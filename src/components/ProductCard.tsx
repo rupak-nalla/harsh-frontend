@@ -30,6 +30,7 @@ export default function ProductCard({
 	const [addedToCart, setAddedToCart] = useState(false);
 	const [cartError, setCartError] = useState("");
 
+	console.log(item.description);
 	const handleAddToCart = async () => {
 		if (addingToCart) return;
 
@@ -345,7 +346,16 @@ export default function ProductCard({
 				)}
 
 				{/* Description */}
-
+				{/* <p
+					className="
+        mt-1.5
+        text-[12px]
+        leading-[1.45]
+        text-black/45
+    "
+				>
+					{item.description}
+				</p> */}
 				<p
 					className="
 						mt-1.5

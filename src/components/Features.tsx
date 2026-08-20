@@ -61,7 +61,7 @@ export default function Features() {
               text-[#85161B]/70
             "
 					>
-						Why Giftify
+						Why Printing House
 					</p>
 
 					<h2

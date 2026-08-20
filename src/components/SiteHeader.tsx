@@ -64,26 +64,26 @@ export default function SiteHeader() {
 					================================================= */}
 
 					<Link
-                    	href="/"
-                    	onClick={closeMobileMenu}
-                    	className="flex shrink-0 items-center gap-2.5 transition-opacity hover:opacity-80"
-                    >
-                    		<img
-                    			src="https://printinghouseujjain.in/assets/logo.png"
-                    			alt="Printing House"
-                    			className="h-10 w-10 object-contain"
-                    		/>
+						href="/"
+						onClick={closeMobileMenu}
+						className="flex shrink-0 items-center gap-2.5 transition-opacity hover:opacity-80"
+					>
+						<img
+							src="https://printinghouseujjain.in/assets/logo.png"
+							alt="Printing House"
+							className="h-10 w-10 object-contain"
+						/>
 
-                    		<div className="hidden sm:block">
-                    			<div className="text-lg font-bold leading-none tracking-tight">
-                    				Printing House
-                    			</div>
+						<div className="hidden sm:block">
+							<div className="text-lg font-bold leading-none tracking-tight">
+								Printing House
+							</div>
 
-                    			<div className="mt-1 text-[9px] font-medium uppercase tracking-[0.16em] text-foreground/45">
-                    				Make it Personal
-                    			</div>
-                    		</div>
-                    </Link>
+							<div className="mt-1 text-[9px] font-medium uppercase tracking-[0.16em] text-foreground/45">
+								You think... We Create...
+							</div>
+						</div>
+					</Link>
 
 					{/* =================================================
 					    DESKTOP NAVIGATION
@@ -274,12 +274,16 @@ export default function SiteHeader() {
 
 							<div className="flex h-[72px] shrink-0 items-center justify-between border-b border-border bg-background px-5">
 								<div className="flex items-center gap-2.5">
-									<img src="https://printinghouseujjain.in/assets/logo.png" alt="Printing House" className="h-9 w-9 object-contain" />
+									<img
+										src="https://printinghouseujjain.in/assets/logo.png"
+										alt="Printing House"
+										className="h-9 w-9 object-contain"
+									/>
 									<div>
 										<div className="text-base font-bold">Printing House</div>
 
 										<div className="text-[8px] font-medium uppercase tracking-[0.15em] text-foreground/40">
-											Make it Personal
+											You think... We Create...
 										</div>
 									</div>
 								</div>
@@ -385,9 +389,7 @@ export default function SiteHeader() {
 												Cart
 											</div>
 
-											<span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#85161B] px-1.5 text-[9px] font-bold text-white">
-												2
-											</span>
+										
 										</Link>
 									</div>
 								</div>
