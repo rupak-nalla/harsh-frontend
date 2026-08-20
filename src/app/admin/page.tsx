@@ -119,7 +119,7 @@ export default function AdminPage() {
 				<div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
 					<div>
 						<p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#85161B]">
-							Giftify Admin
+							Printing House Admin
 						</p>
 
 						<h1 className="text-3xl font-bold tracking-tight text-[#2E2E2E] sm:text-4xl">
@@ -501,7 +501,7 @@ export default function AdminPage() {
 
 				<div className="mt-8 text-center">
 					<p className="text-xs text-[#2E2E2E]/35">
-						Giftify Admin Dashboard • Store overview
+						Printing House Admin Dashboard • Store overview
 					</p>
 				</div>
 

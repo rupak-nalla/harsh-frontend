@@ -93,7 +93,7 @@ export default function ProfilePage() {
 										</h3>
 
 										<p className="mt-1 text-xs text-[#2E2E2E]/50">
-											Giftify member
+											Printing House member
 										</p>
 									</div>
 								</div>
@@ -222,7 +222,7 @@ export default function ProfilePage() {
 								</h2>
 
 								<p className="mt-1 text-xs text-[#2E2E2E]/45">
-									Manage your Giftify account
+									Manage your Printing House account
 								</p>
 							</div>
 
@@ -258,7 +258,7 @@ export default function ProfilePage() {
 							</div>
 
 							<h3 className="mt-5 text-xl font-semibold">
-								Your Giftify journey
+								Your Printing House journey
 							</h3>
 
 							<p className="mt-2 text-sm leading-6 text-white/65">

@@ -451,7 +451,7 @@ export default function RegisterPage() {
 							</div>
 
 							<div>
-								<div className="text-xl font-bold">Giftify</div>
+								<div className="text-xl font-bold">Printing House</div>
 
 								<div className="text-xs text-white/60">Make it Personal</div>
 							</div>
@@ -472,7 +472,7 @@ export default function RegisterPage() {
 							</h1>
 
 							<p className="mt-5 max-w-sm text-sm leading-7 text-white/70">
-								Create your Giftify account and make personalized gifts, save
+								Create your Printing House account and make personalized gifts, save
 								your favourites, and keep track of every order in one place.
 							</p>
 
@@ -516,7 +516,7 @@ export default function RegisterPage() {
 								</div>
 
 								<div>
-									<div className="font-bold text-[#2E2E2E]">Giftify</div>
+									<div className="font-bold text-[#2E2E2E]">Printing House</div>
 
 									<div className="text-[10px] text-[#2E2E2E]/50">
 										Make it Personal
@@ -537,7 +537,7 @@ export default function RegisterPage() {
 							<p className="mt-2 text-sm text-[#2E2E2E]/55">
 								{otpStep
 									? `Enter the OTP sent to ${email}.`
-									: "Join Giftify and start making moments personal."}
+									: "Join Printing House and start making moments personal."}
 							</p>
 						</div>
 
