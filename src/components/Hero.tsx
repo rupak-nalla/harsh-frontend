@@ -32,36 +32,36 @@ import AnnouncementStrip from "./AnnouncementStrip";
 */
 
 const MOCK_HERO_SLIDES = [
-	{
-		id: 1,
-		tag: "Raksha Bandhan Special",
-		title: "Gift Love, Gift Memories",
-		subtitle:
-			"Personalized photo gifts crafted with heart — mugs, cushions, frames & more",
-		cta: "Shop Gifts",
-		bg: "from-amber-900/70 to-rose-900/60",
-		img: "https://printinghouseujjain.in/assets/main.png",
-	},
-	{
-		id: 2,
-		tag: "Professional Printing",
-		title: "Print That Makes an Impression",
-		subtitle:
-			"Visiting cards, brochures, banners — delivered with precision and speed",
-		cta: "Explore Printing",
-		bg: "from-slate-900/75 to-orange-900/60",
-		img: "https://printinghouseujjain.in/assets/main2.png",
-	},
-	{
-		id: 3,
-		tag: "Professional Printing",
-		title: "Print That Makes an Impression",
-		subtitle:
-			"Visiting cards, brochures, banners — delivered with precision and speed",
-		cta: "Explore Printing",
-		bg: "from-slate-900/75 to-orange-900/60",
-		img: "https://printinghouseujjain.in/assets/main3.png",
-	},
+  {
+    id: 1,
+    tag: "Raksha Bandhan Special",
+    title: "Gift Love, Gift Memories",
+    subtitle:
+      "Personalized photo gifts crafted with heart — mugs, cushions, frames & more",
+    cta: "Shop Gifts",
+    bg: "from-amber-900/70 to-rose-900/60",
+    img: "https://printinghouseujjain.in/assets/main.png",
+  },
+  {
+    id: 2,
+    tag: "Professional Printing",
+    title: "Print That Makes an Impression",
+    subtitle:
+      "Visiting cards, brochures, banners — delivered with precision and speed",
+    cta: "Explore Printing",
+    bg: "from-slate-900/75 to-orange-900/60",
+    img: "https://printinghouseujjain.in/assets/main2.png",
+  },
+  {
+    id: 3,
+    tag: "Professional Printing",
+    title: "Print That Makes an Impression",
+    subtitle:
+      "Visiting cards, brochures, banners — delivered with precision and speed",
+    cta: "Explore Printing",
+    bg: "from-slate-900/75 to-orange-900/60",
+    img: "https://printinghouseujjain.in/assets/main3.png",
+  },
 ];
 
 /*
@@ -75,30 +75,30 @@ const MOCK_HERO_SLIDES = [
 */
 
 const FEATURES = [
-	{
-		icon: Palette,
-		title: "100% Customizable",
-		subtitle: "Make it truly yours",
-	},
-	{
-		icon: BadgeCheck,
-		title: "Premium Quality",
-		subtitle: "Crafted with care",
-	},
-	{
-		icon: Truck,
-		title: "Fast Delivery",
-		subtitle: "Across India",
-	},
-	{
-		icon: ShieldCheck,
-		title: "Secure Payments",
-		subtitle: "Safe checkout",
-	},
+  {
+    icon: Palette,
+    title: "100% Customizable",
+    subtitle: "Make it truly yours",
+  },
+  {
+    icon: BadgeCheck,
+    title: "Premium Quality",
+    subtitle: "Crafted with care",
+  },
+  {
+    icon: Truck,
+    title: "Fast Delivery",
+    subtitle: "Across India",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Secure Payments",
+    subtitle: "Safe checkout",
+  },
 ];
 
 export default function Hero() {
-	/*
+  /*
 	|--------------------------------------------------------------------------
 	| HERO DATA
 	|--------------------------------------------------------------------------
@@ -111,12 +111,12 @@ export default function Hero() {
 	|--------------------------------------------------------------------------
 	*/
 
-	const [heroSlides, setHeroSlides] = useState(MOCK_HERO_SLIDES);
+  const [heroSlides, setHeroSlides] = useState(MOCK_HERO_SLIDES);
 
-	const [heroIdx, setHeroIdx] = useState(0);
-	const [direction, setDirection] = useState(1);
+  const [heroIdx, setHeroIdx] = useState(0);
+  const [direction, setDirection] = useState(1);
 
-	/*
+  /*
 	|--------------------------------------------------------------------------
 	| BACKEND FETCH — COMMENTED FOR NOW
 	|--------------------------------------------------------------------------
@@ -135,7 +135,7 @@ export default function Hero() {
 	|--------------------------------------------------------------------------
 	*/
 
-	/*
+  /*
 	useEffect(() => {
 		const fetchHeroSlides = async () => {
 			try {
@@ -163,81 +163,81 @@ export default function Hero() {
 	}, []);
 	*/
 
-	/*
+  /*
 	|--------------------------------------------------------------------------
 	| AUTO SLIDE
 	|--------------------------------------------------------------------------
 	*/
 
-	useEffect(() => {
-		if (heroSlides.length <= 1) return;
+  useEffect(() => {
+    if (heroSlides.length <= 1) return;
 
-		const timer = setInterval(() => {
-			setDirection(1);
+    const timer = setInterval(() => {
+      setDirection(1);
 
-			setHeroIdx((prev) => (prev + 1) % heroSlides.length);
-		}, 5000);
+      setHeroIdx((prev) => (prev + 1) % heroSlides.length);
+    }, 10000);
 
-		return () => clearInterval(timer);
-	}, [heroSlides.length]);
+    return () => clearInterval(timer);
+  }, [heroSlides.length]);
 
-	/*
+  /*
 	|--------------------------------------------------------------------------
 	| SAFETY CHECK
 	|--------------------------------------------------------------------------
 	*/
 
-	const slide = heroSlides[heroIdx] ?? heroSlides[0];
+  const slide = heroSlides[heroIdx] ?? heroSlides[0];
 
-	if (!slide) {
-		return null;
-	}
+  if (!slide) {
+    return null;
+  }
 
-	/*
+  /*
 	|--------------------------------------------------------------------------
 	| NEXT SLIDE
 	|--------------------------------------------------------------------------
 	*/
 
-	const nextSlide = () => {
-		setDirection(1);
+  const nextSlide = () => {
+    setDirection(1);
 
-		setHeroIdx((prev) => (prev + 1) % heroSlides.length);
-	};
+    setHeroIdx((prev) => (prev + 1) % heroSlides.length);
+  };
 
-	/*
+  /*
 	|--------------------------------------------------------------------------
 	| PREVIOUS SLIDE
 	|--------------------------------------------------------------------------
 	*/
 
-	const previousSlide = () => {
-		setDirection(-1);
+  const previousSlide = () => {
+    setDirection(-1);
 
-		setHeroIdx((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
-	};
+    setHeroIdx((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
+  };
 
-	/*
+  /*
 	|--------------------------------------------------------------------------
 	| GO TO SPECIFIC SLIDE
 	|--------------------------------------------------------------------------
 	*/
 
-	const goToSlide = (index: number) => {
-		if (index === heroIdx) return;
+  const goToSlide = (index: number) => {
+    if (index === heroIdx) return;
 
-		setDirection(index > heroIdx ? 1 : -1);
-		setHeroIdx(index);
-	};
+    setDirection(index > heroIdx ? 1 : -1);
+    setHeroIdx(index);
+  };
 
-	return (
-		<>
-			{/* -----------------------------------------------------------------
+  return (
+    <>
+      {/* -----------------------------------------------------------------
 			    HERO
 			----------------------------------------------------------------- */}
 
-			<section
-				className="
+      <section
+        className="
 		relative
 		my-6
 		overflow-hidden
@@ -245,71 +245,71 @@ export default function Hero() {
 		shadow-lg
 
 		/* Mobile: match image aspect ratio */
-		aspect-[1920/840]
+		aspect-[1920/720]
 
 		/* Laptop/Desktop: keep your existing height */
 		lg:aspect-auto
 		lg:h-[clamp(460px,65vh,680px)]
 	"
-			>
-				<AnimatePresence initial={false} custom={direction} mode="sync">
-					<motion.div
-						key={slide.id}
-						custom={direction}
-						variants={{
-							enter: (direction: number) => ({
-								x: direction > 0 ? "100%" : "-100%",
-								opacity: 1,
-							}),
-							center: {
-								x: 0,
-								opacity: 1,
-							},
-							exit: (direction: number) => ({
-								x: direction > 0 ? "-100%" : "100%",
-								opacity: 1,
-							}),
-						}}
-						initial="enter"
-						animate="center"
-						exit="exit"
-						transition={{
-							x: {
-								duration: 0.75,
-								ease: [0.65, 0, 0.35, 1],
-							},
-						}}
-						className="absolute inset-0 z-0"
-					>
-						<motion.div
-							initial={{ scale: 1.04 }}
-							animate={{ scale: 1 }}
-							transition={{
-								duration: 5,
-								ease: "linear",
-							}}
-							className="absolute inset-0"
-						>
-							<Image
-								src={slide.img}
-								alt={slide.title}
-								priority={heroIdx === 0}
-								width={1920}
-								height={840}
-								className="block h-full w-full object-contain lg:object-cover"
-							/>
-						</motion.div>
+      >
+        <AnimatePresence initial={false} custom={direction} mode="sync">
+          <motion.div
+            key={slide.id}
+            custom={direction}
+            variants={{
+              enter: (direction: number) => ({
+                x: direction > 0 ? "100%" : "-100%",
+                opacity: 1,
+              }),
+              center: {
+                x: 0,
+                opacity: 1,
+              },
+              exit: (direction: number) => ({
+                x: direction > 0 ? "-100%" : "100%",
+                opacity: 1,
+              }),
+            }}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{
+              x: {
+                duration: 0.75,
+                ease: [0.65, 0, 0.35, 1],
+              },
+            }}
+            className="absolute inset-0 z-0"
+          >
+            <motion.div
+              initial={{ scale: 1.04 }}
+              animate={{ scale: 1 }}
+              transition={{
+                duration: 5,
+                ease: "linear",
+              }}
+              className="absolute inset-0"
+            >
+              <Image
+                src={slide.img}
+                alt={slide.title}
+                priority={heroIdx === 0}
+                width={1000}
+                height={1080}
+                className="block h-full w-full object-contain lg:object-cover"
+              />
+            </motion.div>
 
-						<div className="absolute inset-0" />
-					</motion.div>
-				</AnimatePresence>
+            <div className="absolute inset-0" />
+          </motion.div>
+        </AnimatePresence>
 
-				{/* Previous */}
-				<button
-					type="button"
-					onClick={previousSlide}
-					aria-label="Previous slide"
-					className="
+        {/* Previous */}
+        <button
+          type="button"
+          onClick={previousSlide}
+          aria-label="Previous slide"
+          className="
 			absolute left-4 top-1/2 z-20
 			flex h-10 w-10
 			-translate-y-1/2
@@ -324,16 +324,16 @@ export default function Hero() {
 			hover:bg-black/40
 			active:scale-95
 		"
-				>
-					‹
-				</button>
+        >
+          ‹
+        </button>
 
-				{/* Next */}
-				<button
-					type="button"
-					onClick={nextSlide}
-					aria-label="Next slide"
-					className="
+        {/* Next */}
+        <button
+          type="button"
+          onClick={nextSlide}
+          aria-label="Next slide"
+          className="
 			absolute right-4 top-1/2 z-20
 			flex h-10 w-10
 			-translate-y-1/2
@@ -348,43 +348,43 @@ export default function Hero() {
 			hover:bg-black/40
 			active:scale-95
 		"
-				>
-					›
-				</button>
+        >
+          ›
+        </button>
 
-				{/* Dots */}
-				<div
-					className="
+        {/* Dots */}
+        <div
+          className="
 			absolute bottom-6 left-1/2 z-20
 			flex -translate-x-1/2
 			items-center gap-2
 		"
-				>
-					{heroSlides.map((slideItem, index) => (
-						<button
-							key={slideItem.id}
-							type="button"
-							onClick={() => goToSlide(index)}
-							aria-label={`Go to slide ${index + 1}`}
-							aria-current={index === heroIdx ? "true" : undefined}
-							className="h-2 rounded-full transition-all duration-300"
-							style={{
-								width: index === heroIdx ? 26 : 8,
-								background:
-									index === heroIdx ? "white" : "rgba(255,255,255,0.45)",
-							}}
-						/>
-					))}
-				</div>
-			</section>
+        >
+          {heroSlides.map((slideItem, index) => (
+            <button
+              key={slideItem.id}
+              type="button"
+              onClick={() => goToSlide(index)}
+              aria-label={`Go to slide ${index + 1}`}
+              aria-current={index === heroIdx ? "true" : undefined}
+              className="h-2 rounded-full transition-all duration-300"
+              style={{
+                width: index === heroIdx ? 26 : 8,
+                background:
+                  index === heroIdx ? "white" : "rgba(255,255,255,0.45)",
+              }}
+            />
+          ))}
+        </div>
+      </section>
 
-			{/* -----------------------------------------------------------------
+      {/* -----------------------------------------------------------------
 			    HERO FEATURES
 			----------------------------------------------------------------- */}
 
-			<HeroFeatures />
-		</>
-	);
+      <HeroFeatures />
+    </>
+  );
 }
 
 /*
@@ -394,95 +394,100 @@ export default function Hero() {
 */
 
 export function HeroFeatures() {
-	return (
-		<section className="w-full py-5 sm:py-6">
-			<div
-				className="
+  return (
+    <section className="w-full py-5 sm:py-6">
+      <div
+        className="
 					grid
-					grid-cols-1
-					gap-3
+					grid-cols-2
+					overflow-hidden
+					rounded-2xl
+					border-y
+					border-[#2E2E2E]/10
+					py-3
 					sm:grid-cols-2
-					lg:grid-cols-4
+					lg:flex
+					lg:items-center
+					lg:justify-center
+					lg:py-4
 				"
-			>
-				{FEATURES.map((item, index) => {
-					const Icon = item.icon;
+      >
+        {FEATURES.map((item, index) => {
+          const Icon = item.icon;
 
-					return (
-						<motion.div
-							key={item.title}
-							initial={{ opacity: 0, y: 10 }}
-							whileInView={{ opacity: 1, y: 0 }}
-							viewport={{
-								once: true,
-								amount: 0.2,
-							}}
-							transition={{
-								duration: 0.3,
-								delay: index * 0.05,
-							}}
-							whileHover={{
-								y: -4,
-							}}
-							className="
-								flex
-								min-w-0
-								items-center
-								gap-3
-								rounded-2xl
-								bg-white
-								p-4
-								shadow-sm
-								transition-shadow
-								duration-200
-								hover:shadow-md
-							"
-						>
-							{/* Icon */}
-
-							<div
-								className="
+          return (
+            <div key={item.title} className="contents">
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{
+                  once: true,
+                  amount: 0.2,
+                }}
+                transition={{
+                  duration: 0.3,
+                  delay: index * 0.05,
+                }}
+                className="
 									flex
-									h-11
-									w-11
-									shrink-0
 									items-center
-									justify-center
-									rounded-full
-									bg-[#F7D6BF]/50
-									text-[#85161B]
+									gap-2.5
+									px-4
+									py-3
+									sm:px-6
+									lg:flex-1
+									lg:justify-center
+									lg:px-7
+									lg:py-1
 								"
-							>
-								<Icon size={21} strokeWidth={1.8} />
-							</div>
-
-							{/* Text */}
-
-							<div className="min-w-0">
-								<div
-									className="
-										text-sm
-										font-semibold
-										text-[#2E2E2E]
+              >
+                <div
+                  className="
+										flex
+										h-9
+										w-9
+										shrink-0
+										items-center
+										justify-center
+										rounded-full
+										bg-[#F7D6BF]/50
+										text-[#85161B]
+										sm:h-10
+										sm:w-10
 									"
-								>
-									{item.title}
-								</div>
+                >
+                  <Icon size={18} strokeWidth={1.8} />
+                </div>
 
-								<div
-									className="
-										mt-0.5
-										text-xs
-										text-[#2E2E2E]/60
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-[#2E2E2E] sm:text-sm">
+                    {item.title}
+                  </div>
+
+                  <div className="mt-0.5 text-[10px] text-[#2E2E2E]/50 sm:text-xs">
+                    {item.subtitle}
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Desktop separators */}
+
+              {index < FEATURES.length - 1 && (
+                <div
+                  aria-hidden="true"
+                  className="
+										hidden
+										h-9
+										w-px
+										bg-[#2E2E2E]/10
+										lg:block
 									"
-								>
-									{item.subtitle}
-								</div>
-							</div>
-						</motion.div>
-					);
-				})}
-			</div>
-		</section>
-	);
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
 }
