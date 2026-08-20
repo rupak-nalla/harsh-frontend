@@ -50,7 +50,7 @@ const MOCK_HERO_SLIDES = [
 			"Visiting cards, brochures, banners — delivered with precision and speed",
 		cta: "Explore Printing",
 		bg: "from-slate-900/75 to-orange-900/60",
-		img: "https://printinghouseujjain.in/assets/main2.jpeg",
+		img: "https://printinghouseujjain.in/assets/main2.png",
 	},
 	{
 		id: 3,
@@ -60,7 +60,7 @@ const MOCK_HERO_SLIDES = [
 			"Visiting cards, brochures, banners — delivered with precision and speed",
 		cta: "Explore Printing",
 		bg: "from-slate-900/75 to-orange-900/60",
-		img: "https://printinghouseujjain.in/assets/main3.jpeg",
+		img: "https://printinghouseujjain.in/assets/main3.png",
 	},
 ];
 
@@ -296,7 +296,7 @@ export default function Hero() {
 								priority={heroIdx === 0}
 								width={1920}
 								height={840}
-								className="block h-full w-full object-contain lg: object-cover"
+								className="block h-full w-full object-contain lg:object-cover"
 							/>
 						</motion.div>
 
