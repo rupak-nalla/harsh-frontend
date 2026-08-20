@@ -16,10 +16,7 @@ export default function HorizontalScrollSection({
 	const ref = useRef<HTMLDivElement>(null);
 
 	const scroll = (dir: "l" | "r") => {
-		const card =
-			ref.current?.querySelector<HTMLElement>(
-				"[data-scroll-card]",
-			);
+		const card = ref.current?.querySelector<HTMLElement>("[data-scroll-card]");
 
 		const cardWidth = card?.offsetWidth ?? 320;
 		const gap = 20;
@@ -33,23 +30,14 @@ export default function HorizontalScrollSection({
 	};
 
 	/*
-	 * Only keep actual rendered children.
+	 * Children.toArray() already removes null, undefined,
+	 * and boolean children.
 	 *
-	 * This prevents empty/null/false children from becoming
-	 * empty carousel cards.
+	 * Keep only actual React elements so that empty/non-rendered
+	 * children don't become carousel cards.
 	 */
-	const items = Children.toArray(children).filter(
-		(child) => {
-			if (
-				child === null ||
-				child === undefined ||
-				child === false
-			) {
-				return false;
-			}
-
-			return isValidElement(child);
-		},
+	const items = Children.toArray(children).filter((child) =>
+		isValidElement(child),
 	);
 
 	return (
@@ -156,8 +144,7 @@ export default function HorizontalScrollSection({
 								active:scale-95
 							"
 							style={{
-								background:
-									"var(--primary)",
+								background: "var(--primary)",
 							}}
 						>
 							›
@@ -178,10 +165,8 @@ export default function HorizontalScrollSection({
 						scrollbar-hide
 					"
 					style={{
-						scrollSnapType:
-							"x mandatory",
-						scrollPaddingLeft:
-							"0px",
+						scrollSnapType: "x mandatory",
+						scrollPaddingLeft: "0px",
 					}}
 				>
 					{items.map((child, index) => (
@@ -197,8 +182,7 @@ export default function HorizontalScrollSection({
 								xl:w-[340px]
 							"
 							style={{
-								scrollSnapAlign:
-									"start",
+								scrollSnapAlign: "start",
 							}}
 						>
 							{child}
