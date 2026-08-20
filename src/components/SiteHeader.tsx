@@ -64,24 +64,26 @@ export default function SiteHeader() {
 					================================================= */}
 
 					<Link
-						href="/"
-						onClick={closeMobileMenu}
-						className="flex shrink-0 items-center gap-2.5 transition-opacity hover:opacity-80"
-					>
-						<div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F7D6BF] text-[#85161B]">
-							<span className="text-lg font-bold">PH</span>
-						</div>
+                    	href="/"
+                    	onClick={closeMobileMenu}
+                    	className="flex shrink-0 items-center gap-2.5 transition-opacity hover:opacity-80"
+                    >
+                    		<img
+                    			src="https://printinghouseujjain.in/assets/logo.png"
+                    			alt="Printing House"
+                    			className="h-10 w-10 object-contain"
+                    		/>
 
-						<div className="hidden sm:block">
-							<div className="text-lg font-bold leading-none tracking-tight">
-								Printing House
-							</div>
+                    		<div className="hidden sm:block">
+                    			<div className="text-lg font-bold leading-none tracking-tight">
+                    				Printing House
+                    			</div>
 
-							<div className="mt-1 text-[9px] font-medium uppercase tracking-[0.16em] text-foreground/45">
-								Make it Personal
-							</div>
-						</div>
-					</Link>
+                    			<div className="mt-1 text-[9px] font-medium uppercase tracking-[0.16em] text-foreground/45">
+                    				Make it Personal
+                    			</div>
+                    		</div>
+                    </Link>
 
 					{/* =================================================
 					    DESKTOP NAVIGATION
