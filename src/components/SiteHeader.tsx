@@ -274,10 +274,7 @@ export default function SiteHeader() {
 
 							<div className="flex h-[72px] shrink-0 items-center justify-between border-b border-border bg-background px-5">
 								<div className="flex items-center gap-2.5">
-									<div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F7D6BF] text-[#85161B]">
-										<span className="font-bold">PH</span>
-									</div>
-
+									<img src="https://printinghouseujjain.in/assets/logo.png" alt="Printing House" className="h-9 w-9 object-contain" />
 									<div>
 										<div className="text-base font-bold">Printing House</div>
 
