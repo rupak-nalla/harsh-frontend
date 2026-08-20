@@ -1,3 +1,34 @@
+# Giftify Landing Page
+
+Premium Next.js ecommerce landing page for personalized gifts and commercial printing services.
+
+## Included
+
+- Sticky premium navbar with ecommerce links
+- Hero section with floating product composition
+- Shop by category, bestsellers, printing services, how-it-works, features, bulk order CTA, testimonials, and newsletter sections
+- Responsive layout with Tailwind CSS and reusable components
+- Static routes for shop, cart, orders, profile, login, register, and admin
+
+## Local Development
+
+```bash
+npm install
+npm run dev
+```
+
+## Production Check
+
+```bash
+npm run build
+npm run start
+```
+
+## Notes
+
+- Framer Motion is pinned to a React 19 compatible version.
+- The current implementation is a polished marketing homepage with route scaffolding, ready for backend and CMS integration.
+- Next recommended upgrades: authentication, product data source, cart persistence, checkout, and admin dashboards.
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
