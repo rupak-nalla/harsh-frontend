@@ -34,7 +34,7 @@ export default function BulkOrderCTA() {
 
 					<div className="relative min-h-[360px] overflow-hidden sm:min-h-[430px] lg:min-h-[520px]">
 						<img
-							src="/images/corporate-gifting.jpg"
+							src="https://printinghouseujjain.in/assets/bulk.png"
 							alt="Corporate gifting products"
 							loading="lazy"
 							className="
