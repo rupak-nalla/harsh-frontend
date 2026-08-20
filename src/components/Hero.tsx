@@ -40,7 +40,7 @@ const MOCK_HERO_SLIDES = [
 			"Personalized photo gifts crafted with heart — mugs, cushions, frames & more",
 		cta: "Shop Gifts",
 		bg: "from-amber-900/70 to-rose-900/60",
-		img: "/Images/hero-banner-img-1.jpeg",
+		img: "https://printinghouseujjain.in/assets/main.png",
 	},
 	{
 		id: 2,
@@ -50,7 +50,7 @@ const MOCK_HERO_SLIDES = [
 			"Visiting cards, brochures, banners — delivered with precision and speed",
 		cta: "Explore Printing",
 		bg: "from-slate-900/75 to-orange-900/60",
-		img: "/Images/hero-banner-img-2.jpg",
+		img: "https://printinghouseujjain.in/assets/main2.png",
 	},
 	{
 		id: 3,
@@ -60,7 +60,7 @@ const MOCK_HERO_SLIDES = [
 			"Visiting cards, brochures, banners — delivered with precision and speed",
 		cta: "Explore Printing",
 		bg: "from-slate-900/75 to-orange-900/60",
-		img: "/Images/hero-banner-img-3.jpg",
+		img: "https://printinghouseujjain.in/assets/main3.png",
 	},
 ];
 
