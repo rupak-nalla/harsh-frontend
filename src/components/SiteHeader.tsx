@@ -209,7 +209,7 @@ export default function SiteHeader() {
 						================================================= */}
 
 						<a
-							href="https://wa.me/917000000000"
+							href="https://wa.me/918827882713?text=Hi"
 							target="_blank"
 							rel="noopener noreferrer"
 							className="hidden items-center gap-1.5 rounded-xl bg-[#25D366] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 lg:flex"
@@ -361,14 +361,14 @@ export default function SiteHeader() {
 									</p>
 
 									<div className="space-y-1">
-										<Link
+										{/* <Link
 											href="/profile"
 											onClick={closeMobileMenu}
 											className="flex items-center gap-3 rounded-xl bg-background px-4 py-3.5 text-sm font-medium text-foreground/75 transition hover:bg-muted/10 hover:text-[#85161B]"
 										>
 											<HiOutlineUser size={20} />
 											Account
-										</Link>
+										</Link> */}
 
 										<Link
 											href="/wishlist"
@@ -388,8 +388,6 @@ export default function SiteHeader() {
 												<HiOutlineShoppingCart size={20} />
 												Cart
 											</div>
-
-										
 										</Link>
 									</div>
 								</div>
@@ -397,16 +395,36 @@ export default function SiteHeader() {
 
 							{/* WHATSAPP */}
 
+							{/* =========================================================
+    WHATSAPP — MOBILE
+========================================================= */}
+
 							<div className="shrink-0 border-t border-border bg-background p-5">
 								<a
 									href="https://wa.me/918827882713?text=Hi"
 									target="_blank"
 									rel="noopener noreferrer"
-									aria-label="WhatsApp"
-									className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 transition hover:bg-white/20"
+									aria-label="Chat with us on WhatsApp"
+									className="
+			flex
+			h-11
+			w-full
+			items-center
+			justify-center
+			gap-2
+			rounded-xl
+			bg-[#25D366]
+			px-4
+			text-sm
+			font-semibold
+			text-white
+			transition
+			hover:bg-[#20BD5A]
+			active:scale-[0.98]
+		"
 								>
-									<span>💬</span>
-									Chat with us on WhatsApp
+									<span className="text-base">💬</span>
+									<span>Chat with us on WhatsApp</span>
 								</a>
 							</div>
 						</motion.aside>

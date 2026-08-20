@@ -2,7 +2,7 @@ import React from "react";
 
 const announcements = [
 	"One of ujjain's first dedicated online store for personalized gifts and custom printing",
-	"📦 Free delivery on orders above ₹1000 within Ujjain",
+	"📦 Free delivery on orders above ₹1000",
 	"🖨️ Want bulk orders ? Contact us 8827882713",
 	"🎁 Custom gifts for birthdays, weddings & corporate events",
 	// "💳 PVC Cards starting at just ₹5/piece — Bulk orders welcome",

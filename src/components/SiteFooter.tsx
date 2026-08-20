@@ -167,7 +167,7 @@ export default function SiteFooter() {
 					    PRINTING
 					================================================= */}
 
-					<div>
+					{/* <div>
 						<h3 className="mb-4 font-semibold" style={{ color: "white" }}>
 							Printing
 						</h3>
@@ -218,7 +218,7 @@ export default function SiteFooter() {
 								</Link>
 							</li>
 						</ul>
-					</div>
+					</div> */}
 
 					{/* =================================================
 					    SUPPORT
