@@ -50,7 +50,7 @@ const MOCK_HERO_SLIDES = [
 			"Visiting cards, brochures, banners — delivered with precision and speed",
 		cta: "Explore Printing",
 		bg: "from-slate-900/75 to-orange-900/60",
-		img: "https://printinghouseujjain.in/assets/main2.png",
+		img: "https://printinghouseujjain.in/assets/main2.jpeg",
 	},
 	{
 		id: 3,
@@ -60,7 +60,7 @@ const MOCK_HERO_SLIDES = [
 			"Visiting cards, brochures, banners — delivered with precision and speed",
 		cta: "Explore Printing",
 		bg: "from-slate-900/75 to-orange-900/60",
-		img: "https://printinghouseujjain.in/assets/main3.png",
+		img: "https://printinghouseujjain.in/assets/main3.jpeg",
 	},
 ];
 
