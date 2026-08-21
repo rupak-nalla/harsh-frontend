@@ -51,7 +51,7 @@ export default function Home() {
 	return (
 		<>
 			{/* Popup */}
-			{/* <OfferPopup /> */}
+			<OfferPopup />
 
 			<main className="w-full px-2.5 sm:px-4 md:px-6 lg:px-8">
 				<Hero />
