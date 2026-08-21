@@ -5,6 +5,7 @@ import "./globals.css";
 import AnnouncementStrip from "@/components/AnnouncementStrip";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
+import SupportBubble from "@/components/SupportBubble";
 
 const geistSans = Geist({
 	variable: "--font-geist-sans",
@@ -113,7 +114,7 @@ export default function RootLayout({
 				<AnnouncementStrip />
 
 				{children}
-
+				<SupportBubble />
 				<SiteFooter />
 			</body>
 		</html>
