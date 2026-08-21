@@ -471,21 +471,48 @@ export default function ShopPage() {
 	   FILTER + SEARCH + SORT
 	===================================================== */
 
+	/* =====================================================
+   FILTER + SEARCH + SORT
+===================================================== */
+
 	const filteredProducts = useMemo(() => {
 		return products
 			.filter((product) => {
+				/*
+				 * CATEGORY FILTER
+				 *
+				 * If no category is selected:
+				 *    → allow all categories
+				 *
+				 * If categories are selected:
+				 *    → product must belong to at least one
+				 *      selected category
+				 */
 				const matchesCategory =
 					selectedCategories.length === 0 ||
 					selectedCategories.some((categoryId) =>
 						product.categoryIds.includes(categoryId),
 					);
 
+				/*
+				 * OCCASION FILTER
+				 *
+				 * If no occasion is selected:
+				 *    → allow all occasions
+				 *
+				 * If occasions are selected:
+				 *    → product must belong to at least one
+				 *      selected occasion
+				 */
 				const matchesOccasion =
 					selectedOccasions.length === 0 ||
 					selectedOccasions.some((occasionId) =>
 						product.occasionIds.includes(occasionId),
 					);
 
+				/*
+				 * SEARCH FILTER
+				 */
 				const searchText = search.toLowerCase().trim();
 
 				const matchesSearch =
@@ -493,6 +520,23 @@ export default function ShopPage() {
 					product.name.toLowerCase().includes(searchText) ||
 					product.description.toLowerCase().includes(searchText);
 
+				/*
+				 * IMPORTANT:
+				 *
+				 * CATEGORY AND OCCASION are combined with AND.
+				 *
+				 * Example:
+				 *
+				 * Category = T-Shirts
+				 * Occasion = Birthday
+				 *
+				 * Product must satisfy BOTH:
+				 *
+				 *     T-Shirt ✓
+				 *     Birthday ✓
+				 *
+				 * Otherwise it will NOT be displayed.
+				 */
 				return matchesCategory && matchesOccasion && matchesSearch;
 			})
 			.sort((a, b) => {
