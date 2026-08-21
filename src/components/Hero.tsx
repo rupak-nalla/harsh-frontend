@@ -3,12 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-	ShieldCheck,
-	Truck,
-	Palette,
-	BadgeCheck,
-} from "lucide-react";
+import { ShieldCheck, Truck, Palette, BadgeCheck } from "lucide-react";
 
 /*
 |--------------------------------------------------------------------------
@@ -19,22 +14,23 @@ import {
 const MOCK_HERO_SLIDES = [
 	{
 		id: 1,
+		tag: "Professional Printing",
+		title: "Ujjain's First Dedicated Online Store",
+		subtitle: "Personalized Gifts & Custom Printing",
+		cta: "Explore Now",
+		img: "https://printinghouseujjain.in/assets/main.png",
+	},
+
+	{
+		id: 2,
 		tag: "Raksha Bandhan Special",
 		title: "Gift Love, Gift Memories",
 		subtitle:
 			"Personalized photo gifts crafted with heart — mugs, cushions, frames & more",
 		cta: "Shop Gifts",
-		img: "https://printinghouseujjain.in/assets/main.png",
-	},
-	{
-		id: 2,
-		tag: "Professional Printing",
-		title: "Print That Makes an Impression",
-		subtitle:
-			"Visiting cards, brochures, banners — delivered with precision and speed",
-		cta: "Explore Printing",
 		img: "https://printinghouseujjain.in/assets/main2.png",
 	},
+
 	{
 		id: 3,
 		tag: "Professional Printing",
@@ -93,7 +89,9 @@ export default function Hero() {
 		const timer = setInterval(() => {
 			setDirection(1);
 
-			setHeroIdx((prev) => (prev + 1) % heroSlides.length);
+			setHeroIdx((prev) => {
+				return (prev + 1) % heroSlides.length;
+			});
 		}, 10000);
 
 		return () => clearInterval(timer);
@@ -113,28 +111,30 @@ export default function Hero() {
 
 	/*
 	|--------------------------------------------------------------------------
-	| NEXT SLIDE
+	| NEXT
 	|--------------------------------------------------------------------------
 	*/
 
 	const nextSlide = () => {
 		setDirection(1);
 
-		setHeroIdx((prev) => (prev + 1) % heroSlides.length);
+		setHeroIdx((prev) => {
+			return (prev + 1) % heroSlides.length;
+		});
 	};
 
 	/*
 	|--------------------------------------------------------------------------
-	| PREVIOUS SLIDE
+	| PREVIOUS
 	|--------------------------------------------------------------------------
 	*/
 
 	const previousSlide = () => {
 		setDirection(-1);
 
-		setHeroIdx(
-			(prev) => (prev - 1 + heroSlides.length) % heroSlides.length,
-		);
+		setHeroIdx((prev) => {
+			return (prev - 1 + heroSlides.length) % heroSlides.length;
+		});
 	};
 
 	/*
@@ -160,40 +160,36 @@ export default function Hero() {
 				<section
 					className="
 						relative
+						mx-4
 						my-4
 						overflow-hidden
 						rounded-xl
 						shadow-lg
 
-						w-full
-						aspect-[1920/720]
+						aspect-[1000/375]
 
+						sm:mx-6
 						sm:my-5
 						sm:rounded-2xl
+
+						lg:mx-8
 					"
 				>
-					<AnimatePresence
-						initial={false}
-						custom={direction}
-						mode="sync"
-					>
+					<AnimatePresence initial={false} custom={direction} mode="sync">
 						<motion.div
 							key={slide.id}
 							custom={direction}
 							variants={{
 								enter: (direction: number) => ({
 									x: direction > 0 ? "100%" : "-100%",
-									opacity: 1,
 								}),
 
 								center: {
 									x: 0,
-									opacity: 1,
 								},
 
 								exit: (direction: number) => ({
 									x: direction > 0 ? "-100%" : "100%",
-									opacity: 1,
 								}),
 							}}
 							initial="enter"
@@ -205,33 +201,36 @@ export default function Hero() {
 									ease: [0.65, 0, 0.35, 1],
 								},
 							}}
-							className="absolute inset-0 z-0"
+							className="absolute inset-0"
 						>
 							{/* =================================================
 							    IMAGE
+
+							    IMPORTANT:
+							    Do NOT use object-cover.
+							    The original banners are 1000x375.
 							================================================= */}
 
 							<motion.div
-								initial={{ scale: 1.02 }}
+								initial={{ scale: 1 }}
 								animate={{ scale: 1 }}
-								transition={{
-									duration: 5,
-									ease: "linear",
-								}}
 								className="absolute inset-0"
 							>
 								<Image
 									src={slide.img}
 									alt={slide.title}
-									fill
+									width={1000}
+									height={375}
 									priority={heroIdx === 0}
-									sizes="100vw"
+									sizes="(max-width: 640px) 100vw, (max-width: 1024px) calc(100vw - 48px), calc(100vw - 64px)"
 									className="
 										block
 										h-full
 										w-full
-										object-cover
 									"
+									style={{
+										objectFit: "fill",
+									}}
 								/>
 							</motion.div>
 						</motion.div>
@@ -341,9 +340,7 @@ export default function Hero() {
 								type="button"
 								onClick={() => goToSlide(index)}
 								aria-label={`Go to slide ${index + 1}`}
-								aria-current={
-									index === heroIdx ? "true" : undefined
-								}
+								aria-current={index === heroIdx ? "true" : undefined}
 								className="
 									h-2
 									rounded-full
@@ -353,9 +350,7 @@ export default function Hero() {
 								style={{
 									width: index === heroIdx ? 26 : 8,
 									background:
-										index === heroIdx
-											? "white"
-											: "rgba(255,255,255,0.45)",
+										index === heroIdx ? "white" : "rgba(255,255,255,0.45)",
 								}}
 							/>
 						))}
@@ -364,7 +359,7 @@ export default function Hero() {
 			</div>
 
 			{/* =========================================================
-			    HERO FEATURES
+			    FEATURES
 			========================================================= */}
 
 			<HeroFeatures />
@@ -401,10 +396,7 @@ export function HeroFeatures() {
 					const Icon = item.icon;
 
 					return (
-						<div
-							key={item.title}
-							className="contents"
-						>
+						<div key={item.title} className="contents">
 							<motion.div
 								initial={{
 									opacity: 0,
@@ -453,10 +445,7 @@ export function HeroFeatures() {
 										sm:w-10
 									"
 								>
-									<Icon
-										size={18}
-										strokeWidth={1.8}
-									/>
+									<Icon size={18} strokeWidth={1.8} />
 								</div>
 
 								<div className="min-w-0">
@@ -465,7 +454,6 @@ export function HeroFeatures() {
 											text-xs
 											font-semibold
 											text-[#2E2E2E]
-
 											sm:text-sm
 										"
 									>
@@ -477,7 +465,6 @@ export function HeroFeatures() {
 											mt-0.5
 											text-[10px]
 											text-[#2E2E2E]/50
-
 											sm:text-xs
 										"
 									>
@@ -485,8 +472,6 @@ export function HeroFeatures() {
 									</div>
 								</div>
 							</motion.div>
-
-							{/* Desktop separator */}
 
 							{index < FEATURES.length - 1 && (
 								<div
