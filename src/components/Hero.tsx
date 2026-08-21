@@ -230,7 +230,7 @@ export default function Hero() {
 										block
 										h-full
 										w-full
-										object-contain
+										object-cover
 									"
 								/>
 							</motion.div>
