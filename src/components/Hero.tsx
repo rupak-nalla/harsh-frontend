@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
-import { ShieldCheck, Truck, Palette, BadgeCheck } from "lucide-react";
+import {
+	ShieldCheck,
+	Truck,
+	Palette,
+	BadgeCheck,
+} from "lucide-react";
 
 /*
 |--------------------------------------------------------------------------
@@ -71,46 +76,10 @@ const FEATURES = [
 ];
 
 export default function Hero() {
-	/*
-	|--------------------------------------------------------------------------
-	| HERO DATA
-	|--------------------------------------------------------------------------
-	*/
-
-	const [heroSlides, setHeroSlides] = useState(MOCK_HERO_SLIDES);
+	const [heroSlides] = useState(MOCK_HERO_SLIDES);
 
 	const [heroIdx, setHeroIdx] = useState(0);
 	const [direction, setDirection] = useState(1);
-
-	/*
-	|--------------------------------------------------------------------------
-	| BACKEND FETCH
-	|--------------------------------------------------------------------------
-	|
-	| Uncomment this when your backend API is ready.
-	|
-	| useEffect(() => {
-	| 	const fetchHeroSlides = async () => {
-	| 		try {
-	| 			const response = await fetch("/api/hero-slides");
-	|
-	| 			if (!response.ok) {
-	| 				throw new Error("Failed to fetch hero slides");
-	| 			}
-	|
-	| 			const data = await response.json();
-	|
-	| 			setHeroSlides(data.data ?? data);
-	| 			setHeroIdx(0);
-	| 		} catch (error) {
-	| 			console.error("Error fetching hero slides:", error);
-	| 			setHeroSlides(MOCK_HERO_SLIDES);
-	| 		}
-	| 	};
-	|
-	| 	fetchHeroSlides();
-	| }, []);
-	*/
 
 	/*
 	|--------------------------------------------------------------------------
@@ -163,12 +132,14 @@ export default function Hero() {
 	const previousSlide = () => {
 		setDirection(-1);
 
-		setHeroIdx((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
+		setHeroIdx(
+			(prev) => (prev - 1 + heroSlides.length) % heroSlides.length,
+		);
 	};
 
 	/*
 	|--------------------------------------------------------------------------
-	| GO TO SPECIFIC SLIDE
+	| GO TO SLIDE
 	|--------------------------------------------------------------------------
 	*/
 
@@ -184,27 +155,28 @@ export default function Hero() {
 			{/* =========================================================
 			    HERO
 			========================================================= */}
-			<div className="w-full flex items-center justify-center bg-[#FBF9F7]">
 
+			<div className="w-full bg-[#FBF9F7]">
 				<section
 					className="
 						relative
-						my-6
+						my-4
 						overflow-hidden
-						rounded-2xl
+						rounded-xl
 						shadow-lg
-						
 
 						w-full
-						h-full
-
-						/* Mobile */
 						aspect-[1920/720]
 
-						
+						sm:my-5
+						sm:rounded-2xl
 					"
 				>
-					<AnimatePresence initial={false} custom={direction} mode="sync">
+					<AnimatePresence
+						initial={false}
+						custom={direction}
+						mode="sync"
+					>
 						<motion.div
 							key={slide.id}
 							custom={direction}
@@ -236,11 +208,11 @@ export default function Hero() {
 							className="absolute inset-0 z-0"
 						>
 							{/* =================================================
-								IMAGE
+							    IMAGE
 							================================================= */}
 
 							<motion.div
-								initial={{ scale: 1 }}
+								initial={{ scale: 1.02 }}
 								animate={{ scale: 1 }}
 								transition={{
 									duration: 5,
@@ -253,9 +225,7 @@ export default function Hero() {
 									alt={slide.title}
 									fill
 									priority={heroIdx === 0}
-									sizes="
-										100vw
-									"
+									sizes="100vw"
 									className="
 										block
 										h-full
@@ -268,7 +238,7 @@ export default function Hero() {
 					</AnimatePresence>
 
 					{/* =========================================================
-						PREVIOUS BUTTON
+					    PREVIOUS BUTTON
 					========================================================= */}
 
 					<button
@@ -277,12 +247,12 @@ export default function Hero() {
 						aria-label="Previous slide"
 						className="
 							absolute
-							left-4
+							left-3
 							top-1/2
 							z-20
 							flex
-							h-10
-							w-10
+							h-9
+							w-9
 							-translate-y-1/2
 							items-center
 							justify-center
@@ -298,13 +268,17 @@ export default function Hero() {
 							hover:scale-105
 							hover:bg-black/40
 							active:scale-95
+
+							sm:left-4
+							sm:h-10
+							sm:w-10
 						"
 					>
 						‹
 					</button>
 
 					{/* =========================================================
-						NEXT BUTTON
+					    NEXT BUTTON
 					========================================================= */}
 
 					<button
@@ -313,12 +287,12 @@ export default function Hero() {
 						aria-label="Next slide"
 						className="
 							absolute
-							right-4
+							right-3
 							top-1/2
 							z-20
 							flex
-							h-10
-							w-10
+							h-9
+							w-9
 							-translate-y-1/2
 							items-center
 							justify-center
@@ -334,25 +308,31 @@ export default function Hero() {
 							hover:scale-105
 							hover:bg-black/40
 							active:scale-95
+
+							sm:right-4
+							sm:h-10
+							sm:w-10
 						"
 					>
 						›
 					</button>
 
 					{/* =========================================================
-						DOTS
+					    DOTS
 					========================================================= */}
 
 					<div
 						className="
 							absolute
-							bottom-6
+							bottom-3
 							left-1/2
 							z-20
 							flex
 							-translate-x-1/2
 							items-center
 							gap-2
+
+							sm:bottom-6
 						"
 					>
 						{heroSlides.map((slideItem, index) => (
@@ -361,7 +341,9 @@ export default function Hero() {
 								type="button"
 								onClick={() => goToSlide(index)}
 								aria-label={`Go to slide ${index + 1}`}
-								aria-current={index === heroIdx ? "true" : undefined}
+								aria-current={
+									index === heroIdx ? "true" : undefined
+								}
 								className="
 									h-2
 									rounded-full
@@ -371,7 +353,9 @@ export default function Hero() {
 								style={{
 									width: index === heroIdx ? 26 : 8,
 									background:
-										index === heroIdx ? "white" : "rgba(255,255,255,0.45)",
+										index === heroIdx
+											? "white"
+											: "rgba(255,255,255,0.45)",
 								}}
 							/>
 						))}
@@ -417,7 +401,10 @@ export function HeroFeatures() {
 					const Icon = item.icon;
 
 					return (
-						<div key={item.title} className="contents">
+						<div
+							key={item.title}
+							className="contents"
+						>
 							<motion.div
 								initial={{
 									opacity: 0,
@@ -466,7 +453,10 @@ export function HeroFeatures() {
 										sm:w-10
 									"
 								>
-									<Icon size={18} strokeWidth={1.8} />
+									<Icon
+										size={18}
+										strokeWidth={1.8}
+									/>
 								</div>
 
 								<div className="min-w-0">
