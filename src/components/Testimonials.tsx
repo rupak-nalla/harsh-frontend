@@ -231,6 +231,7 @@ export default function Testimonials() {
 				sm:py-14
 
 				lg:py-16
+				rounded-3xl
 			"
 		>
 			<div className="mx-auto w-full">
