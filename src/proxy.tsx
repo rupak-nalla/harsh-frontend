@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const BLOCKED_ROUTES = [
-	"/login",
+	// "/login",
 	"/admin",
 	"/checkout",
 	"/cart",
-	"/register",
-	"/forgot-password",
-	"/profile",
+	// "/register",
+	// "/forgot-password",
+	// "/profile",
 	"/orders",
 	"/order-tracking",
 ];
@@ -37,13 +37,13 @@ export function proxy(request: NextRequest) {
 
 export const config = {
 	matcher: [
-		"/login/:path*",
+		// "/login/:path*",
 		"/admin/:path*",
-		"/checkout/:path*",
+		// "/checkout/:path*",
 		"/cart/:path*",
-		"/register/:path*",
-		"/forgot-password/:path*",
-		"/profile/:path*",
+		// "/register/:path*",
+		// "/forgot-password/:path*",
+		// "/profile/:path*",
 		"/orders/:path*",
 		"/order-tracking/:path*",
 	],
