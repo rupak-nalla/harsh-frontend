@@ -191,7 +191,7 @@ export default function LoginPage() {
 							<div>
 								<div className="text-xl font-bold">Printing House</div>
 
-								<div className="text-xs text-white/70">Make it Personal</div>
+								<div className="text-xs text-white/70">You Think... We Create...</div>
 							</div>
 						</Link>
 
@@ -260,7 +260,7 @@ export default function LoginPage() {
 									<div className="font-bold text-[#2E2E2E]">Printing House</div>
 
 									<div className="text-[10px] text-[#2E2E2E]/50">
-										Make it Personal
+										You Think... We Create...
 									</div>
 								</div>
 							</Link>
