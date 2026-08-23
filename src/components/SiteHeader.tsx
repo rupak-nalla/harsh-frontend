@@ -182,13 +182,13 @@ export default function SiteHeader() {
 						    ACCOUNT
 						================================================= */}
 
-						{/* <Link
+						<Link
 							href="/profile"
 							aria-label="Account"
 							className="hidden h-10 w-10 items-center justify-center rounded-xl bg-background text-foreground/70 transition hover:bg-muted/10 hover:text-[#85161B] sm:flex"
 						>
 							<HiOutlineUser size={20} />
-						</Link> */}
+						</Link>
 
 						{/* =================================================
 						    CART
@@ -361,14 +361,14 @@ export default function SiteHeader() {
 									</p>
 
 									<div className="space-y-1">
-										{/* <Link
+										<Link
 											href="/profile"
 											onClick={closeMobileMenu}
 											className="flex items-center gap-3 rounded-xl bg-background px-4 py-3.5 text-sm font-medium text-foreground/75 transition hover:bg-muted/10 hover:text-[#85161B]"
 										>
 											<HiOutlineUser size={20} />
 											Account
-										</Link> */}
+										</Link>
 
 										<Link
 											href="/wishlist"
