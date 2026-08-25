@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 const API_URL = "https://printinghouseujjain.in";
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
 	try {
 		const cookie = request.headers.get("cookie");
 
-		const response = await fetch(`${API_URL}/api/logout`, {
-			method: "POST",
+		const response = await fetch(`${API_URL}/api/orders`, {
+			method: "GET",
 			headers: {
 				Accept: "application/json",
 				...(cookie ? { Cookie: cookie } : {}),
@@ -22,12 +22,14 @@ export async function POST(request: NextRequest) {
 		try {
 			data = text ? JSON.parse(text) : {};
 		} catch {
+			console.error("INVALID ORDERS RESPONSE:", text);
+
 			data = {
-				message: text || "Invalid response from logout server.",
+				message: text || "Invalid response from orders server.",
 			};
 		}
 
-		console.log("BACKEND LOGOUT RESPONSE:", data);
+		console.log("BACKEND ORDERS RESPONSE:", data);
 
 		const nextResponse = NextResponse.json(data, {
 			status: response.status,
@@ -41,11 +43,11 @@ export async function POST(request: NextRequest) {
 
 		return nextResponse;
 	} catch (error) {
-		console.error("Logout proxy error:", error);
+		console.error("Orders proxy error:", error);
 
 		return NextResponse.json(
 			{
-				message: "Unable to connect to logout server.",
+				message: "Unable to connect to orders server.",
 			},
 			{
 				status: 500,

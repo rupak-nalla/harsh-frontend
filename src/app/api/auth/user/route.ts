@@ -4,11 +4,13 @@ const API_URL = "https://printinghouseujjain.in";
 
 export async function GET(request: NextRequest) {
 	try {
+		const cookie = request.headers.get("cookie");
+
 		const response = await fetch(`${API_URL}/api/user`, {
 			method: "GET",
 			headers: {
 				Accept: "application/json",
-				Cookie: request.headers.get("cookie") || "",
+				...(cookie ? { Cookie: cookie } : {}),
 			},
 			cache: "no-store",
 		});
@@ -18,8 +20,10 @@ export async function GET(request: NextRequest) {
 		let data: unknown;
 
 		try {
-			data = JSON.parse(text);
+			data = text ? JSON.parse(text) : {};
 		} catch {
+			console.error("INVALID USER RESPONSE:", text);
+
 			data = {
 				message: text || "Invalid response from user server.",
 			};
@@ -31,10 +35,6 @@ export async function GET(request: NextRequest) {
 			status: response.status,
 		});
 
-		/*
-		 * Forward Set-Cookie headers from backend.
-		 * This is important if the backend uses a session cookie.
-		 */
 		const setCookie = response.headers.get("set-cookie");
 
 		if (setCookie) {

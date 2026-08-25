@@ -4,106 +4,132 @@ const API_URL = "https://printinghouseujjain.in";
 
 export async function POST(request: NextRequest) {
 	try {
-		const body = await request.json().catch(() => null);
+		console.log("====================================");
+		console.log("NEXT.JS /api/cart/add CALLED");
+		console.log("====================================");
 
-		const productId = body?.productId ?? body?.product_id;
-		const quantity = body?.quantity;
+		/*
+		 * Read multipart/form-data from the frontend.
+		 *
+		 * Product customization can contain:
+		 * - text fields
+		 * - customization requirements
+		 * - uploaded images
+		 */
+		const formData = await request.formData();
 
-		if (
-			productId === undefined ||
-			productId === null ||
-			String(productId).trim() === ""
-		) {
-			return NextResponse.json(
-				{
-					message: "Missing required product id.",
-				},
-				{
-					status: 400,
-				},
-			);
+		console.log("FORM DATA RECEIVED:");
+
+		for (const [key, value] of formData.entries()) {
+			if (value instanceof File) {
+				console.log(
+					key,
+					`[File: ${value.name}, ${value.size} bytes, ${value.type}]`,
+				);
+			} else {
+				console.log(key, value);
+			}
 		}
 
 		/*
-		 * quantity is optional.
-		 *
-		 * undefined → backend default (+1)
-		 * 0         → remove product
-		 * 1         → set quantity to 1
-		 * 2         → set quantity to 2
-		 * etc.
+		 * Forward the user's cookies to the backend.
 		 */
-		if (
-			quantity !== undefined &&
-			(typeof quantity !== "number" ||
-				!Number.isFinite(quantity) ||
-				quantity < 0 ||
-				!Number.isInteger(quantity))
-		) {
-			return NextResponse.json(
-				{
-					message: "Invalid quantity.",
-				},
-				{
-					status: 400,
-				},
-			);
-		}
+		const cookie = request.headers.get("cookie");
 
-		const backendFormData = new FormData();
-
-		backendFormData.append("product_id", String(productId));
+		console.log("COOKIE:", cookie ? "Present" : "Not present");
 
 		/*
-		 * Only send quantity when explicitly provided.
-		 *
-		 * This is important because:
-		 *
-		 * no quantity → backend's default +1
-		 * quantity 0   → backend receives 0
+		 * Call the actual backend.
 		 */
-		if (quantity !== undefined) {
-			backendFormData.append("quantity", String(quantity));
-		}
+		const backendUrl = `${API_URL}/api/add_to_cart`;
 
-		console.log("FORWARDING ADD TO CART:", {
-			product_id: String(productId),
-			quantity:
-				quantity === undefined ? "(not set — backend default)" : quantity,
-		});
+		console.log("FORWARDING TO:", backendUrl);
 
-		const incomingCookie = request.headers.get("cookie");
-
-		const response = await fetch(`${API_URL}/api/add_to_cart`, {
+		const response = await fetch(backendUrl, {
 			method: "POST",
-			body: backendFormData,
+
 			headers: {
 				Accept: "application/json",
-				...(incomingCookie ? { Cookie: incomingCookie } : {}),
+
+				...(cookie
+					? {
+							Cookie: cookie,
+						}
+					: {}),
 			},
+
+			/*
+			 * IMPORTANT:
+			 *
+			 * Do NOT manually set Content-Type.
+			 *
+			 * Since this is FormData, fetch automatically
+			 * generates the multipart boundary.
+			 */
+			body: formData,
+
 			cache: "no-store",
 		});
 
-		const text = await response.text();
+		console.log("BACKEND STATUS:", response.status);
+		console.log("BACKEND STATUS TEXT:", response.statusText);
+
+		const responseText = await response.text();
+
+		console.log("BACKEND RAW RESPONSE:", responseText);
 
 		let data: unknown;
 
 		try {
-			data = JSON.parse(text);
+			data = JSON.parse(responseText);
 		} catch {
 			data = {
-				message: text || "Invalid response from cart server.",
+				message:
+					responseText || "Invalid response from backend cart server.",
 			};
 		}
 
-		console.log("BACKEND ADD TO CART RESPONSE:", data);
+		/*
+		 * If the backend itself returns 404,
+		 * make that very clear to the frontend.
+		 */
+		if (!response.ok) {
+			console.error(
+				`Backend cart request failed: ${response.status}`,
+				data,
+			);
 
+			return NextResponse.json(
+				{
+					success: false,
+					message:
+						typeof data === "object" &&
+						data !== null &&
+						"message" in data
+							? String(
+									(data as { message?: unknown }).message ??
+										"Backend request failed.",
+								)
+							: "Backend cart request failed.",
+
+					backendStatus: response.status,
+					backendResponse: data,
+				},
+				{
+					status: response.status,
+				},
+			);
+		}
+
+		/*
+		 * Forward successful response.
+		 */
 		const nextResponse = NextResponse.json(data, {
 			status: response.status,
 		});
 
 		/*
-		 * Forward updated session cookie.
+		 * Forward Set-Cookie from backend.
 		 */
 		const setCookie = response.headers.get("set-cookie");
 
@@ -113,10 +139,14 @@ export async function POST(request: NextRequest) {
 
 		return nextResponse;
 	} catch (error) {
-		console.error("Add to cart proxy error:", error);
+		console.error("====================================");
+		console.error("ADD TO CART PROXY ERROR");
+		console.error(error);
+		console.error("====================================");
 
 		return NextResponse.json(
 			{
+				success: false,
 				message: "Unable to connect to cart server.",
 			},
 			{

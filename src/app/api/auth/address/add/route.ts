@@ -4,14 +4,37 @@ const API_URL = "https://printinghouseujjain.in";
 
 export async function POST(request: NextRequest) {
 	try {
+		const incomingFormData = await request.formData();
+
+		const formData = new FormData();
+
+		const fields = [
+			"phone",
+			"flat_house_building",
+			"road_area_colony",
+			"landmark",
+			"city",
+			"state",
+			"pincode",
+		];
+
+		for (const field of fields) {
+			const value = incomingFormData.get(field);
+
+			if (value !== null) {
+				formData.append(field, String(value));
+			}
+		}
+
 		const cookie = request.headers.get("cookie");
 
-		const response = await fetch(`${API_URL}/api/logout`, {
+		const response = await fetch(`${API_URL}/api/add_address`, {
 			method: "POST",
 			headers: {
 				Accept: "application/json",
 				...(cookie ? { Cookie: cookie } : {}),
 			},
+			body: formData,
 			cache: "no-store",
 		});
 
@@ -23,11 +46,11 @@ export async function POST(request: NextRequest) {
 			data = text ? JSON.parse(text) : {};
 		} catch {
 			data = {
-				message: text || "Invalid response from logout server.",
+				message: text || "Invalid response from address server.",
 			};
 		}
 
-		console.log("BACKEND LOGOUT RESPONSE:", data);
+		console.log("BACKEND ADD ADDRESS RESPONSE:", data);
 
 		const nextResponse = NextResponse.json(data, {
 			status: response.status,
@@ -41,11 +64,11 @@ export async function POST(request: NextRequest) {
 
 		return nextResponse;
 	} catch (error) {
-		console.error("Logout proxy error:", error);
+		console.error("Add address proxy error:", error);
 
 		return NextResponse.json(
 			{
-				message: "Unable to connect to logout server.",
+				message: "Unable to connect to address server.",
 			},
 			{
 				status: 500,

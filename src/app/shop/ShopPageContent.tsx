@@ -1,9 +1,13 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+
 import { useRouter, useSearchParams } from "next/navigation";
+
 import ProductCard from "../../components/ProductCard";
+
 import { CartProvider } from "../../context/CartContext";
+
 import {
 	Search,
 	ChevronDown,
@@ -53,9 +57,19 @@ interface ApiProduct {
 	occasion_ids?: string | null;
 	in_stock?: string | null;
 	sold?: number;
-	customize_reqs?: string | null;
+
+	/*
+	 * Backend normally returns this as a JSON string:
+	 *
+	 * '["text:10:Enter your custom name"]'
+	 *
+	 * But we also support an already parsed array.
+	 */
+	customize_reqs?: string | string[] | null;
+
 	keywords?: string | null;
 	created_at?: string;
+	delivery?: string | number | null;
 }
 
 /* =========================================================
@@ -74,6 +88,8 @@ interface Product {
 	occasionNames: string[];
 	description: string;
 	inStock: boolean;
+
+	customizeReqs: string | string[] | null;
 }
 
 /* =========================================================
@@ -131,7 +147,9 @@ export default function ShopPage() {
 	===================================================== */
 
 	const categoryFromUrl = searchParams.get("category");
+
 	const occasionFromUrl = searchParams.get("occasion");
+
 	const searchFromUrl = searchParams.get("search");
 
 	/* =====================================================
@@ -139,10 +157,13 @@ export default function ShopPage() {
 	===================================================== */
 
 	const [categories, setCategories] = useState<ApiCategory[]>([]);
+
 	const [occasions, setOccasions] = useState<ApiOccasion[]>([]);
+
 	const [products, setProducts] = useState<Product[]>([]);
 
 	const [loading, setLoading] = useState(true);
+
 	const [error, setError] = useState("");
 
 	/* =====================================================
@@ -186,9 +207,9 @@ export default function ShopPage() {
 
 				console.log("Shop API response:", data);
 
-				/* ---------------------------------------------
+				/* =================================================
 				   CATEGORIES
-				--------------------------------------------- */
+				================================================= */
 
 				const apiCategories: ApiCategory[] = Array.isArray(data.categories)
 					? data.categories
@@ -196,9 +217,9 @@ export default function ShopPage() {
 
 				setCategories(apiCategories);
 
-				/* ---------------------------------------------
+				/* =================================================
 				   OCCASIONS
-				--------------------------------------------- */
+				================================================= */
 
 				const apiOccasions: ApiOccasion[] = Array.isArray(data.occasions)
 					? data.occasions
@@ -206,9 +227,9 @@ export default function ShopPage() {
 
 				setOccasions(apiOccasions);
 
-				/* ---------------------------------------------
+				/* =================================================
 				   PRODUCTS
-				--------------------------------------------- */
+				================================================= */
 
 				const apiProducts: ApiProduct[] = Array.isArray(data.products)
 					? data.products
@@ -221,24 +242,33 @@ export default function ShopPage() {
 
 					const occasionIds = parseIds(product.occasion_ids);
 
-					/*
-					 * IMPORTANT:
-					 * Normalize description to a guaranteed string.
-					 *
-					 * If API returns:
-					 *   null
-					 *   undefined
-					 *   ""
-					 *
-					 * ProductCard will still receive a valid string.
-					 */
-
 					const description =
 						typeof product.description === "string"
 							? product.description.trim()
 							: "";
 
-					console.log(`Product "${product.name}" description:`, description);
+					/*
+					 * IMPORTANT:
+					 *
+					 * Preserve customize_reqs.
+					 *
+					 * Backend examples:
+					 *
+					 * "[\"text:10:Enter your custom name\"]"
+					 *
+					 * "[\"photo:Upload Photo\",\"text:8:CustomText (optional)\"]"
+					 */
+
+					const customizeReqs = Array.isArray(product.customize_reqs)
+						? product.customize_reqs
+						: typeof product.customize_reqs === "string"
+							? product.customize_reqs
+							: null;
+
+					console.log(
+						`Product "${product.name}" customization requirements:`,
+						customizeReqs,
+					);
 
 					return {
 						id: String(product.id),
@@ -273,12 +303,11 @@ export default function ShopPage() {
 							)
 							.filter(Boolean),
 
-						/*
-						 * THIS IS THE IMPORTANT PART
-						 */
 						description,
 
 						inStock: product.in_stock === "available",
+
+						customizeReqs,
 					};
 				});
 
@@ -320,6 +349,7 @@ export default function ShopPage() {
 			.filter((id): id is number => typeof id === "number");
 
 		setSelectedCategories(selectedIds);
+
 		setCurrentPage(1);
 	}, [categoryFromUrl, categories]);
 
@@ -346,6 +376,7 @@ export default function ShopPage() {
 			.filter((id): id is number => typeof id === "number");
 
 		setSelectedOccasions(selectedIds);
+
 		setCurrentPage(1);
 	}, [occasionFromUrl, occasions]);
 
@@ -355,6 +386,7 @@ export default function ShopPage() {
 
 	useEffect(() => {
 		setSearch(searchFromUrl || "");
+
 		setCurrentPage(1);
 	}, [searchFromUrl]);
 
@@ -372,6 +404,7 @@ export default function ShopPage() {
 		}
 
 		setSelectedCategories(updatedCategories);
+
 		setCurrentPage(1);
 
 		const selectedSlugs = updatedCategories
@@ -404,6 +437,7 @@ export default function ShopPage() {
 		}
 
 		setSelectedOccasions(updatedOccasions);
+
 		setCurrentPage(1);
 
 		const selectedSlugs = updatedOccasions
@@ -471,48 +505,21 @@ export default function ShopPage() {
 	   FILTER + SEARCH + SORT
 	===================================================== */
 
-	/* =====================================================
-   FILTER + SEARCH + SORT
-===================================================== */
-
 	const filteredProducts = useMemo(() => {
 		return products
 			.filter((product) => {
-				/*
-				 * CATEGORY FILTER
-				 *
-				 * If no category is selected:
-				 *    → allow all categories
-				 *
-				 * If categories are selected:
-				 *    → product must belong to at least one
-				 *      selected category
-				 */
 				const matchesCategory =
 					selectedCategories.length === 0 ||
 					selectedCategories.some((categoryId) =>
 						product.categoryIds.includes(categoryId),
 					);
 
-				/*
-				 * OCCASION FILTER
-				 *
-				 * If no occasion is selected:
-				 *    → allow all occasions
-				 *
-				 * If occasions are selected:
-				 *    → product must belong to at least one
-				 *      selected occasion
-				 */
 				const matchesOccasion =
 					selectedOccasions.length === 0 ||
 					selectedOccasions.some((occasionId) =>
 						product.occasionIds.includes(occasionId),
 					);
 
-				/*
-				 * SEARCH FILTER
-				 */
 				const searchText = search.toLowerCase().trim();
 
 				const matchesSearch =
@@ -520,23 +527,6 @@ export default function ShopPage() {
 					product.name.toLowerCase().includes(searchText) ||
 					product.description.toLowerCase().includes(searchText);
 
-				/*
-				 * IMPORTANT:
-				 *
-				 * CATEGORY AND OCCASION are combined with AND.
-				 *
-				 * Example:
-				 *
-				 * Category = T-Shirts
-				 * Occasion = Birthday
-				 *
-				 * Product must satisfy BOTH:
-				 *
-				 *     T-Shirt ✓
-				 *     Birthday ✓
-				 *
-				 * Otherwise it will NOT be displayed.
-				 */
 				return matchesCategory && matchesOccasion && matchesSearch;
 			})
 			.sort((a, b) => {
@@ -850,13 +840,15 @@ export default function ShopPage() {
 												price: product.price,
 												original: product.original,
 												image: product.image,
+												description: product.description,
 
 												/*
 												 * IMPORTANT:
-												 * Pass the description
-												 * directly.
+												 *
+												 * Pass the raw customization
+												 * requirement data through.
 												 */
-												description: product.description,
+												customizeReqs: product.customizeReqs,
 											}}
 											showOriginal
 										/>
@@ -1040,8 +1032,6 @@ function CategoryFilters({
 
 	return (
 		<div className="rounded-2xl border border-[#E8DED7] bg-white p-5">
-			{/* HEADER */}
-
 			<div className="flex items-start justify-between gap-3">
 				<div>
 					<h3 className="text-sm font-semibold text-[#2E2E2E]">Filters</h3>

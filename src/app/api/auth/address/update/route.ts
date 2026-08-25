@@ -4,25 +4,20 @@ const API_URL = "https://printinghouseujjain.in";
 
 export async function POST(request: NextRequest) {
 	try {
-		/*
-		 * Read the incoming multipart/form-data.
-		 */
 		const incomingFormData = await request.formData();
 
-		/*
-		 * Create a new FormData for the actual backend.
-		 */
 		const formData = new FormData();
 
 		const fields = [
-			"primary",
+			"id",
+			"name",
+			"phone",
 			"flat_house_building",
 			"road_area_colony",
 			"landmark",
 			"city",
 			"state",
 			"pincode",
-			"phone",
 		];
 
 		for (const field of fields) {
@@ -33,20 +28,13 @@ export async function POST(request: NextRequest) {
 			}
 		}
 
-		console.log(
-			"FORWARDING ADDRESS FORM DATA:",
-			Object.fromEntries(formData.entries()),
-		);
+		const cookie = request.headers.get("cookie");
 
-		const response = await fetch(`${API_URL}/api/add_address`, {
+		const response = await fetch(`${API_URL}/api/update_user`, {
 			method: "POST",
 			headers: {
 				Accept: "application/json",
-
-				/*
-				 * Forward the user's authentication cookie.
-				 */
-				Cookie: request.headers.get("cookie") || "",
+				...(cookie ? { Cookie: cookie } : {}),
 			},
 			body: formData,
 			cache: "no-store",
@@ -57,22 +45,19 @@ export async function POST(request: NextRequest) {
 		let data: unknown;
 
 		try {
-			data = JSON.parse(text);
+			data = text ? JSON.parse(text) : {};
 		} catch {
 			data = {
-				message: text || "Invalid response from address server.",
+				message: text || "Invalid response from update user server.",
 			};
 		}
 
-		console.log("BACKEND ADD ADDRESS RESPONSE:", data);
+		console.log("BACKEND UPDATE USER RESPONSE:", data);
 
 		const nextResponse = NextResponse.json(data, {
 			status: response.status,
 		});
 
-		/*
-		 * Forward backend cookies if it sends any.
-		 */
 		const setCookie = response.headers.get("set-cookie");
 
 		if (setCookie) {
@@ -81,11 +66,11 @@ export async function POST(request: NextRequest) {
 
 		return nextResponse;
 	} catch (error) {
-		console.error("Add address proxy error:", error);
+		console.error("Update user proxy error:", error);
 
 		return NextResponse.json(
 			{
-				message: "Unable to connect to address server.",
+				message: "Unable to update user.",
 			},
 			{
 				status: 500,

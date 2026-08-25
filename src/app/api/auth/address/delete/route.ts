@@ -4,14 +4,34 @@ const API_URL = "https://printinghouseujjain.in";
 
 export async function POST(request: NextRequest) {
 	try {
+		const incomingFormData = await request.formData();
+
+		const id = incomingFormData.get("id");
+
+		if (!id) {
+			return NextResponse.json(
+				{
+					message: "Address ID is required.",
+				},
+				{
+					status: 400,
+				},
+			);
+		}
+
+		const formData = new FormData();
+
+		formData.append("id", String(id));
+
 		const cookie = request.headers.get("cookie");
 
-		const response = await fetch(`${API_URL}/api/logout`, {
+		const response = await fetch(`${API_URL}/api/delete_address`, {
 			method: "POST",
 			headers: {
 				Accept: "application/json",
 				...(cookie ? { Cookie: cookie } : {}),
 			},
+			body: formData,
 			cache: "no-store",
 		});
 
@@ -23,11 +43,11 @@ export async function POST(request: NextRequest) {
 			data = text ? JSON.parse(text) : {};
 		} catch {
 			data = {
-				message: text || "Invalid response from logout server.",
+				message: text || "Invalid response from delete address server.",
 			};
 		}
 
-		console.log("BACKEND LOGOUT RESPONSE:", data);
+		console.log("BACKEND DELETE ADDRESS RESPONSE:", data);
 
 		const nextResponse = NextResponse.json(data, {
 			status: response.status,
@@ -41,11 +61,11 @@ export async function POST(request: NextRequest) {
 
 		return nextResponse;
 	} catch (error) {
-		console.error("Logout proxy error:", error);
+		console.error("Delete address proxy error:", error);
 
 		return NextResponse.json(
 			{
-				message: "Unable to connect to logout server.",
+				message: "Unable to delete address.",
 			},
 			{
 				status: 500,

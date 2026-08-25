@@ -26,52 +26,35 @@ const PRODUCT_IMAGE_BASE_URL =
    TYPES
 ============================================================================ */
 
+type Customization = Record<string, string>;
+
 type CartItem = {
 	id: string;
 	title: string;
+	description: string;
 	price: number;
+	marketPrice: number;
+	resellerPrice: number;
 	quantity: number;
 	image?: string;
+	delivery: number;
+	customization: Customization;
+	inStock: string;
+};
+
+type CartResponse = {
+	status?: number;
+	message?: string;
+	products_count?: number;
+	cart?: RawCartItem[];
+	total_price?: number | string;
+	delivery_fee?: number | string;
+	grand_total?: number | string;
 };
 
 type RawCartItem = {
 	id?: string | number;
 	product_id?: string | number;
-	productId?: string | number;
-
-	title?: string;
-	name?: string;
-
-	price?: number | string;
-
-	quantity?: number | string;
-	qty?: number | string;
-
-	image?: string;
-	image_url?: string;
-};
-
-/*
- * Product structure returned by:
- *
- * /api/products?product_id=<id>
- *
- * Example:
- *
- * {
- *   "status": 200,
- *   "message": "Success.",
- *   "product": {
- *      "id": 2,
- *      "name": "...",
- *      "selling_price": "249.00",
- *      "primary_photo_path": "2_1.png",
- *      ...
- *   }
- * }
- */
-type Product = {
-	id?: string | number;
 
 	name?: string;
 	description?: string;
@@ -97,132 +80,119 @@ type Product = {
 	keywords?: string;
 
 	created_at?: string;
-};
 
-type CartResponse = {
-	items?: RawCartItem[];
-	cart?: RawCartItem[];
-	cart_items?: RawCartItem[];
+	delivery?: string | number;
 
-	message?: string;
+	quantity?: string | number;
 
-	status?: number;
-};
-
-type ProductResponse = {
-	status?: number;
-
-	message?: string;
-
-	product?: Product;
-
-	data?: Product | Product[];
-
-	products?: Product[];
+	customization?: string | Record<string, string>;
 };
 
 /* ============================================================================
-   NORMALIZE CART ITEM
+   HELPERS
 ============================================================================ */
 
-function normalizeCartItem(raw: RawCartItem): CartItem {
-	const id = String(raw.product_id ?? raw.productId ?? raw.id ?? "");
+/**
+ * Convert a value into a safe number.
+ */
+function toNumber(value: unknown, fallback = 0): number {
+	const number = Number(value);
 
-	const quantity = Number(raw.quantity ?? raw.qty ?? 1);
-
-	const price = Number(raw.price ?? 0);
-
-	return {
-		id,
-
-		title: raw.title ?? raw.name ?? "",
-
-		price: Number.isFinite(price) ? price : 0,
-
-		quantity:
-			Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1,
-
-		image: raw.image ?? raw.image_url,
-	};
+	return Number.isFinite(number) ? number : fallback;
 }
 
-/* ============================================================================
-   EXTRACT PRODUCT
-============================================================================ */
-
-function extractProduct(data: ProductResponse): Product | null {
-	/*
-	 * Actual API response:
-	 *
-	 * {
-	 *   status: 200,
-	 *   message: "Success.",
-	 *   product: {...}
-	 * }
-	 */
-
-	if (data.product && typeof data.product === "object") {
-		return data.product;
+/**
+ * Convert API customization string into an object.
+ *
+ * Example API:
+ *
+ * "{\"penname\":\"Name To be Printed On Pen = xcvbnmn,\"}"
+ *
+ * becomes:
+ *
+ * {
+ *   penname: "Name To be Printed On Pen = xcvbnmn,"
+ * }
+ */
+function parseCustomization(
+	value?: string | Record<string, string>,
+): Customization {
+	if (!value) {
+		return {};
 	}
 
-	/*
-	 * Fallback in case API returns:
-	 *
-	 * {
-	 *   data: {...}
-	 * }
-	 */
-
-	if (data.data && !Array.isArray(data.data) && typeof data.data === "object") {
-		return data.data;
+	if (typeof value === "object") {
+		return value;
 	}
 
-	/*
-	 * Fallback if API returns products array.
-	 */
+	try {
+		const parsed = JSON.parse(value);
 
-	if (Array.isArray(data.products) && data.products.length > 0) {
-		return data.products[0];
+		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+			return parsed as Customization;
+		}
+	} catch (error) {
+		console.error("Unable to parse customization:", error);
 	}
 
-	/*
-	 * Fallback if data itself is an array.
-	 */
-
-	if (Array.isArray(data.data) && data.data.length > 0) {
-		return data.data[0];
-	}
-
-	return null;
+	return {};
 }
 
-/* ============================================================================
-   PRODUCT IMAGE URL
-============================================================================ */
-
+/**
+ * Convert an API image filename into the actual image URL.
+ */
 function getProductImage(photoPath?: string): string | undefined {
 	if (!photoPath) {
 		return undefined;
 	}
 
-	/*
-	 * If API already returns a complete URL,
-	 * use it directly.
-	 */
-
-	if (photoPath.startsWith("http://") || photoPath.startsWith("https://")) {
+	if (
+		photoPath.startsWith("http://") ||
+		photoPath.startsWith("https://")
+	) {
 		return photoPath;
 	}
-
-	/*
-	 * Remove a leading slash so we don't get:
-	 *
-	 * /assets/products//2_1.png
-	 */
 
 	const cleanPath = photoPath.replace(/^\/+/, "");
 
 	return `${PRODUCT_IMAGE_BASE_URL}${cleanPath}`;
+}
+
+/**
+ * Convert raw cart item returned by the backend into
+ * the structure used by the UI.
+ */
+function normalizeCartItem(raw: RawCartItem): CartItem {
+	const id = String(raw.id ?? raw.product_id ?? "");
+
+	const quantity = Math.max(
+		1,
+		Math.floor(toNumber(raw.quantity, 1)),
+	);
+
+	return {
+		id,
+
+		title: raw.name ?? "Untitled product",
+
+		description: raw.description ?? "",
+
+		price: toNumber(raw.selling_price, 0),
+
+		marketPrice: toNumber(raw.market_price, 0),
+
+		resellerPrice: toNumber(raw.reseller_price, 0),
+
+		quantity,
+
+		image: getProductImage(raw.primary_photo_path),
+
+		delivery: toNumber(raw.delivery, 0),
+
+		customization: parseCustomization(raw.customization),
+
+		inStock: raw.in_stock ?? "available",
+	};
 }
 
 /* ============================================================================
@@ -246,12 +216,18 @@ function CartView() {
 
 	const [error, setError] = useState("");
 
+	const [deliveryFee, setDeliveryFee] = useState(0);
+
+	const [serverSubtotal, setServerSubtotal] = useState(0);
+
+	const [serverGrandTotal, setServerGrandTotal] = useState(0);
+
 	const [updatingItemIds, setUpdatingItemIds] = useState<Set<string>>(
 		new Set(),
 	);
 
 	/* ==========================================================================
-	   ERROR HELPER
+	   ERROR
 	========================================================================== */
 
 	const showError = (message: string) => {
@@ -259,48 +235,7 @@ function CartView() {
 
 		setTimeout(() => {
 			setError("");
-		}, 2500);
-	};
-
-	/* ==========================================================================
-	   FETCH PRODUCT DETAILS
-	========================================================================== */
-
-	const fetchProductDetails = async (
-		productId: string,
-	): Promise<Product | null> => {
-		try {
-			/*
-			 * Our Next.js proxy handles:
-			 *
-			 * GET /api/products?product_id=<id>
-			 *
-			 * and forwards the product_id to the
-			 * external API.
-			 */
-
-			const response = await fetch(
-				`/api/products?product_id=${encodeURIComponent(productId)}`,
-				{
-					method: "GET",
-					cache: "no-store",
-				},
-			);
-
-			const data: ProductResponse = await response.json().catch(() => ({}));
-
-			if (!response.ok) {
-				throw new Error(
-					data?.message ?? `Unable to fetch product ${productId}.`,
-				);
-			}
-
-			return extractProduct(data);
-		} catch (err) {
-			console.error(`Fetch product ${productId} failed:`, err);
-
-			return null;
-		}
+		}, 3000);
 	};
 
 	/* ==========================================================================
@@ -313,106 +248,48 @@ function CartView() {
 		setError("");
 
 		try {
-			/*
-			 * First fetch the cart.
-			 */
-
 			const response = await fetch("/api/cart", {
 				method: "GET",
-
 				credentials: "include",
-
 				cache: "no-store",
 			});
 
-			const data: CartResponse = await response.json().catch(() => ({}));
+			const data: CartResponse = await response
+				.json()
+				.catch(() => ({}));
+
+			console.log("CART RESPONSE:", data);
 
 			if (!response.ok) {
 				throw new Error(
-					data?.message ?? "Unable to load your cart. Please try again.",
+					data?.message ??
+						"Unable to load your cart. Please try again.",
 				);
 			}
 
-			/*
-			 * Support different possible cart response keys.
-			 */
+			const rawItems = Array.isArray(data.cart) ? data.cart : [];
 
-			const rawItems = data.items ?? data.cart ?? data.cart_items ?? [];
-
-			/*
-			 * Normalize cart items.
-			 */
-
-			const cartItems = rawItems
+			const normalizedItems = rawItems
 				.map(normalizeCartItem)
 				.filter((item) => item.id);
 
+			setItems(normalizedItems);
+
 			/*
-			 * Fetch product details for every cart item.
+			 * Store totals returned by the backend.
 			 */
 
-			const itemsWithDetails = await Promise.all(
-				cartItems.map(async (cartItem) => {
-					const product = await fetchProductDetails(cartItem.id);
-
-					/*
-					 * If product API fails,
-					 * keep the original cart item.
-					 */
-
-					if (!product) {
-						return cartItem;
-					}
-
-					/*
-					 * PRODUCT NAME
-					 *
-					 * API:
-					 *
-					 * product.name
-					 */
-
-					const title = product.name ?? cartItem.title ?? "Untitled product";
-
-					/*
-					 * PRODUCT SELLING PRICE
-					 *
-					 * API:
-					 *
-					 * selling_price: "249.00"
-					 */
-
-					const price = Number(product.selling_price ?? cartItem.price ?? 0);
-
-					/*
-					 * PRODUCT PRIMARY IMAGE
-					 *
-					 * API:
-					 *
-					 * primary_photo_path:
-					 * "2_1.png"
-					 *
-					 * becomes:
-					 *
-					 * https://printinghouseujjain.in/assets/products/2_1.png
-					 */
-
-					const image =
-						getProductImage(product.primary_photo_path) ?? cartItem.image;
-
-					return {
-						...cartItem,
-
-						title,
-
-						price: Number.isFinite(price) ? price : 0,
-
-						image,
-					};
-				}),
+			setServerSubtotal(
+				toNumber(data.total_price, 0),
 			);
 
-			setItems(itemsWithDetails);
+			setDeliveryFee(
+				toNumber(data.delivery_fee, 0),
+			);
+
+			setServerGrandTotal(
+				toNumber(data.grand_total, 0),
+			);
 		} catch (err) {
 			console.error("Fetch cart failed:", err);
 
@@ -426,43 +303,64 @@ function CartView() {
 		}
 	};
 
+	/* ==========================================================================
+	   INITIAL LOAD
+	========================================================================== */
+
 	useEffect(() => {
 		fetchCart();
 	}, []);
 
 	/* ==========================================================================
-	   CART TOTAL
+	   LOCAL TOTALS
 	========================================================================== */
 
-	const cartTotal = items.reduce(
+	const localSubtotal = items.reduce(
 		(sum, item) => sum + item.price * item.quantity,
 		0,
 	);
 
-	const totalProducts = items.reduce((total, item) => total + item.quantity, 0);
+	const totalProducts = items.reduce(
+		(total, item) => total + item.quantity,
+		0,
+	);
+
+	/*
+	 * Use backend totals when available.
+	 *
+	 * During optimistic quantity changes, localSubtotal is more
+	 * accurate until fetchCart() finishes.
+	 */
+
+	const subtotal =
+		items.length > 0 && serverSubtotal > 0
+			? localSubtotal
+			: localSubtotal;
+
+	const grandTotal =
+		items.length > 0
+			? subtotal + deliveryFee
+			: 0;
 
 	/* ==========================================================================
 	   SET QUANTITY
 	========================================================================== */
 
-	const setItemQuantity = async (itemId: string, newQuantity: number) => {
-		/*
-		 * Quantity cannot be negative.
-		 */
-
+	const setItemQuantity = async (
+		itemId: string,
+		newQuantity: number,
+	) => {
 		if (newQuantity < 0) {
 			return;
 		}
-
-		/*
-		 * Prevent duplicate requests.
-		 */
 
 		if (updatingItemIds.has(itemId)) {
 			return;
 		}
 
-		const currentItem = items.find((item) => item.id === itemId);
+		const currentItem = items.find(
+			(item) => item.id === itemId,
+		);
 
 		if (!currentItem) {
 			return;
@@ -471,7 +369,7 @@ function CartView() {
 		const previousQuantity = currentItem.quantity;
 
 		/*
-		 * Mark product as updating.
+		 * Mark item as updating.
 		 */
 
 		setUpdatingItemIds((previous) => {
@@ -484,12 +382,14 @@ function CartView() {
 
 		/*
 		 * Optimistic update.
-		 *
-		 * Quantity 0 means remove.
 		 */
 
 		if (newQuantity === 0) {
-			setItems((previous) => previous.filter((item) => item.id !== itemId));
+			setItems((previous) =>
+				previous.filter(
+					(item) => item.id !== itemId,
+				),
+			);
 		} else {
 			setItems((previous) =>
 				previous.map((item) =>
@@ -505,73 +405,90 @@ function CartView() {
 
 		try {
 			/*
-			 * Update cart.
+			 * IMPORTANT:
 			 *
-			 * quantity = 0
-			 * means remove.
+			 * /api/cart/add expects multipart/form-data.
+			 *
+			 * Do NOT send JSON.
 			 */
+
+			const formData = new FormData();
+
+			formData.append("product_id", itemId);
+
+			formData.append(
+				"quantity",
+				String(newQuantity),
+			);
 
 			const response = await fetch("/api/cart/add", {
 				method: "POST",
 
-				headers: {
-					"Content-Type": "application/json",
-				},
-
 				credentials: "include",
 
-				body: JSON.stringify({
-					productId: itemId,
-
-					quantity: newQuantity,
-				}),
+				body: formData,
 			});
 
-			const data: {
-				message?: string;
-			} = await response.json().catch(() => ({}));
+			const data = await response
+				.json()
+				.catch(() => ({}));
+
+			console.log(
+				"UPDATE CART RESPONSE:",
+				data,
+			);
 
 			if (!response.ok) {
 				throw new Error(
-					data?.message ?? "Unable to update cart. Please try again.",
+					data?.message ??
+						"Unable to update cart. Please try again.",
 				);
 			}
-		} catch (err) {
-			console.error("Quantity update failed:", err);
 
 			/*
-			 * Restore previous state.
+			 * Fetch the cart again so that:
+			 *
+			 * - quantity
+			 * - subtotal
+			 * - delivery
+			 * - grand total
+			 *
+			 * are all synchronized with backend.
+			 */
+
+			await fetchCart();
+		} catch (err) {
+			console.error(
+				"Quantity update failed:",
+				err,
+			);
+
+			/*
+			 * Restore old quantity.
 			 */
 
 			setItems((previous) => {
-				const exists = previous.some((item) => item.id === itemId);
+				const exists = previous.some(
+					(item) => item.id === itemId,
+				);
 
-				/*
-				 * If the item was
-				 * optimistically removed,
-				 * restore it.
-				 */
-
-				if (!exists && previousQuantity > 0) {
+				if (!exists) {
 					return [
 						...previous,
 						{
 							...currentItem,
-							quantity: previousQuantity,
+							quantity:
+								previousQuantity,
 						},
 					];
 				}
-
-				/*
-				 * Otherwise restore
-				 * its old quantity.
-				 */
 
 				return previous.map((item) =>
 					item.id === itemId
 						? {
 								...item,
-								quantity: previousQuantity,
+								quantity:
+									previousQuantity,
 							}
 						: item,
 				);
@@ -580,7 +497,7 @@ function CartView() {
 			showError(
 				err instanceof Error
 					? err.message
-					: "Unable to update cart. Please try again.",
+					: "Unable to update cart.",
 			);
 		} finally {
 			setUpdatingItemIds((previous) => {
@@ -598,7 +515,10 @@ function CartView() {
 	========================================================================== */
 
 	const handleIncrease = (item: CartItem) => {
-		setItemQuantity(item.id, item.quantity + 1);
+		setItemQuantity(
+			item.id,
+			item.quantity + 1,
+		);
 	};
 
 	/* ==========================================================================
@@ -606,9 +526,10 @@ function CartView() {
 	========================================================================== */
 
 	const handleDecrease = (item: CartItem) => {
-		const newQuantity = Math.max(0, item.quantity - 1);
-
-		setItemQuantity(item.id, newQuantity);
+		setItemQuantity(
+			item.id,
+			Math.max(0, item.quantity - 1),
+		);
 	};
 
 	/* ==========================================================================
@@ -638,48 +559,64 @@ function CartView() {
 
 		const previousItems = [...items];
 
-		/*
-		 * Optimistically clear.
-		 */
-
 		setItems([]);
 
 		try {
 			/*
-			 * Set every item quantity
-			 * to zero.
+			 * Remove every product.
 			 */
 
 			for (const item of previousItems) {
-				const response = await fetch("/api/cart/add", {
-					method: "POST",
+				const formData = new FormData();
 
-					headers: {
-						"Content-Type": "application/json",
+				formData.append(
+					"product_id",
+					item.id,
+				);
+
+				formData.append(
+					"quantity",
+					"0",
+				);
+
+				const response = await fetch(
+					"/api/cart/add",
+					{
+						method: "POST",
+
+						credentials: "include",
+
+						body: formData,
 					},
+				);
 
-					credentials: "include",
-
-					body: JSON.stringify({
-						productId: item.id,
-
-						quantity: 0,
-					}),
-				});
+				const data = await response
+					.json()
+					.catch(() => ({}));
 
 				if (!response.ok) {
-					const data = await response.json().catch(() => ({}));
-
-					throw new Error(data?.message ?? "Unable to clear the cart.");
+					throw new Error(
+						data?.message ??
+							"Unable to clear the cart.",
+					);
 				}
 			}
+
+			setDeliveryFee(0);
+			setServerSubtotal(0);
+			setServerGrandTotal(0);
 		} catch (err) {
-			console.error("Clear cart failed:", err);
+			console.error(
+				"Clear cart failed:",
+				err,
+			);
 
 			setItems(previousItems);
 
 			showError(
-				err instanceof Error ? err.message : "Unable to clear your cart.",
+				err instanceof Error
+					? err.message
+					: "Unable to clear your cart.",
 			);
 		}
 	};
@@ -707,7 +644,9 @@ function CartView() {
 					<div className="flex flex-col items-center gap-3">
 						<span className="h-8 w-8 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
 
-						<p className="text-sm text-[#2E2E2E]/50">Loading your cart...</p>
+						<p className="text-sm text-[#2E2E2E]/50">
+							Loading your cart...
+						</p>
 					</div>
 				</div>
 			</main>
@@ -715,7 +654,7 @@ function CartView() {
 	}
 
 	/* ==========================================================================
-	   ERROR
+	   ERROR WITH NO ITEMS
 	========================================================================== */
 
 	if (error && items.length === 0) {
@@ -778,8 +717,9 @@ function CartView() {
 						</h1>
 
 						<p className="mx-auto mt-3 max-w-md text-sm leading-7 text-[#2E2E2E]/55">
-							Looks like you haven't added anything to your cart. Find something
-							special and make it personal.
+							Looks like you haven't added anything to
+							your cart. Find something special and make
+							it personal.
 						</p>
 
 						<Link
@@ -825,8 +765,11 @@ function CartView() {
 						</h1>
 
 						<p className="mt-2 text-sm text-[#2E2E2E]/50">
-							{totalProducts} {totalProducts === 1 ? "product" : "products"} in
-							your cart
+							{totalProducts}{" "}
+							{totalProducts === 1
+								? "product"
+								: "products"}{" "}
+							in your cart
 						</p>
 					</div>
 				</div>
@@ -848,13 +791,13 @@ function CartView() {
 			)}
 
 			{/* =================================================================
-			    CART CONTENT
+			    CONTENT
 			================================================================= */}
 
 			<section className="mx-auto max-w-7xl px-5 py-8 sm:px-6 lg:px-8 lg:py-10">
 				<div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px] lg:gap-8">
 					{/* =========================================================
-					    LEFT SIDE
+					    LEFT
 					========================================================= */}
 
 					<div>
@@ -862,7 +805,9 @@ function CartView() {
 							{/* HEADER */}
 
 							<div className="flex items-center justify-between border-b border-[#E8DED7] px-5 py-4 sm:px-6">
-								<h2 className="font-semibold text-[#2E2E2E]">Cart Items</h2>
+								<h2 className="font-semibold text-[#2E2E2E]">
+									Cart Items
+								</h2>
 
 								<button
 									type="button"
@@ -877,103 +822,246 @@ function CartView() {
 
 							<div className="divide-y divide-[#E8DED7]">
 								{items.map((item) => {
-									const quantity = item.quantity;
+									const isUpdating =
+										updatingItemIds.has(
+											item.id,
+										);
 
-									const itemTotal = Number(item.price) * quantity;
-
-									const isUpdating = updatingItemIds.has(item.id);
+									const itemTotal =
+										item.price *
+										item.quantity;
 
 									return (
-										<div key={item.id} className="p-5 sm:p-6">
+										<div
+											key={item.id}
+											className="p-5 sm:p-6"
+										>
 											<div className="flex gap-4 sm:gap-5">
-												{/* IMAGE */}
+												{/* =================================================
+												    IMAGE
+												================================================= */}
 
 												<div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-[#F7F3F0] sm:h-28 sm:w-28">
 													{item.image ? (
 														<img
-															src={item.image}
-															alt={item.title || "Product"}
+															src={
+																item.image
+															}
+															alt={
+																item.title
+															}
 															className="h-full w-full object-cover"
-															onError={(event) => {
-																event.currentTarget.style.display = "none";
+															onError={(
+																event,
+															) => {
+																event.currentTarget.style.display =
+																	"none";
 															}}
 														/>
 													) : (
 														<div className="flex h-full w-full items-center justify-center">
 															<ShoppingBag
-																size={25}
+																size={
+																	25
+																}
 																className="text-[#85161B]/30"
 															/>
 														</div>
 													)}
 												</div>
 
-												{/* DETAILS */}
+												{/* =================================================
+												    DETAILS
+												================================================= */}
 
 												<div className="min-w-0 flex-1">
 													<div className="flex items-start justify-between gap-3">
-														<div>
+														<div className="min-w-0">
 															<h3 className="font-semibold text-[#2E2E2E]">
-																{item.title || "Untitled product"}
+																{
+																	item.title
+																}
 															</h3>
 
-															<p className="mt-1 text-sm text-[#2E2E2E]/50">
-																₹{Number(item.price).toFixed(2)} each
-															</p>
+															{item.description && (
+																<p className="mt-1 line-clamp-2 text-xs leading-5 text-[#2E2E2E]/45">
+																	{
+																		item.description
+																	}
+																</p>
+															)}
+
+															<div className="mt-2 flex flex-wrap items-center gap-2">
+																<span className="text-sm font-medium text-[#85161B]">
+																	₹
+																	{item.price.toFixed(
+																		2,
+																	)}
+																</span>
+
+																{item.marketPrice >
+																	item.price && (
+																	<span className="text-xs text-[#2E2E2E]/35 line-through">
+																		₹
+																		{item.marketPrice.toFixed(
+																			2,
+																		)}
+																	</span>
+																)}
+															</div>
 														</div>
 
 														{/* REMOVE */}
 
 														<button
 															type="button"
-															disabled={isUpdating}
-															onClick={() => handleRemove(item)}
+															disabled={
+																isUpdating
+															}
+															onClick={() =>
+																handleRemove(
+																	item,
+																)
+															}
 															aria-label={`Remove ${item.title}`}
-															className="rounded-lg p-2 text-[#2E2E2E]/35 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+															className="shrink-0 rounded-lg p-2 text-[#2E2E2E]/35 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
 														>
-															<Trash2 size={17} />
+															<Trash2
+																size={
+																	17
+																}
+															/>
 														</button>
 													</div>
 
-													{/* QUANTITY */}
+													{/* =================================================
+													    CUSTOMIZATION
+													================================================= */}
 
-													<div className="mt-5 flex items-center justify-between">
+													{Object.keys(
+														item.customization,
+													).length >
+														0 && (
+														<div className="mt-3 rounded-lg bg-[#FBF9F7] px-3 py-2.5">
+															<p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#85161B]">
+																Customization
+															</p>
+
+															<div className="mt-1 space-y-0.5">
+																{Object.entries(
+																	item.customization,
+																).map(
+																	(
+																		[
+																			key,
+																			value,
+																		],
+																	) => (
+																		<p
+																			key={
+																				key
+																			}
+																			className="text-xs leading-5 text-[#2E2E2E]/60"
+																		>
+																			<span className="font-medium text-[#2E2E2E]">
+																				{key
+																					.replace(
+																						/_/g,
+																						" ",
+																					)
+																					.replace(
+																						/\b\w/g,
+																						(
+																							char,
+																						) =>
+																							char.toUpperCase(),
+																					)}
+																				:
+																			</span>{" "}
+																			{
+																				value
+																			}
+																		</p>
+																	),
+																)}
+															</div>
+														</div>
+													)}
+
+													{/* =================================================
+													    QUANTITY + TOTAL
+													================================================= */}
+
+													<div className="mt-4 flex items-center justify-between gap-3">
 														<div className="flex items-center rounded-lg border border-[#DED6D0]">
 															<button
 																type="button"
-																disabled={isUpdating}
-																onClick={() => handleDecrease(item)}
+																disabled={
+																	isUpdating
+																}
+																onClick={() =>
+																	handleDecrease(
+																		item,
+																	)
+																}
 																aria-label={`Decrease quantity of ${item.title}`}
 																className="flex h-9 w-9 items-center justify-center text-[#2E2E2E]/60 transition hover:bg-[#FBF9F7] disabled:cursor-not-allowed disabled:opacity-30"
 															>
-																<Minus size={14} />
+																<Minus
+																	size={
+																		14
+																	}
+																/>
 															</button>
 
 															<span className="flex h-9 min-w-10 items-center justify-center border-x border-[#DED6D0] text-sm font-medium text-[#2E2E2E]">
 																{isUpdating ? (
 																	<span className="h-3 w-3 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
 																) : (
-																	quantity
+																	item.quantity
 																)}
 															</span>
 
 															<button
 																type="button"
-																disabled={isUpdating}
-																onClick={() => handleIncrease(item)}
+																disabled={
+																	isUpdating
+																}
+																onClick={() =>
+																	handleIncrease(
+																		item,
+																	)
+																}
 																aria-label={`Increase quantity of ${item.title}`}
 																className="flex h-9 w-9 items-center justify-center text-[#2E2E2E]/60 transition hover:bg-[#FBF9F7] disabled:cursor-not-allowed disabled:opacity-30"
 															>
-																<Plus size={14} />
+																<Plus
+																	size={
+																		14
+																	}
+																/>
 															</button>
 														</div>
 
-														{/* ITEM TOTAL */}
-
 														<p className="font-semibold text-[#85161B]">
-															₹{itemTotal.toFixed(2)}
+															₹
+															{itemTotal.toFixed(
+																2,
+															)}
 														</p>
 													</div>
+
+													{/* DELIVERY */}
+
+													{item.delivery >
+														0 && (
+														<p className="mt-2 text-[11px] text-[#2E2E2E]/40">
+															Delivery: ₹
+															{item.delivery.toFixed(
+																2,
+															)}
+														</p>
+													)}
 												</div>
 											</div>
 										</div>
@@ -989,7 +1077,10 @@ function CartView() {
 						<div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
 							<div className="flex items-center gap-3 rounded-xl border border-[#E8DED7] bg-white p-4">
 								<div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F7D6BF]/40">
-									<Truck size={17} className="text-[#85161B]" />
+									<Truck
+										size={17}
+										className="text-[#85161B]"
+									/>
 								</div>
 
 								<div>
@@ -998,14 +1089,18 @@ function CartView() {
 									</p>
 
 									<p className="mt-0.5 text-[11px] text-[#2E2E2E]/50">
-										Delivered safely to your doorstep
+										Delivered safely to
+										your doorstep
 									</p>
 								</div>
 							</div>
 
 							<div className="flex items-center gap-3 rounded-xl border border-[#E8DED7] bg-white p-4">
 								<div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F7D6BF]/40">
-									<ShieldCheck size={17} className="text-[#85161B]" />
+									<ShieldCheck
+										size={17}
+										className="text-[#85161B]"
+									/>
 								</div>
 
 								<div>
@@ -1014,7 +1109,8 @@ function CartView() {
 									</p>
 
 									<p className="mt-0.5 text-[11px] text-[#2E2E2E]/50">
-										Your information is protected
+										Your information is
+										protected
 									</p>
 								</div>
 							</div>
@@ -1032,32 +1128,53 @@ function CartView() {
 							</h2>
 
 							<div className="mt-6 space-y-4 text-sm">
+								{/* SUBTOTAL */}
+
 								<div className="flex justify-between text-[#2E2E2E]/60">
 									<span>Subtotal</span>
 
-									<span>₹{cartTotal.toFixed(2)}</span>
-								</div>
-
-								<div className="flex justify-between gap-4 text-[#2E2E2E]/60">
-									<span>Shipping</span>
-
-									<span className="text-right font-medium text-[#2E2E2E]">
-										Calculated at checkout
+									<span>
+										₹
+										{subtotal.toFixed(
+											2,
+										)}
 									</span>
 								</div>
+
+								{/* DELIVERY */}
+
+								<div className="flex justify-between text-[#2E2E2E]/60">
+									<span>Delivery</span>
+
+									<span>
+										{deliveryFee >
+										0
+											? `₹${deliveryFee.toFixed(
+													2,
+												)}`
+											: "Free"}
+									</span>
+								</div>
+
+								{/* TOTAL */}
 
 								<div className="border-t border-[#E8DED7] pt-4">
 									<div className="flex items-end justify-between">
 										<div>
-											<p className="font-semibold text-[#2E2E2E]">Total</p>
+											<p className="font-semibold text-[#2E2E2E]">
+												Grand Total
+											</p>
 
 											<p className="mt-1 text-[11px] text-[#2E2E2E]/40">
-												Taxes calculated at checkout
+												Including delivery
 											</p>
 										</div>
 
 										<p className="text-2xl font-bold text-[#85161B]">
-											₹{cartTotal.toFixed(2)}
+											₹
+											{grandTotal.toFixed(
+												2,
+											)}
 										</p>
 									</div>
 								</div>
@@ -1071,13 +1188,14 @@ function CartView() {
 								className="group mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#85161B] py-3.5 text-sm font-semibold text-white transition-all hover:bg-[#721318] hover:shadow-lg active:scale-[0.99]"
 							>
 								Proceed to Checkout
+
 								<ArrowRight
 									size={17}
 									className="transition-transform group-hover:translate-x-1"
 								/>
 							</button>
 
-							{/* CONTINUE SHOPPING */}
+							{/* CONTINUE */}
 
 							<Link
 								href="/shop"
@@ -1087,8 +1205,8 @@ function CartView() {
 							</Link>
 
 							<p className="mt-5 text-center text-[11px] leading-5 text-[#2E2E2E]/40">
-								By proceeding to checkout, you agree to our terms and
-								conditions.
+								By proceeding to checkout, you agree
+								to our terms and conditions.
 							</p>
 						</div>
 					</aside>
