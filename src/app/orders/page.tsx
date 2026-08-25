@@ -769,7 +769,7 @@ function OrderCard({ order }: { order: Order }) {
 					<div className="flex flex-col gap-2 sm:flex-row">
 						{/* VIEW ORDER */}
 
-						<Link
+						{/* <Link
 							href={`/orders/${encodeURIComponent(order.id)}`}
 							className="
 								group
@@ -799,11 +799,11 @@ function OrderCard({ order }: { order: Order }) {
 									group-hover:translate-x-0.5
 								"
 							/>
-						</Link>
+						</Link> */}
 
 						{/* TRACK / DELIVERY */}
 
-						<Link
+						{/* <Link
 							href={`/order-tracking/${encodeURIComponent(order.id)}`}
 							className={`
 								group
@@ -853,7 +853,7 @@ function OrderCard({ order }: { order: Order }) {
 									Track order
 								</>
 							)}
-						</Link>
+						</Link> */}
 					</div>
 				</div>
 

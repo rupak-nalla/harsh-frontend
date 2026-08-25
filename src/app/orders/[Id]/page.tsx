@@ -1,0 +1,1107 @@
+"use client";
+
+import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import {
+	ArrowLeft,
+	Package,
+	CheckCircle2,
+	Clock3,
+	Truck,
+	MapPin,
+	Box,
+	AlertCircle,
+	ShoppingBag,
+	Phone,
+	Home,
+	CreditCard,
+	CalendarDays,
+	ChevronRight,
+} from "lucide-react";
+
+/* ─────────────────────────────────────────
+   IMAGE URLS
+───────────────────────────────────────── */
+
+const PRODUCT_IMAGE_URL = "https://printinghouseujjain.in/assets/products/";
+
+const UPLOAD_IMAGE_URL = "https://printinghouseujjain.in/assets/uploads/";
+
+/* ─────────────────────────────────────────
+   TYPES
+───────────────────────────────────────── */
+
+type OrderStatus =
+	| "Order placed"
+	| "Order accepted"
+	| "Packed"
+	| "Shipped"
+	| "Out for delivery"
+	| "Delivered"
+	| "Cancelled";
+
+type OrderStatusType = "processing" | "shipping" | "delivered" | "cancelled";
+
+type Customization = {
+	key: string;
+	label: string;
+	value: string;
+	photos: string[];
+};
+
+type OrderItem = {
+	id: string;
+	name: string;
+	image: string;
+	qty: number;
+	price: number;
+	customizations: Customization[];
+};
+
+type OrderAddress = {
+	flatHouseBuilding: string;
+	roadAreaColony: string;
+	landmark: string;
+	city: string;
+	state: string;
+	pincode: string;
+	phone: string;
+};
+
+type Order = {
+	id: string;
+	date: string;
+	status: OrderStatus;
+	statusType: OrderStatusType;
+	paymentStatus: string;
+
+	totalPrice: number;
+	deliveryFee: number;
+	grandTotal: number;
+
+	items: OrderItem[];
+	address: OrderAddress | null;
+};
+
+/* ─────────────────────────────────────────
+   RAW API TYPES
+───────────────────────────────────────── */
+
+type RawCartItem = {
+	id?: string | number;
+	name?: string;
+	primary_photo_path?: string;
+
+	quantity?: string | number;
+	selling_price?: string | number;
+
+	[key: string]: unknown;
+};
+
+type RawAddress = {
+	flat_house_building?: string;
+	road_area_colony?: string;
+	landmark?: string;
+	city?: string;
+	state?: string;
+	pincode?: string | number;
+	phone?: string;
+};
+
+type RawOrder = {
+	id?: string | number;
+	order_id?: string | number;
+
+	payment_status?: string;
+	order_status?: string;
+
+	address?: string;
+	cart?: string;
+
+	products_count?: string | number;
+
+	total_price?: string | number;
+	delivery_fee?: string | number;
+	grand_total?: string | number;
+
+	created_at?: string;
+};
+
+type OrdersResponse = {
+	status?: number;
+	message?: string;
+	wishlist?: RawOrder[];
+	orders?: RawOrder[];
+	result?: RawOrder[];
+};
+
+/* ─────────────────────────────────────────
+   STATUS
+───────────────────────────────────────── */
+
+function normalizeStatus(rawStatus?: string): {
+	status: OrderStatus;
+	statusType: OrderStatusType;
+} {
+	const key = (rawStatus ?? "").toLowerCase().replace(/[\s_-]+/g, "");
+
+	if (key.includes("cancel")) {
+		return {
+			status: "Cancelled",
+			statusType: "cancelled",
+		};
+	}
+
+	if (key.includes("delivered")) {
+		return {
+			status: "Delivered",
+			statusType: "delivered",
+		};
+	}
+
+	if (key.includes("outfordelivery")) {
+		return {
+			status: "Out for delivery",
+			statusType: "shipping",
+		};
+	}
+
+	if (key.includes("shipped") || key.includes("dispatch")) {
+		return {
+			status: "Shipped",
+			statusType: "shipping",
+		};
+	}
+
+	if (key.includes("packed")) {
+		return {
+			status: "Packed",
+			statusType: "processing",
+		};
+	}
+
+	if (key.includes("accepted") || key.includes("confirmed")) {
+		return {
+			status: "Order accepted",
+			statusType: "processing",
+		};
+	}
+
+	return {
+		status: "Order placed",
+		statusType: "processing",
+	};
+}
+
+/* ─────────────────────────────────────────
+   FORMAT DATE
+───────────────────────────────────────── */
+
+function formatDate(dateString?: string) {
+	if (!dateString) {
+		return "—";
+	}
+
+	const parsed = new Date(dateString.replace(" ", "T"));
+
+	if (Number.isNaN(parsed.getTime())) {
+		return dateString;
+	}
+
+	return parsed.toLocaleDateString("en-IN", {
+		year: "numeric",
+		month: "long",
+		day: "numeric",
+	});
+}
+
+/* ─────────────────────────────────────────
+   NUMBER
+───────────────────────────────────────── */
+
+function toNumber(value: unknown): number {
+	const number = Number(value ?? 0);
+
+	return Number.isFinite(number) ? number : 0;
+}
+
+/* ─────────────────────────────────────────
+   UPLOAD FILE PARSER
+───────────────────────────────────────── */
+
+/*
+   Handles values such as:
+
+   "1Photo For = 20262517dd18144decd9df4545b00cdcc6e55351080755.jpg"
+
+   and
+
+   "Upload Up to 4 Photos = [\"file1.jpg\",\"file2.jpg\"]"
+*/
+
+function extractUploadedPhotos(value: string): string[] {
+	if (!value) {
+		return [];
+	}
+
+	const photos: string[] = [];
+
+	/* -----------------------------------------
+	   CASE 1:
+	   JSON array embedded inside the string
+
+	   Upload Up to 4 Photos = ["a.jpg","b.jpg"]
+	----------------------------------------- */
+
+	const arrayMatch = value.match(/\[[\s\S]*\]/);
+
+	if (arrayMatch) {
+		try {
+			const parsed = JSON.parse(arrayMatch[0]);
+
+			if (Array.isArray(parsed)) {
+				for (const item of parsed) {
+					if (typeof item === "string") {
+						photos.push(item);
+					}
+				}
+			}
+		} catch {
+			// Ignore invalid embedded JSON.
+		}
+	}
+
+	/* -----------------------------------------
+	   CASE 2:
+	   Single filename
+
+	   1Photo For = filename.jpg
+	----------------------------------------- */
+
+	if (photos.length === 0) {
+		const filenameMatch = value.match(
+			/([a-zA-Z0-9_-]+\.(?:jpg|jpeg|png|webp|gif))/gi,
+		);
+
+		if (filenameMatch) {
+			photos.push(...filenameMatch);
+		}
+	}
+
+	return [...new Set(photos)];
+}
+
+/* ─────────────────────────────────────────
+   CUSTOMIZATION PARSER
+───────────────────────────────────────── */
+
+function parseCustomizations(item: RawCartItem): Customization[] {
+	const customizations: Customization[] = [];
+
+	Object.entries(item).forEach(([key, rawValue]) => {
+		if (
+			[
+				"id",
+				"name",
+				"primary_photo_path",
+				"quantity",
+				"selling_price",
+			].includes(key)
+		) {
+			return;
+		}
+
+		if (rawValue === null || rawValue === undefined || rawValue === "") {
+			return;
+		}
+
+		let value = String(rawValue);
+
+		/*
+		   Sometimes backend can return a JSON string such as:
+
+		   {
+		     "photosome": "1Photo For = filename.jpg",
+		     "uptofour": "Upload Up to 4 Photos = [...]",
+		     "custom": "Custom Text(optional) = fasdf"
+		   }
+
+		   We display the useful portion after "=".
+		*/
+
+		const equalsIndex = value.indexOf("=");
+
+		if (equalsIndex !== -1) {
+			const possibleLabel = value.slice(0, equalsIndex).trim();
+			const possibleValue = value.slice(equalsIndex + 1).trim();
+
+			if (possibleValue) {
+				value = possibleValue;
+			}
+
+			const photos = extractUploadedPhotos(String(rawValue));
+
+			customizations.push({
+				key,
+				label:
+					possibleLabel ||
+					key
+						.replace(/([A-Z])/g, " $1")
+						.replace(/^./, (char) => char.toUpperCase()),
+				value,
+				photos,
+			});
+
+			return;
+		}
+
+		customizations.push({
+			key,
+			label: key
+				.replace(/([A-Z])/g, " $1")
+				.replace(/^./, (char) => char.toUpperCase()),
+			value,
+			photos: extractUploadedPhotos(value),
+		});
+	});
+
+	return customizations;
+}
+
+/* ─────────────────────────────────────────
+   NORMALIZE ORDER
+───────────────────────────────────────── */
+
+function normalizeOrder(raw: RawOrder): Order {
+	const orderId = String(raw.order_id ?? raw.id ?? "");
+
+	/* -----------------------------------------
+	   CART
+	----------------------------------------- */
+
+	let rawItems: RawCartItem[] = [];
+
+	if (raw.cart) {
+		try {
+			const parsed = JSON.parse(raw.cart);
+
+			if (Array.isArray(parsed)) {
+				rawItems = parsed;
+			}
+		} catch (error) {
+			console.error("Failed to parse cart:", error);
+		}
+	}
+
+	const items: OrderItem[] = rawItems.map((item, index) => {
+		const quantity = toNumber(item.quantity);
+
+		return {
+			id: String(item.id ?? `${orderId}-item-${index}`),
+
+			name: item.name ?? "Untitled product",
+
+			image: item.primary_photo_path
+				? `${PRODUCT_IMAGE_URL}${item.primary_photo_path}`
+				: "",
+
+			qty: quantity > 0 ? Math.floor(quantity) : 1,
+
+			price: toNumber(item.selling_price),
+
+			customizations: parseCustomizations(item),
+		};
+	});
+
+	/* -----------------------------------------
+	   ADDRESS
+	----------------------------------------- */
+
+	let address: OrderAddress | null = null;
+
+	if (raw.address) {
+		try {
+			const parsedAddress: RawAddress = JSON.parse(raw.address);
+
+			address = {
+				flatHouseBuilding: parsedAddress.flat_house_building ?? "",
+
+				roadAreaColony: parsedAddress.road_area_colony ?? "",
+
+				landmark: parsedAddress.landmark ?? "",
+
+				city: parsedAddress.city ?? "",
+
+				state: parsedAddress.state ?? "",
+
+				pincode:
+					parsedAddress.pincode !== undefined
+						? String(parsedAddress.pincode)
+						: "",
+
+				phone: parsedAddress.phone ?? "",
+			};
+		} catch (error) {
+			console.error("Failed to parse address:", error);
+		}
+	}
+
+	const { status, statusType } = normalizeStatus(raw.order_status);
+
+	return {
+		id: orderId,
+
+		date: formatDate(raw.created_at),
+
+		status,
+		statusType,
+
+		paymentStatus: raw.payment_status ?? "",
+
+		totalPrice: toNumber(raw.total_price),
+
+		deliveryFee: toNumber(raw.delivery_fee),
+
+		grandTotal: toNumber(raw.grand_total),
+
+		items,
+		address,
+	};
+}
+
+/* ─────────────────────────────────────────
+   ORDER DETAIL PAGE
+───────────────────────────────────────── */
+
+export default function OrderDetailsPage() {
+	const params = useParams();
+
+	const orderId = decodeURIComponent(String(params.id ?? ""));
+
+	const [order, setOrder] = useState<Order | null>(null);
+
+	const [loading, setLoading] = useState(true);
+
+	const [error, setError] = useState("");
+
+	useEffect(() => {
+		if (!orderId) {
+			setError("Invalid order ID.");
+			setLoading(false);
+			return;
+		}
+
+		fetchOrder();
+	}, [orderId]);
+
+	const fetchOrder = async () => {
+		setLoading(true);
+		setError("");
+
+		try {
+			const response = await fetch("/api/orders", {
+				method: "GET",
+				credentials: "include",
+				cache: "no-store",
+			});
+
+			const data: OrdersResponse = await response.json().catch(() => ({}));
+
+			if (!response.ok) {
+				throw new Error(data.message || "Unable to load order.");
+			}
+
+			const rawOrders = data.wishlist ?? data.orders ?? data.result ?? [];
+
+			const rawOrder = rawOrders.find(
+				(item) => String(item.order_id ?? item.id ?? "") === orderId,
+			);
+
+			if (!rawOrder) {
+				throw new Error("Order not found.");
+			}
+
+			setOrder(normalizeOrder(rawOrder));
+		} catch (error) {
+			console.error("Failed to fetch order:", error);
+
+			setError(
+				error instanceof Error ? error.message : "Unable to load this order.",
+			);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	/* ─────────────────────────────────────
+	   LOADING
+	───────────────────────────────────── */
+
+	if (loading) {
+		return (
+			<main className="min-h-screen bg-[#FBF9F7]">
+				<div className="flex min-h-screen items-center justify-center">
+					<div className="flex flex-col items-center gap-3">
+						<span className="h-8 w-8 animate-spin rounded-full border-2 border-[#85161B]/20 border-t-[#85161B]" />
+
+						<p className="text-sm text-[#2E2E2E]/50">Loading order...</p>
+					</div>
+				</div>
+			</main>
+		);
+	}
+
+	/* ─────────────────────────────────────
+	   ERROR
+	───────────────────────────────────── */
+
+	if (error || !order) {
+		return (
+			<main className="min-h-screen bg-[#FBF9F7]">
+				<div className="mx-auto flex min-h-screen max-w-3xl items-center justify-center px-5">
+					<div className="w-full rounded-3xl border border-[#E9DED7] bg-white p-10 text-center shadow-sm">
+						<div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-50">
+							<AlertCircle size={30} className="text-red-500" />
+						</div>
+
+						<h1 className="mt-5 text-2xl font-bold text-[#2E2E2E]">
+							Order not found
+						</h1>
+
+						<p className="mt-2 text-sm text-[#2E2E2E]/55">
+							{error || "We couldn't find this order."}
+						</p>
+
+						<Link
+							href="/orders"
+							className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-5 py-3 text-sm font-semibold text-white hover:bg-[#721318]"
+						>
+							<ArrowLeft size={16} />
+							Back to Orders
+						</Link>
+					</div>
+				</div>
+			</main>
+		);
+	}
+
+	return (
+		<main className="min-h-screen bg-[#FBF9F7]">
+			<section className="mx-auto max-w-6xl px-5 py-8 sm:px-6 lg:px-8 lg:py-12">
+				{/* ─────────────────────────
+				    BACK
+				───────────────────────── */}
+
+				<Link
+					href="/orders"
+					className="mb-7 inline-flex items-center gap-2 text-sm font-medium text-[#2E2E2E]/60 transition hover:text-[#85161B]"
+				>
+					<ArrowLeft size={16} />
+					Back to Orders
+				</Link>
+
+				{/* ─────────────────────────
+				    HEADER
+				───────────────────────── */}
+
+				<div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+					<div>
+						<p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#85161B]">
+							Order details
+						</p>
+
+						<h1 className="mt-2 text-2xl font-bold tracking-tight text-[#2E2E2E] sm:text-3xl">
+							Order #{order.id}
+						</h1>
+
+						<div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-[#2E2E2E]/50">
+							<span className="inline-flex items-center gap-1.5">
+								<CalendarDays size={14} />
+								{order.date}
+							</span>
+
+							<span className="h-1 w-1 rounded-full bg-[#2E2E2E]/25" />
+
+							<span>Payment {order.paymentStatus || "pending"}</span>
+						</div>
+					</div>
+
+					<StatusBadge status={order.status} type={order.statusType} />
+				</div>
+
+				{/* ─────────────────────────
+				    STATUS TRACKER
+				───────────────────────── */}
+
+				<StatusTimeline order={order} />
+
+				{/* ─────────────────────────
+				    MAIN GRID
+				───────────────────────── */}
+
+				<div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
+					{/* LEFT */}
+
+					<div className="space-y-6">
+						{/* PRODUCTS */}
+
+						<section className="overflow-hidden rounded-2xl border border-[#E9DED7] bg-white">
+							<div className="border-b border-[#EEE6E1] px-5 py-4 sm:px-6">
+								<div className="flex items-center justify-between">
+									<div>
+										<h2 className="text-base font-bold text-[#2E2E2E]">
+											Items in your order
+										</h2>
+
+										<p className="mt-1 text-xs text-[#2E2E2E]/45">
+											{order.items.length}{" "}
+											{order.items.length === 1 ? "item" : "items"}
+										</p>
+									</div>
+
+									<ShoppingBag size={19} className="text-[#85161B]" />
+								</div>
+							</div>
+
+							<div className="divide-y divide-[#EEE6E1]">
+								{order.items.map((item) => (
+									<OrderProduct key={item.id} item={item} />
+								))}
+							</div>
+						</section>
+
+						{/* ADDRESS */}
+
+						{order.address && <AddressCard address={order.address} />}
+					</div>
+
+					{/* RIGHT */}
+
+					<div className="space-y-6">
+						{/* PRICE SUMMARY */}
+
+						<PriceSummary order={order} />
+
+						{/* PAYMENT */}
+
+						<div className="rounded-2xl border border-[#E9DED7] bg-white p-5 sm:p-6">
+							<div className="flex items-center gap-3">
+								<div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F8F3F0] text-[#85161B]">
+									<CreditCard size={18} />
+								</div>
+
+								<div>
+									<h3 className="text-sm font-bold text-[#2E2E2E]">Payment</h3>
+
+									<p className="mt-0.5 text-xs text-[#2E2E2E]/45">
+										Payment status
+									</p>
+								</div>
+							</div>
+
+							<div className="mt-5 flex items-center justify-between rounded-xl bg-[#F8F3F0] px-4 py-3">
+								<span className="text-xs text-[#2E2E2E]/55">Status</span>
+
+								<span
+									className={`text-xs font-bold uppercase ${
+										order.paymentStatus.toLowerCase() === "paid"
+											? "text-[#31824A]"
+											: "text-[#B56B27]"
+									}`}
+								>
+									{order.paymentStatus || "Pending"}
+								</span>
+							</div>
+						</div>
+
+						{/* TRACK BUTTON */}
+
+						<Link
+							href={`/order-tracking/${encodeURIComponent(order.id)}`}
+							className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#85161B] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-[#721318] hover:shadow-lg"
+						>
+							<MapPin size={17} />
+							Track this order
+							<ChevronRight size={16} />
+						</Link>
+					</div>
+				</div>
+			</section>
+		</main>
+	);
+}
+
+/* ─────────────────────────────────────────
+   PRODUCT
+───────────────────────────────────────── */
+
+function OrderProduct({ item }: { item: OrderItem }) {
+	return (
+		<div className="p-5 sm:p-6">
+			<div className="flex gap-4">
+				<div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-[#F5F1ED] sm:h-28 sm:w-28">
+					{item.image ? (
+						<img
+							src={item.image}
+							alt={item.name}
+							className="h-full w-full object-cover"
+						/>
+					) : (
+						<div className="flex h-full w-full items-center justify-center">
+							<ShoppingBag size={25} className="text-[#85161B]/25" />
+						</div>
+					)}
+				</div>
+
+				<div className="min-w-0 flex-1">
+					<h3 className="text-sm font-bold text-[#2E2E2E] sm:text-base">
+						{item.name}
+					</h3>
+
+					<p className="mt-1 text-xs text-[#2E2E2E]/50">Quantity: {item.qty}</p>
+
+					<p className="mt-3 text-sm font-bold text-[#85161B]">
+						₹{item.price.toFixed(2)}
+					</p>
+				</div>
+			</div>
+
+			{/* CUSTOMIZATION */}
+
+			{item.customizations.length > 0 && (
+				<div className="mt-5 rounded-xl bg-[#FBF9F7] p-4">
+					<div className="mb-3 flex items-center gap-2">
+						<Box size={15} className="text-[#85161B]" />
+
+						<h4 className="text-xs font-bold uppercase tracking-wide text-[#2E2E2E]">
+							Customization
+						</h4>
+					</div>
+
+					<div className="space-y-4">
+						{item.customizations.map((custom) => (
+							<div key={custom.key}>
+								<p className="text-xs font-semibold text-[#2E2E2E]/60">
+									{custom.label}
+								</p>
+
+								{/* Uploaded photos */}
+
+								{custom.photos.length > 0 ? (
+									<div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+										{custom.photos.map((filename) => (
+											<a
+												key={filename}
+												href={`${UPLOAD_IMAGE_URL}${filename}`}
+												target="_blank"
+												rel="noreferrer"
+												className="group relative aspect-square overflow-hidden rounded-xl border border-[#E9DED7] bg-white"
+											>
+												<img
+													src={`${UPLOAD_IMAGE_URL}${filename}`}
+													alt="Uploaded customization"
+													className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+												/>
+											</a>
+										))}
+									</div>
+								) : (
+									<p className="mt-1 break-words text-sm text-[#2E2E2E]">
+										{custom.value}
+									</p>
+								)}
+							</div>
+						))}
+					</div>
+				</div>
+			)}
+		</div>
+	);
+}
+
+/* ─────────────────────────────────────────
+   ADDRESS CARD
+───────────────────────────────────────── */
+
+function AddressCard({ address }: { address: OrderAddress }) {
+	return (
+		<section className="rounded-2xl border border-[#E9DED7] bg-white p-5 sm:p-6">
+			<div className="flex items-center gap-3">
+				<div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F8F3F0] text-[#85161B]">
+					<Home size={18} />
+				</div>
+
+				<div>
+					<h2 className="text-sm font-bold text-[#2E2E2E]">Delivery address</h2>
+
+					<p className="mt-0.5 text-xs text-[#2E2E2E]/45">
+						Your order will be delivered here
+					</p>
+				</div>
+			</div>
+
+			<div className="mt-5 space-y-2 text-sm text-[#2E2E2E]/70">
+				{address.flatHouseBuilding && <p>{address.flatHouseBuilding}</p>}
+
+				{address.roadAreaColony && <p>{address.roadAreaColony}</p>}
+
+				{address.landmark && <p>Landmark: {address.landmark}</p>}
+
+				<p>
+					{[address.city, address.state, address.pincode]
+						.filter(Boolean)
+						.join(", ")}
+				</p>
+
+				{address.phone && (
+					<div className="mt-4 flex items-center gap-2 border-t border-[#EEE6E1] pt-4 text-xs font-medium">
+						<Phone size={14} className="text-[#85161B]" />
+						{address.phone}
+					</div>
+				)}
+			</div>
+		</section>
+	);
+}
+
+/* ─────────────────────────────────────────
+   PRICE SUMMARY
+───────────────────────────────────────── */
+
+function PriceSummary({ order }: { order: Order }) {
+	return (
+		<section className="rounded-2xl border border-[#E9DED7] bg-white p-5 sm:p-6">
+			<h2 className="text-base font-bold text-[#2E2E2E]">Order summary</h2>
+
+			<div className="mt-5 space-y-4">
+				<div className="flex items-center justify-between text-sm">
+					<span className="text-[#2E2E2E]/55">Items total</span>
+
+					<span className="font-medium text-[#2E2E2E]">
+						₹{order.totalPrice.toFixed(2)}
+					</span>
+				</div>
+
+				<div className="flex items-center justify-between text-sm">
+					<span className="text-[#2E2E2E]/55">Delivery</span>
+
+					<span className="font-medium text-[#2E2E2E]">
+						₹{order.deliveryFee.toFixed(2)}
+					</span>
+				</div>
+
+				<div className="border-t border-[#EEE6E1] pt-4">
+					<div className="flex items-center justify-between">
+						<span className="text-sm font-bold text-[#2E2E2E]">
+							Grand total
+						</span>
+
+						<span className="text-xl font-bold text-[#85161B]">
+							₹{order.grandTotal.toFixed(2)}
+						</span>
+					</div>
+				</div>
+			</div>
+		</section>
+	);
+}
+
+/* ─────────────────────────────────────────
+   STATUS TIMELINE
+───────────────────────────────────────── */
+
+function StatusTimeline({ order }: { order: Order }) {
+	const statuses: {
+		label: OrderStatus;
+		icon: React.ReactNode;
+	}[] = [
+		{
+			label: "Order placed",
+			icon: <Package size={16} />,
+		},
+		{
+			label: "Order accepted",
+			icon: <CheckCircle2 size={16} />,
+		},
+		{
+			label: "Packed",
+			icon: <Box size={16} />,
+		},
+		{
+			label: "Shipped",
+			icon: <Truck size={16} />,
+		},
+		{
+			label: "Out for delivery",
+			icon: <MapPin size={16} />,
+		},
+		{
+			label: "Delivered",
+			icon: <CheckCircle2 size={16} />,
+		},
+	];
+
+	const currentIndex = useMemo(() => {
+		if (order.status === "Cancelled") {
+			return -1;
+		}
+
+		return statuses.findIndex((item) => item.label === order.status);
+	}, [order.status]);
+
+	if (order.status === "Cancelled") {
+		return (
+			<div className="rounded-2xl border border-red-200 bg-white p-5">
+				<div className="flex items-center gap-3">
+					<div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-500">
+						<AlertCircle size={19} />
+					</div>
+
+					<div>
+						<h3 className="text-sm font-bold text-red-600">Order cancelled</h3>
+
+						<p className="mt-1 text-xs text-[#2E2E2E]/50">
+							This order has been cancelled.
+						</p>
+					</div>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<div className="overflow-x-auto rounded-2xl border border-[#E9DED7] bg-white p-5 sm:p-6">
+			<div className="min-w-[650px]">
+				<div className="flex items-start">
+					{statuses.map((item, index) => {
+						const completed = index <= currentIndex;
+
+						const active = index === currentIndex;
+
+						return (
+							<React.Fragment key={item.label}>
+								<div className="flex flex-1 flex-col items-center">
+									<div
+										className={`
+												flex
+												h-10
+												w-10
+												items-center
+												justify-center
+												rounded-full
+												border-2
+												transition
+												${
+													completed
+														? "border-[#85161B] bg-[#85161B] text-white"
+														: "border-[#E5DCD6] bg-white text-[#2E2E2E]/25"
+												}
+												${active ? "ring-4 ring-[#85161B]/10" : ""}
+											`}
+									>
+										{item.icon}
+									</div>
+
+									<p
+										className={`
+												mt-2
+												text-center
+												text-[10px]
+												font-semibold
+												sm:text-xs
+												${completed ? "text-[#85161B]" : "text-[#2E2E2E]/35"}
+											`}
+									>
+										{item.label}
+									</p>
+								</div>
+
+								{index < statuses.length - 1 && (
+									<div
+										className={`
+												mt-5
+												h-0.5
+												flex-1
+												${index < currentIndex ? "bg-[#85161B]" : "bg-[#E9DED7]"}
+											`}
+									/>
+								)}
+							</React.Fragment>
+						);
+					})}
+				</div>
+			</div>
+		</div>
+	);
+}
+
+/* ─────────────────────────────────────────
+   STATUS BADGE
+───────────────────────────────────────── */
+
+function StatusBadge({
+	status,
+	type,
+}: {
+	status: OrderStatus;
+	type: OrderStatusType;
+}) {
+	const getIcon = () => {
+		switch (status) {
+			case "Order placed":
+				return <Package size={14} />;
+
+			case "Order accepted":
+				return <CheckCircle2 size={14} />;
+
+			case "Packed":
+				return <Box size={14} />;
+
+			case "Shipped":
+				return <Truck size={14} />;
+
+			case "Out for delivery":
+				return <MapPin size={14} />;
+
+			case "Delivered":
+				return <CheckCircle2 size={14} />;
+
+			case "Cancelled":
+				return <AlertCircle size={14} />;
+
+			default:
+				return <Clock3 size={14} />;
+		}
+	};
+
+	const styles = {
+		delivered: "bg-[#EDF8F0] text-[#31824A]",
+
+		shipping: "bg-[#EEF5FF] text-[#3973B9]",
+
+		processing: "bg-[#FFF3E8] text-[#B56B27]",
+
+		cancelled: "bg-red-50 text-red-600",
+	};
+
+	return (
+		<span
+			className={`
+				inline-flex
+				w-fit
+				items-center
+				gap-1.5
+				rounded-full
+				px-3
+				py-1.5
+				text-xs
+				font-semibold
+				${styles[type]}
+			`}
+		>
+			{getIcon()}
+			{status}
+		</span>
+	);
+}

@@ -10,7 +10,6 @@ export async function POST(request: NextRequest) {
 
 		const fields = [
 			"id",
-			"name",
 			"phone",
 			"flat_house_building",
 			"road_area_colony",
@@ -30,7 +29,7 @@ export async function POST(request: NextRequest) {
 
 		const cookie = request.headers.get("cookie");
 
-		const response = await fetch(`${API_URL}/api/update_user`, {
+		const response = await fetch(`${API_URL}/api/update_address`, {
 			method: "POST",
 			headers: {
 				Accept: "application/json",
