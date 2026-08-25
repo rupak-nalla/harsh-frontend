@@ -214,7 +214,7 @@ export default function ProfilePage() {
 				formData.append("phone", profilePhone.trim());
 			}
 
-			const response = await fetch("/api/auth/update-user", {
+			const response = await fetch("/api/auth/user/update-user", {
 				method: "POST",
 				body: formData,
 				credentials: "include",
@@ -348,7 +348,7 @@ export default function ProfilePage() {
 			formData.append("state", addressForm.state.trim());
 			formData.append("pincode", addressForm.pincode.trim());
 
-			let endpoint = "/api/auth/add-address";
+			let endpoint = "/api/auth/address/add";
 
 			/*
 			 * For editing we send the address ID.
@@ -357,7 +357,7 @@ export default function ProfilePage() {
 			 * for updating the existing address.
 			 */
 			if (editingAddress) {
-				endpoint = "/api/auth/update-user";
+				endpoint = "/api/auth/address/update";
 
 				formData.append(
 					"id",
@@ -430,7 +430,7 @@ export default function ProfilePage() {
 
 			formData.append("id", String(addressId));
 
-			const response = await fetch("/api/auth/set-primary", {
+			const response = await fetch("/api/auth/address/set-primary", {
 				method: "POST",
 				body: formData,
 				credentials: "include",
@@ -495,7 +495,7 @@ export default function ProfilePage() {
 				String(deletingAddress.id),
 			);
 
-			const response = await fetch("/api/auth/delete-address", {
+			const response = await fetch("/api/auth/address/delete", {
 				method: "POST",
 				body: formData,
 				credentials: "include",
@@ -872,12 +872,12 @@ export default function ProfilePage() {
 									subtitle="Your saved products"
 								/>
 
-								<AccountLink
+								{/* <AccountLink
 									href="/settings"
 									icon={<Settings size={18} />}
 									title="Account Settings"
 									subtitle="Password and preferences"
-								/>
+								/> */}
 							</div>
 						</div>
 
@@ -888,7 +888,7 @@ export default function ProfilePage() {
 								<Package size={19} />
 							</div>
 
-							<h3 className="mt-5 text-xl font-semibold text-white">
+							<h3 className="mt-5 text-xl font-semibold" style={{ color: "#FFFF" }}>
 								Your Printing House journey
 							</h3>
 

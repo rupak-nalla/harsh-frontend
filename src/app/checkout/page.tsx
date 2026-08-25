@@ -17,6 +17,12 @@ import {
 } from "lucide-react";
 
 /* =========================================================
+   IMAGE BASE URL
+========================================================= */
+
+const PRODUCT_IMAGE_URL = "https://printinghouseujjain.in/assets/products/";
+
+/* =========================================================
    RAZORPAY TYPES
 ========================================================= */
 
@@ -173,7 +179,9 @@ type RawAddress = {
 type Address = {
 	id: string;
 	phone: string;
-	address: string;
+	flatHouseBuilding: string;
+	roadAreaColony: string;
+	landmark: string;
 	city: string;
 	state: string;
 	pincode: string;
@@ -214,7 +222,9 @@ function normalizeCartItem(raw: RawCartItem): CartItem {
 		quantity:
 			Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1,
 
-		image: raw.primary_photo_path,
+		image: raw.primary_photo_path
+			? `${PRODUCT_IMAGE_URL}${raw.primary_photo_path}`
+			: undefined,
 
 		delivery: Number.isFinite(delivery) ? delivery : 0,
 	};
@@ -222,34 +232,22 @@ function normalizeCartItem(raw: RawCartItem): CartItem {
 
 /* =========================================================
    NORMALIZE ADDRESS
+
+   Keeps the backend's fields separate (flat_house_building,
+   road_area_colony, landmark, city, state, pincode) instead of
+   flattening them into one string, since /api/checkout expects
+   them individually.
 ========================================================= */
 
 function normalizeAddress(raw: RawAddress, index: number): Address {
 	const id = String(raw.id ?? `addr-${index}`);
 
-	/*
-		Build a single display/edit address string out of the
-		flat/building, road/area, and landmark fields. The backend
-		sometimes duplicates the same text between
-		flat_house_building and landmark (see sample response), so
-		skip landmark if it's identical to avoid repeating it.
-	*/
-	const parts = [raw.flat_house_building, raw.road_area_colony].filter(
-		(part): part is string => Boolean(part && part.trim()),
-	);
-
-	if (
-		raw.landmark &&
-		raw.landmark.trim() &&
-		raw.landmark.trim() !== raw.flat_house_building?.trim()
-	) {
-		parts.push(raw.landmark.trim());
-	}
-
 	return {
 		id,
 		phone: raw.phone ?? "",
-		address: parts.join(", "),
+		flatHouseBuilding: raw.flat_house_building ?? "",
+		roadAreaColony: raw.road_area_colony ?? "",
+		landmark: raw.landmark ?? "",
 		city: raw.city ?? "",
 		state: raw.state ?? "",
 		pincode: raw.pincode !== undefined ? String(raw.pincode) : "",
@@ -320,7 +318,10 @@ function CheckoutView() {
 		lastName: "",
 		email: "",
 		phone: "",
-		address: "",
+
+		flatHouseBuilding: "",
+		roadAreaColony: "",
+		landmark: "",
 		city: "",
 		state: "",
 		pincode: "",
@@ -460,16 +461,18 @@ function CheckoutView() {
 	/* =======================================================
 	   APPLY A SAVED ADDRESS TO THE FORM
 
-	   Only touches the address-related fields (address, city,
-	   state, pincode, phone). Name/email always come from the
-	   account, not from the address record.
+	   Only touches the address-related fields. Name/email
+	   always come from the account, not from the address
+	   record.
 	======================================================= */
 
 	const applyAddressToForm = (addr: Address) => {
 		setFormData((previous) => ({
 			...previous,
 			phone: addr.phone || previous.phone,
-			address: addr.address,
+			flatHouseBuilding: addr.flatHouseBuilding,
+			roadAreaColony: addr.roadAreaColony,
+			landmark: addr.landmark,
 			city: addr.city,
 			state: addr.state,
 			pincode: addr.pincode,
@@ -594,7 +597,9 @@ function CheckoutView() {
 			// be entered.
 			setFormData((previous) => ({
 				...previous,
-				address: "",
+				flatHouseBuilding: "",
+				roadAreaColony: "",
+				landmark: "",
 				city: "",
 				state: "",
 				pincode: "",
@@ -631,9 +636,15 @@ function CheckoutView() {
 			return "Please enter your phone number.";
 		}
 
-		if (!formData.address.trim()) {
-			return "Please enter your address.";
+		if (!formData.flatHouseBuilding.trim()) {
+			return "Please enter your flat / house / building.";
 		}
+
+		if (!formData.roadAreaColony.trim()) {
+			return "Please enter your road / area / colony.";
+		}
+
+		// Landmark is optional — no validation.
 
 		if (!formData.city.trim()) {
 			return "Please enter your city.";
@@ -824,7 +835,15 @@ function CheckoutView() {
 			/* ===========================================
 			   STEP 1
 			   CREATE RAZORPAY ORDER
+
+			   If a saved address is selected, its fields
+			   (already applied to formData by
+			   applyAddressToForm) are what get sent — so a
+			   saved address always goes out exactly as
+			   stored, not retyped.
 			=========================================== */
+
+			const fullName = `${formData.firstName} ${formData.lastName}`.trim();
 
 			const response = await fetch("/api/checkout", {
 				method: "POST",
@@ -836,25 +855,23 @@ function CheckoutView() {
 				credentials: "include",
 
 				body: JSON.stringify({
-					customer: {
-						firstName: formData.firstName,
+					name: fullName,
 
-						lastName: formData.lastName,
+					email: formData.email,
 
-						email: formData.email,
+					phone: formData.phone,
 
-						phone: formData.phone,
-					},
+					flat_house_building: formData.flatHouseBuilding,
 
-					deliveryAddress: {
-						address: formData.address,
+					road_area_colony: formData.roadAreaColony,
 
-						city: formData.city,
+					landmark: formData.landmark || undefined,
 
-						state: formData.state,
+					city: formData.city,
 
-						pincode: formData.pincode,
-					},
+					state: formData.state,
+
+					pincode: formData.pincode,
 
 					// Lets the backend know whether this order used a
 					// previously saved address or a freshly entered one.
@@ -1246,7 +1263,15 @@ function CheckoutView() {
 																	</div>
 
 																	<p className="mt-1 text-xs leading-5 text-[#2E2E2E]/55">
-																		{addr.address}, {addr.pincode}
+																		{addr.flatHouseBuilding}
+																		{addr.roadAreaColony
+																			? `, ${addr.roadAreaColony}`
+																			: ""}
+																		{addr.landmark &&
+																		addr.landmark !== addr.flatHouseBuilding
+																			? `, ${addr.landmark}`
+																			: ""}
+																		, {addr.pincode}
 																	</p>
 
 																	<p className="mt-1 text-xs text-[#2E2E2E]/45">
@@ -1341,12 +1366,33 @@ function CheckoutView() {
 
 										<div className="sm:col-span-2">
 											<FormInput
-												label="Address"
-												name="address"
-												value={formData.address}
+												label="Flat / House / Building"
+												name="flatHouseBuilding"
+												value={formData.flatHouseBuilding}
 												onChange={handleChange}
-												placeholder="House number, street, area"
+												placeholder="Flat no., house name, building"
 												required
+											/>
+										</div>
+
+										<div className="sm:col-span-2">
+											<FormInput
+												label="Road / Area / Colony"
+												name="roadAreaColony"
+												value={formData.roadAreaColony}
+												onChange={handleChange}
+												placeholder="Road name, area, colony"
+												required
+											/>
+										</div>
+
+										<div className="sm:col-span-2">
+											<FormInput
+												label="Landmark"
+												name="landmark"
+												value={formData.landmark}
+												onChange={handleChange}
+												placeholder="Nearby landmark (optional)"
 											/>
 										</div>
 

@@ -15,6 +15,12 @@ import {
 } from "lucide-react";
 
 /* ─────────────────────────────────────────
+   IMAGE BASE URL
+───────────────────────────────────────── */
+
+const PRODUCT_IMAGE_URL = "https://printinghouseujjain.in/assets/products/";
+
+/* ─────────────────────────────────────────
    TYPES
 ───────────────────────────────────────── */
 
@@ -24,9 +30,10 @@ type OrderStatus =
 	| "Packed"
 	| "Shipped"
 	| "Out for delivery"
-	| "Delivered";
+	| "Delivered"
+	| "Cancelled";
 
-type OrderStatusType = "processing" | "shipping" | "delivered";
+type OrderStatusType = "processing" | "shipping" | "delivered" | "cancelled";
 
 type OrderItem = {
 	id: string;
@@ -35,62 +42,102 @@ type OrderItem = {
 	qty: number;
 };
 
+type OrderAddress = {
+	flatHouseBuilding: string;
+	roadAreaColony: string;
+	landmark: string;
+	city: string;
+	state: string;
+	pincode: string;
+	phone: string;
+};
+
 type Order = {
 	id: string;
 	date: string;
 	status: OrderStatus;
 	statusType: OrderStatusType;
+	paymentStatus: string;
 	total: string;
 	items: OrderItem[];
+	address: OrderAddress | null;
 };
 
 /* ─────────────────────────────────────────
    RAW /api/orders RESPONSE
 
-   NOTE:
-   The exact shape of /api/orders isn't confirmed yet, so this
-   normalizes defensively — same pattern used for /api/cart and
-   /api/auth/user elsewhere in this app. Trim the fallback field
-   names down once the real response shape is confirmed.
+   Actual response:
+   {
+     "status": 200,
+     "message": "success.",
+     "wishlist": [
+       {
+         "id": 1,
+         "user_id": 17,
+         "cart_id": null,
+         "type": "user",
+         "order_id": "order_TTt7w4DEW4VqoY",
+         "payment_status": "paid",
+         "order_status": "pending",
+         "address": "{...JSON string...}",
+         "transaction_id": "...",
+         "products_count": "1",
+         "total_price": "89.00",
+         "delivery_fee": "60.00",
+         "grand_total": "149.00",
+         "cart": "[...JSON string...]",
+         "created_at": "2026-08-25 05:31:52"
+       }
+     ]
+   }
+
+   Despite the key name, "wishlist" is the orders array here.
+   "address" and "cart" both arrive as JSON-encoded strings, not
+   nested objects/arrays, so they need an extra JSON.parse step.
 ───────────────────────────────────────── */
 
 type RawOrderItem = {
 	id?: string | number;
-	product_id?: string | number;
 	name?: string;
-	product_name?: string;
-	image?: string;
 	primary_photo_path?: string;
 	quantity?: number | string;
-	qty?: number | string;
+	selling_price?: number | string;
+};
+
+type RawOrderAddress = {
+	flat_house_building?: string;
+	road_area_colony?: string;
+	landmark?: string;
+	city?: string;
+	state?: string;
+	pincode?: string | number;
+	phone?: string;
 };
 
 type RawOrder = {
 	id?: string | number;
 	order_id?: string | number;
 
-	created_at?: string;
-	date?: string;
-	order_date?: string;
-
-	status?: string;
+	payment_status?: string;
 	order_status?: string;
 
-	total?: number | string;
-	grand_total?: number | string;
-	total_price?: number | string;
+	address?: string;
+	cart?: string;
 
-	items?: RawOrderItem[];
-	products?: RawOrderItem[];
-	order_items?: RawOrderItem[];
+	products_count?: string | number;
+	total_price?: string | number;
+	delivery_fee?: string | number;
+	grand_total?: string | number;
+
+	created_at?: string;
 };
 
 type OrdersResponse = {
 	status?: number;
 	message?: string;
-	result?: RawOrder[];
+	wishlist?: RawOrder[];
 	orders?: RawOrder[];
-	data?: RawOrder[];
+	result?: RawOrder[];
 };
 
 /* ─────────────────────────────────────────
@@ -119,6 +166,10 @@ function normalizeStatus(rawStatus: string | undefined): {
 } {
 	const key = (rawStatus ?? "").toLowerCase().replace(/[\s_-]+/g, "");
 
+	if (key.includes("cancel")) {
+		return { status: "Cancelled", statusType: "cancelled" };
+	}
+
 	if (key.includes("delivered")) {
 		return { status: "Delivered", statusType: "delivered" };
 	}
@@ -139,7 +190,7 @@ function normalizeStatus(rawStatus: string | undefined): {
 		return { status: "Order accepted", statusType: "processing" };
 	}
 
-	// Default: freshly placed / pending / unrecognized statuses.
+	// "pending" and any other unrecognized status falls here.
 	return { status: "Order placed", statusType: "processing" };
 }
 
@@ -148,14 +199,12 @@ function normalizeStatus(rawStatus: string | undefined): {
 ───────────────────────────────────────── */
 
 function normalizeOrder(raw: RawOrder, index: number): Order {
-	const id = String(raw.id ?? raw.order_id ?? `order-${index}`);
+	const id = String(raw.order_id ?? raw.id ?? `order-${index}`);
 
-	const rawDate = raw.created_at ?? raw.date ?? raw.order_date ?? "";
+	let date = raw.created_at ?? "";
 
-	let date = rawDate;
-
-	if (rawDate) {
-		const parsed = new Date(rawDate);
+	if (date) {
+		const parsed = new Date(date.replace(" ", "T"));
 
 		if (!Number.isNaN(parsed.getTime())) {
 			date = parsed.toLocaleDateString("en-IN", {
@@ -166,34 +215,76 @@ function normalizeOrder(raw: RawOrder, index: number): Order {
 		}
 	}
 
-	const { status, statusType } = normalizeStatus(
-		raw.status ?? raw.order_status,
-	);
+	const { status, statusType } = normalizeStatus(raw.order_status);
 
-	const rawTotal = Number(raw.grand_total ?? raw.total ?? raw.total_price ?? 0);
+	const rawTotal = Number(raw.grand_total ?? 0);
 
 	const total = `₹${(Number.isFinite(rawTotal) ? rawTotal : 0).toFixed(2)}`;
 
-	const rawItems = raw.items ?? raw.products ?? raw.order_items ?? [];
+	/* =================================================
+	   PARSE CART (JSON-encoded string)
+	================================================= */
 
-	const items: OrderItem[] = rawItems.map((rawItem, itemIndex) => {
-		const quantity = Number(rawItem.quantity ?? rawItem.qty ?? 1);
+	let items: OrderItem[] = [];
 
-		return {
-			id: String(rawItem.id ?? rawItem.product_id ?? `${id}-item-${itemIndex}`),
-			name: rawItem.name ?? rawItem.product_name ?? "Untitled product",
-			image: rawItem.image ?? rawItem.primary_photo_path ?? "",
-			qty: Number.isFinite(quantity) && quantity > 0 ? Math.floor(quantity) : 1,
-		};
-	});
+	if (raw.cart) {
+		try {
+			const rawItems: RawOrderItem[] = JSON.parse(raw.cart);
+
+			items = rawItems.map((rawItem, itemIndex) => {
+				const quantity = Number(rawItem.quantity ?? 1);
+
+				return {
+					id: String(rawItem.id ?? `${id}-item-${itemIndex}`),
+					name: rawItem.name ?? "Untitled product",
+					image: rawItem.primary_photo_path
+						? `${PRODUCT_IMAGE_URL}${rawItem.primary_photo_path}`
+						: "",
+					qty:
+						Number.isFinite(quantity) && quantity > 0
+							? Math.floor(quantity)
+							: 1,
+				};
+			});
+		} catch (err) {
+			console.error("Failed to parse order cart JSON:", err, raw.cart);
+		}
+	}
+
+	/* =================================================
+	   PARSE ADDRESS (JSON-encoded string)
+	================================================= */
+
+	let address: OrderAddress | null = null;
+
+	if (raw.address) {
+		try {
+			const rawAddress: RawOrderAddress = JSON.parse(raw.address);
+
+			address = {
+				flatHouseBuilding: rawAddress.flat_house_building ?? "",
+				roadAreaColony: rawAddress.road_area_colony ?? "",
+				landmark: rawAddress.landmark ?? "",
+				city: rawAddress.city ?? "",
+				state: rawAddress.state ?? "",
+				pincode:
+					rawAddress.pincode !== undefined ? String(rawAddress.pincode) : "",
+				phone: rawAddress.phone ?? "",
+			};
+		} catch (err) {
+			console.error("Failed to parse order address JSON:", err, raw.address);
+		}
+	}
 
 	return {
 		id,
 		date: date || "—",
 		status,
 		statusType,
+		paymentStatus: raw.payment_status ?? "",
 		total,
 		items,
+		address,
 	};
 }
 
@@ -230,16 +321,21 @@ export default function OrdersPage() {
 			console.log("ORDERS RESPONSE:", data);
 
 			if (!response.ok) {
-				throw new Error(data?.message || "Unable to load your orders.");
+				throw new Error(
+					(data as { message?: string })?.message || "Unable to load your orders.",
+				);
 			}
 
-			const rawOrders = data.result ?? data.orders ?? data.data ?? [];
+			const rawOrders = data.wishlist ?? data.orders ?? data.result ?? [];
 
 			const normalizedOrders = rawOrders.map((raw, index) =>
 				normalizeOrder(raw, index),
 			);
 
 			console.log("NORMALIZED ORDERS:", normalizedOrders);
+
+			// Most recent first.
+			normalizedOrders.sort((a, b) => b.id.localeCompare(a.id));
 
 			setOrders(normalizedOrders);
 		} catch (err) {
@@ -269,7 +365,7 @@ export default function OrdersPage() {
 		).length;
 
 		const inProgress = orders.filter(
-			(order) => order.status !== "Delivered",
+			(order) => order.status !== "Delivered" && order.status !== "Cancelled",
 		).length;
 
 		return {
@@ -580,9 +676,30 @@ function OrderCard({ order }: { order: Order }) {
 					<p className="mt-1 text-sm font-semibold text-[#2E2E2E]">
 						#{order.id}
 					</p>
+
+					{order.address && (
+						<p className="mt-1 text-xs text-[#2E2E2E]/45">
+							<MapPin size={11} className="mr-1 inline-block align-[-1px]" />
+							{order.address.city}, {order.address.state}
+						</p>
+					)}
 				</div>
 
-				<StatusBadge status={order.status} type={order.statusType} />
+				<div className="flex flex-col items-start gap-1.5 sm:items-end">
+					<StatusBadge status={order.status} type={order.statusType} />
+
+					{order.paymentStatus && (
+						<span
+							className={`text-[10px] font-semibold uppercase tracking-wide ${
+								order.paymentStatus.toLowerCase() === "paid"
+									? "text-[#31824A]"
+									: "text-[#B56B27]"
+							}`}
+						>
+							Payment {order.paymentStatus}
+						</span>
+					)}
+				</div>
 			</div>
 
 			{/* PRODUCTS */}
@@ -619,7 +736,10 @@ function OrderCard({ order }: { order: Order }) {
 										/>
 									) : (
 										<div className="flex h-full w-full items-center justify-center">
-											<ShoppingBag size={20} className="text-[#85161B]/30" />
+											<ShoppingBag
+												size={20}
+												className="text-[#85161B]/30"
+											/>
 										</div>
 									)}
 								</div>
@@ -792,6 +912,9 @@ function StatusBadge({
 			case "Delivered":
 				return <CheckCircle2 size={14} />;
 
+			case "Cancelled":
+				return <AlertCircle size={14} />;
+
 			default:
 				return <Package size={14} />;
 		}
@@ -801,6 +924,7 @@ function StatusBadge({
 		delivered: "bg-[#EDF8F0] text-[#31824A]",
 		shipping: "bg-[#EEF5FF] text-[#3973B9]",
 		processing: "bg-[#FFF3E8] text-[#B56B27]",
+		cancelled: "bg-red-50 text-red-600",
 	};
 
 	return (
