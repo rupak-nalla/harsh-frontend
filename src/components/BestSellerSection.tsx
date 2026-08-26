@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+
 import HorizontalScrollSection from "./HorizontalScrollSection";
 import ProductCard from "./ProductCard";
 
@@ -10,8 +11,7 @@ const PRODUCT_IMAGE_URL = `${API_URL}/assets/products/`;
 interface ApiProduct {
 	id: number | string;
 	name: string;
-
-	description?: string;
+	description?: string | null;
 
 	primary_photo_path?: string | null;
 	other_photos_paths?: string | null;
@@ -20,15 +20,15 @@ interface ApiProduct {
 	selling_price?: number | string | null;
 	reseller_price?: number | string | null;
 
-	category_ids?: string;
-	occasion_ids?: string;
+	category_ids?: string | null;
+	occasion_ids?: string | null;
 
-	in_stock?: string;
-	sold?: number | string;
+	in_stock?: string | null;
+	sold?: number | string | null;
+	varients?: string | null;
 
-	varients?: string;
-	customize_reqs?: string;
-	keywords?: string;
+	customize_reqs?: string | string[] | null;
+	keywords?: string | null;
 }
 
 interface Product {
@@ -37,13 +37,18 @@ interface Product {
 	price: number;
 	original?: number;
 	image: string;
+
+	description?: string;
+	customizeReqs?: string | string[] | null;
+
 	badge?: string;
+	tag?: string;
 }
 
 /**
  * Build product image URL.
  *
- * Backend:
+ * Backend example:
  * primary_photo_path: "2_1.png"
  *
  * Final:
@@ -60,7 +65,7 @@ function getProductImage(photoPath?: string | null): string {
 		return "";
 	}
 
-	// In case backend ever returns a complete URL
+	// If backend already returns a complete URL
 	if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
 		return cleanPath;
 	}
@@ -80,17 +85,13 @@ export default function FeaturedSection() {
 				setError("");
 
 				/*
-				 * IMPORTANT:
-				 *
-				 * Do NOT call the external API directly.
-				 *
 				 * Browser
 				 *    ↓
 				 * /api/products
 				 *    ↓
 				 * https://printinghouseujjain.in/api/products
 				 *
-				 * This keeps the CORS/proxy setup intact.
+				 * Keep using the local Next.js proxy.
 				 */
 				const response = await fetch("/api/products", {
 					method: "GET",
@@ -109,21 +110,12 @@ export default function FeaturedSection() {
 
 				console.log("Products API response:", data);
 
-				/*
-				 * Actual API response:
-				 *
-				 * {
-				 *   status: 200,
-				 *   message: "Success.",
-				 *   products: [...]
-				 * }
-				 */
 				if (!Array.isArray(data?.products)) {
 					throw new Error("Products array not found in API response");
 				}
 
 				/*
-				 * Take the first 10 products.
+				 * Take first 10 products.
 				 */
 				const firstTenProducts = data.products.slice(0, 10);
 
@@ -131,11 +123,19 @@ export default function FeaturedSection() {
 
 				/*
 				 * Convert API products into the format
-				 * expected by ProductCard.
+				 * expected by the NEW ProductCard.
 				 */
 				const formattedProducts: Product[] = firstTenProducts.map(
 					(product: ApiProduct) => {
 						const image = getProductImage(product.primary_photo_path);
+
+						const sellingPrice = Number(product.selling_price ?? 0);
+
+						const marketPrice =
+							product.market_price !== null &&
+							product.market_price !== undefined
+								? Number(product.market_price)
+								: undefined;
 
 						return {
 							id: String(product.id),
@@ -143,29 +143,32 @@ export default function FeaturedSection() {
 							name: product.name,
 
 							/*
-							 * ProductCard price
-							 * = selling price
+							 * Selling price
 							 */
-							price: Number(product.selling_price ?? 0),
+							price: Number.isFinite(sellingPrice) ? sellingPrice : 0,
 
 							/*
-							 * Original price
-							 * = market price
+							 * Original / market price
 							 */
 							original:
-								product.market_price !== null &&
-								product.market_price !== undefined
-									? Number(product.market_price)
+								marketPrice !== undefined && Number.isFinite(marketPrice)
+									? marketPrice
 									: undefined,
 
 							image,
 
 							/*
-							 * No badge is coming from
-							 * the current API response,
-							 * so don't invent one.
+							 * NEW PRODUCT CARD DATA
+							 */
+							description: product.description ?? "",
+
+							customizeReqs: product.customize_reqs ?? null,
+
+							/*
+							 * No badge/tag from the API currently.
 							 */
 							badge: undefined,
+							tag: undefined,
 						};
 					},
 				);
@@ -193,18 +196,18 @@ export default function FeaturedSection() {
 			subtitle="Discover our featured products"
 			viewAll="View all products"
 		>
-			{/* =========================================
+			{/* =====================================================
 			    LOADING
-			========================================= */}
+			===================================================== */}
 			{loading && (
 				<div className="flex min-w-full items-center justify-center py-12">
 					<p className="text-sm text-foreground/50">Loading products...</p>
 				</div>
 			)}
 
-			{/* =========================================
+			{/* =====================================================
 			    ERROR
-			========================================= */}
+			===================================================== */}
 			{!loading && error && (
 				<div className="flex min-w-full items-center justify-center py-12">
 					<div className="text-center">
@@ -221,18 +224,18 @@ export default function FeaturedSection() {
 				</div>
 			)}
 
-			{/* =========================================
+			{/* =====================================================
 			    NO PRODUCTS
-			========================================= */}
+			===================================================== */}
 			{!loading && !error && products.length === 0 && (
 				<div className="flex min-w-full items-center justify-center py-12">
 					<p className="text-sm text-foreground/50">No products available.</p>
 				</div>
 			)}
 
-			{/* =========================================
+			{/* =====================================================
 			    PRODUCTS
-			========================================= */}
+			===================================================== */}
 			{!loading &&
 				!error &&
 				products.length > 0 &&
