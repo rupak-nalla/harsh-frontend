@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const BLOCKED_ROUTES = [
 	// "/login",
-	"/admin",
+	// "/admin",
 	// "/checkout",
 	// "/cart",
 	// "/register",
