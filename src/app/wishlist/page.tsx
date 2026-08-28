@@ -1,18 +1,19 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import Image from "next/image";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
 import {
+	AlertCircle,
+	ArrowRight,
+	Check,
 	Heart,
+	HeartOff,
 	ShoppingBag,
 	Trash2,
-	ArrowRight,
-	HeartOff,
-	ShoppingCart,
-	AlertCircle,
+	Upload,
+	X,
 } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 
 /* ============================================================================
    CONSTANTS
@@ -21,9 +22,19 @@ import {
 const PRODUCT_IMAGE_BASE_URL =
 	"https://printinghouseujjain.in/assets/products/";
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
 /* ============================================================================
    TYPES
 ============================================================================ */
+
+type CustomizeRequirement = {
+	key: string;
+	type: "text" | "photo" | "photos";
+	max: number;
+	placeholder: string;
+	optional: boolean;
+};
 
 interface WishlistProduct {
 	id: string;
@@ -33,49 +44,61 @@ interface WishlistProduct {
 	image?: string;
 	badge?: string;
 	category?: string;
+	description?: string;
+	customizeReqs?: string | string[] | null;
 }
 
-/*
- * This represents what we expect from /api/wishlist.
- *
- * The wishlist API may only return product IDs.
- */
 interface RawWishlistItem {
 	id?: string | number;
 	product_id?: string | number;
 	productId?: string | number;
+
+	/* Some backends may return the product directly */
+	name?: string;
+	selling_price?: string | number;
+	market_price?: string | number;
+	primary_photo_path?: string;
+	customize_reqs?: string | string[] | null;
+	customizeReqs?: string | string[] | null;
+	description?: string;
+	category?: string;
+	badge?: string;
+
+	product?: {
+		id?: string | number;
+		name?: string;
+		selling_price?: string | number;
+		market_price?: string | number;
+		primary_photo_path?: string;
+		customize_reqs?: string | string[] | null;
+		customizeReqs?: string | string[] | null;
+		description?: string;
+		category?: string;
+		badge?: string;
+	};
 }
 
-/*
- * Product returned by:
- *
- * /api/products?product_id=<id>
- */
 interface Product {
 	id?: string | number;
 	name?: string;
 	description?: string;
-
 	primary_photo_path?: string;
 	other_photos_paths?: string;
-
 	market_price?: string | number;
 	selling_price?: string | number;
 	reseller_price?: string | number;
-
 	category_ids?: string;
 	occasion_ids?: string;
 	in_stock?: string;
 	sold?: string | number;
-
-	customize_reqs?: string;
+	customize_reqs?: string | string[] | null;
+	customizeReqs?: string | string[] | null;
 	keywords?: string;
 	created_at?: string;
+	badge?: string;
+	category?: string;
 }
 
-/*
- * Wishlist API response
- */
 interface WishlistResponse {
 	data?: RawWishlistItem[];
 	items?: RawWishlistItem[];
@@ -84,9 +107,6 @@ interface WishlistResponse {
 	status?: number;
 }
 
-/*
- * Product API response
- */
 interface ProductResponse {
 	status?: number;
 	message?: string;
@@ -96,18 +116,208 @@ interface ProductResponse {
 }
 
 /* ============================================================================
-   NORMALIZE WISHLIST ITEM
+   CUSTOMIZATION PARSER
+
+   Supported:
+
+   text:10:Enter your custom name
+
+   photo:Upload Photo
+
+   photos:5:Upload Photos
+
+   OLD / KEYED FORMAT:
+
+   insidename:text:10:To Be Printed Inside
+
+   photo1:photo:1:Upload Photo
+
+   photos1:photos:5:Upload Photos
+
+   IMPORTANT:
+
+   insidename:text:10:To Be Printed Inside
+
+   becomes:
+
+   key         = insidename
+   type        = text
+   max         = 10
+   placeholder = To Be Printed Inside
+
+   Only "To Be Printed Inside" is shown in the modal.
 ============================================================================ */
 
-function normalizeWishlistItem(raw: RawWishlistItem): WishlistProduct {
-	const id = String(raw.product_id ?? raw.productId ?? raw.id ?? "");
+function parseCustomizeRequirements(
+	value?: string | string[] | null,
+): CustomizeRequirement[] {
+	if (!value) {
+		return [];
+	}
 
-	return {
-		id,
-		name: "Untitled product",
-		price: 0,
-		image: undefined,
-	};
+	let parsed: unknown;
+
+	if (Array.isArray(value)) {
+		parsed = value;
+	} else {
+		try {
+			parsed = JSON.parse(value);
+		} catch (error) {
+			console.error("Failed to parse customize_reqs:", value, error);
+
+			return [];
+		}
+	}
+
+	if (!Array.isArray(parsed)) {
+		return [];
+	}
+
+	return parsed
+		.map((requirement): CustomizeRequirement | null => {
+			if (typeof requirement !== "string") {
+				return null;
+			}
+
+			const parts = requirement.split(":").map((part) => part.trim());
+
+			if (parts.length < 2) {
+				return null;
+			}
+
+			let key = "";
+			let type: "text" | "photo" | "photos";
+			let max = 1;
+			let placeholder = "";
+
+			/* =========================================================
+			   FORMAT:
+
+			   text:10:Enter your custom name
+			   photo:Upload Photo
+			   photos:5:Upload Photos
+			========================================================= */
+
+			if (
+				parts[0] === "text" ||
+				parts[0] === "photo" ||
+				parts[0] === "photos"
+			) {
+				type = parts[0];
+
+				if (type === "photo") {
+					key = "photo";
+					max = 1;
+					placeholder = parts.slice(1).join(":").trim();
+				} else {
+					const possibleMax = Number(parts[1]);
+
+					if (Number.isFinite(possibleMax) && possibleMax >= 1) {
+						max = possibleMax;
+						placeholder = parts.slice(2).join(":").trim();
+					} else {
+						max = type === "text" ? 100 : 1;
+
+						placeholder = parts.slice(1).join(":").trim();
+					}
+
+					key =
+						type === "text"
+							? `text_${Math.random().toString(36).slice(2, 8)}`
+							: `photos_${Math.random().toString(36).slice(2, 8)}`;
+				}
+			} else if (
+
+			/* =========================================================
+			   KEYED FORMAT:
+
+			   insidename:text:10:To Be Printed Inside
+
+			   This is the important format for your backend.
+			========================================================= */
+				parts.length >= 3 &&
+				(parts[1] === "text" || parts[1] === "photo" || parts[1] === "photos")
+			) {
+				key = parts[0];
+
+				type = parts[1];
+
+				const possibleMax = Number(parts[2]);
+
+				if (Number.isFinite(possibleMax) && possibleMax >= 1) {
+					max = possibleMax;
+				} else {
+					max = type === "photo" ? 1 : 100;
+				}
+
+				/*
+				 * Everything after:
+				 *
+				 * key:type:max:
+				 *
+				 * becomes the visible label.
+				 *
+				 * Example:
+				 *
+				 * insidename:text:10:To Be Printed Inside
+				 *
+				 * label = "To Be Printed Inside"
+				 */
+
+				placeholder = parts.slice(3).join(":").trim();
+
+				/*
+				 * Fallback for:
+				 *
+				 * photo1:photo:Upload Photo
+				 */
+
+				if (!placeholder) {
+					placeholder = parts.slice(2).join(":").trim();
+
+					max = type === "photo" ? 1 : 100;
+				}
+			} else {
+				return null;
+			}
+
+			if (!placeholder) {
+				return null;
+			}
+
+			const optional = /\(\s*optional\s*\)/i.test(placeholder);
+
+			const cleanPlaceholder = placeholder
+				.replace(/\s*\(\s*optional\s*\)/i, "")
+				.trim();
+
+			return {
+				key,
+				type,
+				max,
+				placeholder: cleanPlaceholder,
+				optional,
+			};
+		})
+		.filter((item): item is CustomizeRequirement => item !== null);
+}
+
+/* ============================================================================
+   IMAGE
+============================================================================ */
+
+function getProductImage(photoPath?: string): string | undefined {
+	if (!photoPath) {
+		return undefined;
+	}
+
+	if (photoPath.startsWith("http://") || photoPath.startsWith("https://")) {
+		return photoPath;
+	}
+
+	const cleanPath = photoPath.replace(/^\/+/, "");
+
+	return `${PRODUCT_IMAGE_BASE_URL}${cleanPath}`;
 }
 
 /* ============================================================================
@@ -115,51 +325,17 @@ function normalizeWishlistItem(raw: RawWishlistItem): WishlistProduct {
 ============================================================================ */
 
 function extractProduct(data: ProductResponse): Product | null {
-	/*
-	 * Normal response:
-	 *
-	 * {
-	 *   status: 200,
-	 *   message: "Success.",
-	 *   product: {...}
-	 * }
-	 */
-
 	if (data.product && typeof data.product === "object") {
 		return data.product;
 	}
-
-	/*
-	 * Fallback:
-	 *
-	 * {
-	 *   data: {...}
-	 * }
-	 */
 
 	if (data.data && !Array.isArray(data.data) && typeof data.data === "object") {
 		return data.data;
 	}
 
-	/*
-	 * Fallback:
-	 *
-	 * {
-	 *   products: [...]
-	 * }
-	 */
-
 	if (Array.isArray(data.products) && data.products.length > 0) {
 		return data.products[0];
 	}
-
-	/*
-	 * Fallback:
-	 *
-	 * {
-	 *   data: [...]
-	 * }
-	 */
 
 	if (Array.isArray(data.data) && data.data.length > 0) {
 		return data.data[0];
@@ -169,34 +345,61 @@ function extractProduct(data: ProductResponse): Product | null {
 }
 
 /* ============================================================================
-   PRODUCT IMAGE URL
+   NORMALIZE WISHLIST ITEM
 ============================================================================ */
 
-function getProductImage(photoPath?: string): string | undefined {
-	if (!photoPath) {
-		return undefined;
+function normalizeWishlistItem(raw: RawWishlistItem): WishlistProduct | null {
+	const id = String(
+		raw.product_id ?? raw.productId ?? raw.product?.id ?? raw.id ?? "",
+	);
+
+	if (!id) {
+		return null;
 	}
 
-	/*
-	 * If the API already returns a complete URL,
-	 * use it directly.
-	 */
+	const nestedProduct = raw.product;
 
-	if (photoPath.startsWith("http://") || photoPath.startsWith("https://")) {
-		return photoPath;
-	}
+	const price = Number(nestedProduct?.selling_price ?? raw.selling_price ?? 0);
 
-	/*
-	 * Remove leading slashes.
-	 */
+	const originalPrice = Number(
+		nestedProduct?.market_price ?? raw.market_price ?? 0,
+	);
 
-	const cleanPath = photoPath.replace(/^\/+/, "");
+	const customizeReqs =
+		nestedProduct?.customize_reqs ??
+		nestedProduct?.customizeReqs ??
+		raw.customize_reqs ??
+		raw.customizeReqs ??
+		null;
 
-	return `${PRODUCT_IMAGE_BASE_URL}${cleanPath}`;
+	return {
+		id,
+
+		name: nestedProduct?.name ?? raw.name ?? "Untitled product",
+
+		price: Number.isFinite(price) ? price : 0,
+
+		originalPrice:
+			Number.isFinite(originalPrice) && originalPrice > price
+				? originalPrice
+				: undefined,
+
+		image: getProductImage(
+			nestedProduct?.primary_photo_path ?? raw.primary_photo_path,
+		),
+
+		description: nestedProduct?.description ?? raw.description,
+
+		category: nestedProduct?.category ?? raw.category,
+
+		badge: nestedProduct?.badge ?? raw.badge,
+
+		customizeReqs,
+	};
 }
 
 /* ============================================================================
-   WISHLIST PAGE
+   PAGE
 ============================================================================ */
 
 export default function WishlistPage() {
@@ -206,21 +409,53 @@ export default function WishlistPage() {
 
 	const [error, setError] = useState("");
 
-	/* ==========================================================================
-	   ERROR HELPER
-	========================================================================== */
+	const [removingId, setRemovingId] = useState<string | null>(null);
+
+	const [addingId, setAddingId] = useState<string | null>(null);
+
+	/* =========================================================
+	   CUSTOMIZATION MODAL
+	========================================================= */
+
+	const [customizationOpen, setCustomizationOpen] = useState(false);
+
+	const [selectedProduct, setSelectedProduct] =
+		useState<WishlistProduct | null>(null);
+
+	const [customizationValues, setCustomizationValues] = useState<
+		Record<string, string>
+	>({});
+
+	const [customizationFiles, setCustomizationFiles] = useState<
+		Record<string, File[]>
+	>({});
+
+	const [customizationValidationError, setCustomizationValidationError] =
+		useState("");
+
+	const [customizationAdding, setCustomizationAdding] = useState(false);
+
+	/* =========================================================
+	   SUCCESS STATE
+	========================================================= */
+
+	const [successMessage, setSuccessMessage] = useState("");
+
+	/* =========================================================
+	   ERROR
+	========================================================= */
 
 	const showError = (message: string) => {
 		setError(message);
 
 		setTimeout(() => {
 			setError("");
-		}, 2500);
+		}, 3000);
 	};
 
-	/* ==========================================================================
-	   FETCH PRODUCT DETAILS
-	========================================================================== */
+	/* =========================================================
+	   FETCH PRODUCT
+	========================================================= */
 
 	const fetchProductDetails = async (
 		productId: string,
@@ -250,21 +485,18 @@ export default function WishlistPage() {
 		}
 	};
 
-	/* ==========================================================================
+	/* =========================================================
 	   FETCH WISHLIST
-	========================================================================== */
+	========================================================= */
 
-	const fetchWishlist = async () => {
+	const fetchWishlist = useCallback(async () => {
 		setLoading(true);
 		setError("");
 
 		try {
-			/*
-			 * ---------------------------------------------------------------
-			 * STEP 1
-			 * Get wishlist items.
-			 * ---------------------------------------------------------------
-			 */
+			console.log("=================================");
+			console.log("FETCH WISHLIST");
+			console.log("=================================");
 
 			const response = await fetch("/api/wishlist", {
 				method: "GET",
@@ -272,7 +504,21 @@ export default function WishlistPage() {
 				cache: "no-store",
 			});
 
-			const data: WishlistResponse = await response.json().catch(() => ({}));
+			const responseText = await response.text();
+
+			let data: WishlistResponse = {};
+
+			try {
+				data = responseText ? JSON.parse(responseText) : {};
+			} catch {
+				data = {
+					message: responseText || "Invalid response from server.",
+				};
+			}
+
+			console.log("WISHLIST STATUS:", response.status);
+
+			console.log("WISHLIST RESPONSE:", data);
 
 			if (!response.ok) {
 				throw new Error(
@@ -280,90 +526,43 @@ export default function WishlistPage() {
 				);
 			}
 
-			/*
-			 * Support:
-			 *
-			 * data
-			 * items
-			 * wishlist
-			 */
-
 			const rawItems = data.data ?? data.items ?? data.wishlist ?? [];
 
-			/*
-			 * ---------------------------------------------------------------
-			 * STEP 2
-			 * Normalize wishlist items.
-			 * ---------------------------------------------------------------
-			 */
-
-			const wishlistItems = rawItems
+			const normalizedItems = rawItems
 				.map(normalizeWishlistItem)
-				.filter((item) => item.id);
+				.filter((item): item is WishlistProduct => item !== null);
 
 			/*
-			 * ---------------------------------------------------------------
-			 * STEP 3
-			 * Fetch actual product information.
-			 *
-			 * This is the important part.
-			 * ---------------------------------------------------------------
+			 * Fetch product information for every
+			 * wishlist item.
 			 */
 
 			const itemsWithDetails = await Promise.all(
-				wishlistItems.map(async (wishlistItem) => {
+				normalizedItems.map(async (wishlistItem) => {
 					const product = await fetchProductDetails(wishlistItem.id);
-
-					/*
-					 * If product API fails,
-					 * keep the wishlist item.
-					 */
 
 					if (!product) {
 						return wishlistItem;
 					}
 
-					/*
-					 * -------------------------------------------------------
-					 * PRODUCT NAME
-					 * -------------------------------------------------------
-					 */
-
-					const name = product.name ?? wishlistItem.name ?? "Untitled product";
-
-					/*
-					 * -------------------------------------------------------
-					 * SELLING PRICE
-					 * -------------------------------------------------------
-					 */
-
 					const price = Number(
 						product.selling_price ?? wishlistItem.price ?? 0,
 					);
-
-					/*
-					 * -------------------------------------------------------
-					 * MARKET / ORIGINAL PRICE
-					 * -------------------------------------------------------
-					 */
 
 					const originalPrice = Number(
 						product.market_price ?? wishlistItem.originalPrice ?? 0,
 					);
 
-					/*
-					 * -------------------------------------------------------
-					 * PRODUCT IMAGE
-					 * -------------------------------------------------------
-					 */
-
-					const image =
-						getProductImage(product.primary_photo_path) ?? wishlistItem.image;
+					const customizeReqs =
+						product.customize_reqs ??
+						product.customizeReqs ??
+						wishlistItem.customizeReqs ??
+						null;
 
 					return {
 						...wishlistItem,
 
-						name,
+						name: product.name ?? wishlistItem.name,
 
 						price: Number.isFinite(price) ? price : 0,
 
@@ -372,7 +571,16 @@ export default function WishlistPage() {
 								? originalPrice
 								: undefined,
 
-						image,
+						image:
+							getProductImage(product.primary_photo_path) ?? wishlistItem.image,
+
+						description: product.description ?? wishlistItem.description,
+
+						category: product.category ?? wishlistItem.category,
+
+						badge: product.badge ?? wishlistItem.badge,
+
+						customizeReqs,
 					};
 				}),
 			);
@@ -389,30 +597,82 @@ export default function WishlistPage() {
 		} finally {
 			setLoading(false);
 		}
-	};
-
-	/* ==========================================================================
-	   INITIAL FETCH
-	========================================================================== */
-
-	useEffect(() => {
-		fetchWishlist();
 	}, []);
 
-	/* ==========================================================================
-	   REMOVE FROM WISHLIST
-	========================================================================== */
+	/* =========================================================
+	   INITIAL FETCH
+	========================================================= */
 
-	const removeFromWishlist = async (productId: WishlistProduct["id"]) => {
+	useEffect(() => {
+		void fetchWishlist();
+	}, [fetchWishlist]);
+
+	/* =========================================================
+	   BODY SCROLL LOCK
+	========================================================= */
+
+	useEffect(() => {
+		if (!customizationOpen) {
+			return;
+		}
+
+		const previousOverflow = document.body.style.overflow;
+
+		document.body.style.overflow = "hidden";
+
+		return () => {
+			document.body.style.overflow = previousOverflow;
+		};
+	}, [customizationOpen]);
+
+	/* =========================================================
+	   RESET CUSTOMIZATION
+	========================================================= */
+
+	const resetCustomization = () => {
+		setCustomizationValues({});
+		setCustomizationFiles({});
+		setCustomizationValidationError("");
+	};
+
+	/* =========================================================
+	   OPEN CUSTOMIZATION
+	========================================================= */
+
+	const openCustomizationModal = (product: WishlistProduct) => {
+		setSelectedProduct(product);
+		setCustomizationValues({});
+		setCustomizationFiles({});
+		setCustomizationValidationError("");
+		setCustomizationOpen(true);
+	};
+
+	/* =========================================================
+	   CLOSE CUSTOMIZATION
+	========================================================= */
+
+	const closeCustomizationModal = () => {
+		if (customizationAdding) {
+			return;
+		}
+
+		setCustomizationOpen(false);
+		setSelectedProduct(null);
+		resetCustomization();
+	};
+
+	/* =========================================================
+	   REMOVE FROM WISHLIST
+	========================================================= */
+
+	const removeFromWishlist = async (productId: string): Promise<boolean> => {
 		const removedItem = wishlist.find((item) => item.id === productId);
 
 		const removedIndex = wishlist.findIndex((item) => item.id === productId);
 
-		/*
-		 * Optimistic removal.
-		 */
-
 		setWishlist((current) => current.filter((item) => item.id !== productId));
+
+		setRemovingId(productId);
 
 		try {
 			const response = await fetch("/api/wishlist/remove", {
@@ -426,21 +686,20 @@ export default function WishlistPage() {
 				}),
 			});
 
-			const data: { message?: string } = await response
-				.json()
-				.catch(() => ({}));
+			const data = await response.json().catch(() => ({}));
 
 			if (!response.ok) {
 				throw new Error(
-					data?.message ??
-						"Unable to remove item from wishlist. Please try again.",
+					data?.message ?? "Unable to remove item from wishlist.",
 				);
 			}
+
+			return true;
 		} catch (err) {
-			console.error("Error removing wishlist item:", err);
+			console.error("Remove wishlist failed:", err);
 
 			/*
-			 * Revert optimistic update.
+			 * Restore the item if backend failed.
 			 */
 
 			if (removedItem) {
@@ -456,59 +715,472 @@ export default function WishlistPage() {
 			showError(
 				err instanceof Error
 					? err.message
-					: "Unable to remove item from wishlist. Please try again.",
+					: "Unable to remove item from wishlist.",
 			);
+
+			return false;
+		} finally {
+			setRemovingId(null);
 		}
 	};
 
-	/* ==========================================================================
+	/* =========================================================
 	   ADD TO CART
-	========================================================================== */
 
-	const addToCart = async (product: WishlistProduct) => {
+	   SAME CONTRACT AS PRODUCT CARD
+
+	   product_id
+	   text values by their backend key
+	   files by their backend key
+	========================================================= */
+
+	const addToCart = async (
+		product: WishlistProduct,
+		values: Record<string, string>,
+		files: Record<string, File[]>,
+	) => {
+		if (addingId === product.id) {
+			return false;
+		}
+
+		setAddingId(product.id);
+		setError("");
+
 		try {
-			const response = await fetch("/api/cart/add", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				credentials: "include",
-				body: JSON.stringify({
-					productId: product.id,
-					quantity: 1,
-				}),
+			const formData = new FormData();
+
+			/* =====================================================
+			   PRODUCT ID
+			===================================================== */
+
+			formData.append("product_id", product.id);
+
+			/* =====================================================
+			   TEXT CUSTOMIZATION
+
+			   Example:
+
+			   insidename:text:10:To Be Printed Inside
+
+			   becomes:
+
+			   formData.append("insidename", "Hello");
+
+			   NOT:
+
+			   formData.append(
+			     "To Be Printed Inside",
+			     "Hello"
+			   );
+			===================================================== */
+
+			Object.entries(values).forEach(([key, value]) => {
+				const trimmedValue = value.trim();
+
+				if (trimmedValue) {
+					formData.append(key, trimmedValue);
+				}
 			});
 
-			const data: { message?: string } = await response
-				.json()
-				.catch(() => ({}));
+			/* =====================================================
+			   FILE CUSTOMIZATION
+			===================================================== */
 
-			if (!response.ok) {
-				throw new Error(
-					data?.message ?? "Unable to add item to cart. Please try again.",
+			Object.entries(files).forEach(([key, fileList]) => {
+				if (!fileList.length) {
+					return;
+				}
+
+				/*
+				 * Single photo
+				 */
+
+				if (fileList.length === 1) {
+					formData.append(key, fileList[0]);
+
+					return;
+				}
+
+				/*
+				 * Multiple photos
+				 */
+
+				fileList.forEach((file) => {
+					formData.append(`${key}[]`, file);
+				});
+			});
+
+			/* =====================================================
+			   DEBUG FOR DEVELOPMENT
+			===================================================== */
+
+			console.log("=================================");
+
+			console.log("ADDING WISHLIST PRODUCT TO CART");
+
+			console.log("Product ID:", product.id);
+
+			console.log("Text values:", values);
+
+			console.log("Files:", files);
+
+			for (const [key, value] of formData.entries()) {
+				console.log(
+					"FORM DATA:",
+					key,
+					value instanceof File ? value.name : value,
 				);
 			}
 
-			/*
-			 * Remove from wishlist after
-			 * successful cart addition.
-			 */
+			console.log("=================================");
 
-			await removeFromWishlist(product.id);
+			/* =====================================================
+			   API
+			===================================================== */
+
+			const response = await fetch("/api/cart/add", {
+				method: "POST",
+				credentials: "include",
+				body: formData,
+			});
+
+			const responseText = await response.text();
+
+			let data: any;
+
+			try {
+				data = responseText ? JSON.parse(responseText) : {};
+			} catch {
+				data = {
+					message: responseText || "Invalid response from server.",
+				};
+			}
+
+			console.log("ADD TO CART STATUS:", response.status);
+
+			console.log("ADD TO CART RESPONSE:", data);
+
+			if (!response.ok) {
+				throw new Error(
+					data?.message ?? `Unable to add product to cart (${response.status})`,
+				);
+			}
+
+			/* =====================================================
+			   SUCCESS
+			===================================================== */
+
+			setSuccessMessage(`${product.name} added to cart.`);
+
+			setTimeout(() => {
+				setSuccessMessage("");
+			}, 2200);
+
+			return true;
 		} catch (err) {
-			console.error("Error adding product to cart:", err);
+			console.error("Add to cart failed:", err);
 
 			showError(
-				err instanceof Error
-					? err.message
-					: "Unable to add item to cart. Please try again.",
+				err instanceof Error ? err.message : "Unable to add item to cart.",
 			);
+
+			return false;
+		} finally {
+			setAddingId(null);
 		}
 	};
 
-	/* ==========================================================================
-	   LOADING STATE
-	========================================================================== */
+	/* =========================================================
+	   HANDLE ADD TO CART
+
+	   If customization exists:
+
+	   OPEN MODAL
+
+	   Otherwise:
+
+	   ADD DIRECTLY
+	========================================================= */
+
+	const handleAddToCart = async (product: WishlistProduct) => {
+		const requirements = parseCustomizeRequirements(product.customizeReqs);
+
+		console.log("Product customization requirements:", requirements);
+
+		/*
+		 * Customized product
+		 */
+
+		if (requirements.length > 0) {
+			openCustomizationModal(product);
+
+			return;
+		}
+
+		/*
+		 * Normal product
+		 */
+
+		const success = await addToCart(product, {}, {});
+
+		if (success) {
+			await removeFromWishlist(product.id);
+		}
+	};
+
+	/* =========================================================
+	   TEXT CHANGE
+	========================================================= */
+
+	const handleTextChange = (key: string, value: string, max: number) => {
+		setCustomizationValues((previous) => ({
+			...previous,
+			[key]: value.slice(0, max),
+		}));
+
+		setCustomizationValidationError("");
+	};
+
+	/* =========================================================
+	   SINGLE PHOTO
+	========================================================= */
+
+	const handleSinglePhotoChange = (
+		requirement: CustomizeRequirement,
+		file: File | undefined,
+	) => {
+		if (!file) {
+			return;
+		}
+
+		setCustomizationValidationError("");
+
+		if (!file.type.startsWith("image/")) {
+			setCustomizationValidationError(
+				`${requirement.placeholder}: Please select an image file.`,
+			);
+
+			return;
+		}
+
+		if (file.size > MAX_FILE_SIZE) {
+			setCustomizationValidationError(
+				`${requirement.placeholder}: Image must be 10 MB or smaller.`,
+			);
+
+			return;
+		}
+
+		setCustomizationFiles((previous) => ({
+			...previous,
+			[requirement.key]: [file],
+		}));
+	};
+
+	/* =========================================================
+	   MULTIPLE PHOTOS
+	========================================================= */
+
+	const handleMultiplePhotoChange = (
+		requirement: CustomizeRequirement,
+		fileList: FileList | null,
+	) => {
+		if (!fileList) {
+			return;
+		}
+
+		setCustomizationValidationError("");
+
+		const selectedFiles = Array.from(fileList);
+
+		if (selectedFiles.length > requirement.max) {
+			setCustomizationValidationError(
+				`${requirement.placeholder}: Please select up to ${requirement.max} photos.`,
+			);
+
+			return;
+		}
+
+		const invalidFile = selectedFiles.find(
+			(file) => !file.type.startsWith("image/"),
+		);
+
+		if (invalidFile) {
+			setCustomizationValidationError(
+				`${requirement.placeholder}: Only image files are allowed.`,
+			);
+
+			return;
+		}
+
+		const oversizedFile = selectedFiles.find(
+			(file) => file.size > MAX_FILE_SIZE,
+		);
+
+		if (oversizedFile) {
+			setCustomizationValidationError(
+				`${requirement.placeholder}: Each image must be 10 MB or smaller.`,
+			);
+
+			return;
+		}
+
+		setCustomizationFiles((previous) => ({
+			...previous,
+			[requirement.key]: selectedFiles,
+		}));
+	};
+
+	/* =========================================================
+	   REMOVE PHOTO
+	========================================================= */
+
+	const removePhoto = (key: string, index: number) => {
+		setCustomizationFiles((previous) => ({
+			...previous,
+			[key]: (previous[key] || []).filter(
+				(_, fileIndex) => fileIndex !== index,
+			),
+		}));
+	};
+
+	/* =========================================================
+	   VALIDATE CUSTOMIZATION
+	========================================================= */
+
+	const validateCustomization = (): boolean => {
+		if (!selectedProduct) {
+			return false;
+		}
+
+		const requirements = parseCustomizeRequirements(
+			selectedProduct.customizeReqs,
+		);
+
+		for (const requirement of requirements) {
+			/* =================================================
+				   TEXT
+				================================================= */
+
+			if (requirement.type === "text") {
+				const value = customizationValues[requirement.key]?.trim() || "";
+
+				if (!requirement.optional && !value) {
+					setCustomizationValidationError(
+						`${requirement.placeholder} is required.`,
+					);
+
+					return false;
+				}
+
+				if (value.length > requirement.max) {
+					setCustomizationValidationError(
+						`${requirement.placeholder}: Maximum ${requirement.max} characters allowed.`,
+					);
+
+					return false;
+				}
+			}
+
+			/* =================================================
+				   SINGLE PHOTO
+				================================================= */
+
+			if (requirement.type === "photo") {
+				const files = customizationFiles[requirement.key] || [];
+
+				if (!requirement.optional && files.length === 0) {
+					setCustomizationValidationError(
+						`${requirement.placeholder} is required.`,
+					);
+
+					return false;
+				}
+			}
+
+			/* =================================================
+				   MULTIPLE PHOTOS
+				================================================= */
+
+			if (requirement.type === "photos") {
+				const files = customizationFiles[requirement.key] || [];
+
+				if (!requirement.optional && files.length === 0) {
+					setCustomizationValidationError(
+						`${requirement.placeholder} is required.`,
+					);
+
+					return false;
+				}
+
+				if (files.length > requirement.max) {
+					setCustomizationValidationError(
+						`${requirement.placeholder}: Maximum ${requirement.max} photos allowed.`,
+					);
+
+					return false;
+				}
+			}
+		}
+
+		return true;
+	};
+
+	/* =========================================================
+	   SUBMIT CUSTOMIZATION
+	========================================================= */
+
+	const handleCustomizationSubmit = async () => {
+		if (!selectedProduct || customizationAdding) {
+			return;
+		}
+
+		setCustomizationValidationError("");
+
+		const valid = validateCustomization();
+
+		if (!valid) {
+			return;
+		}
+
+		setCustomizationAdding(true);
+
+		try {
+			const success = await addToCart(
+				selectedProduct,
+				customizationValues,
+				customizationFiles,
+			);
+
+			if (!success) {
+				return;
+			}
+
+			/*
+			 * Close modal after successful
+			 * cart addition.
+			 */
+
+			setCustomizationOpen(false);
+			resetCustomization();
+
+			const productId = selectedProduct.id;
+
+			setSelectedProduct(null);
+
+			/*
+			 * Remove from wishlist.
+			 */
+
+			await removeFromWishlist(productId);
+		} finally {
+			setCustomizationAdding(false);
+		}
+	};
+
+	/* =========================================================
+	   LOADING
+	========================================================= */
 
 	if (loading) {
 		return (
@@ -517,7 +1189,9 @@ export default function WishlistPage() {
 
 				<div className="mx-auto max-w-7xl px-5 py-16 sm:px-6 lg:px-8">
 					<div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-						{Array.from({ length: 4 }).map((_, index) => (
+						{Array.from({
+							length: 4,
+						}).map((_, index) => (
 							<div
 								key={index}
 								className="overflow-hidden rounded-2xl border border-[#E7D5C8] bg-white"
@@ -541,9 +1215,9 @@ export default function WishlistPage() {
 		);
 	}
 
-	/* ==========================================================================
-	   ERROR STATE
-	========================================================================== */
+	/* =========================================================
+	   ERROR
+	========================================================= */
 
 	if (error && wishlist.length === 0) {
 		return (
@@ -570,7 +1244,7 @@ export default function WishlistPage() {
 
 						<button
 							type="button"
-							onClick={fetchWishlist}
+							onClick={() => void fetchWishlist()}
 							className="mt-7 inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-6 py-3.5 text-sm font-semibold text-white transition-all hover:bg-[#721318] hover:shadow-lg"
 						>
 							Try again
@@ -581,17 +1255,42 @@ export default function WishlistPage() {
 		);
 	}
 
-	/* ==========================================================================
-	   MAIN PAGE
-	========================================================================== */
+	/* =========================================================
+	   MAIN
+	========================================================= */
 
 	return (
 		<main className="min-h-screen bg-[#F8F5F2]">
 			<WishlistHeader />
 
-			{/* ------------------------------------------------------------------
-			    INLINE ERROR
-			------------------------------------------------------------------ */}
+			{/* SUCCESS MESSAGE */}
+
+			<AnimatePresence>
+				{successMessage && (
+					<motion.div
+						initial={{
+							opacity: 0,
+							y: -10,
+						}}
+						animate={{
+							opacity: 1,
+							y: 0,
+						}}
+						exit={{
+							opacity: 0,
+							y: -10,
+						}}
+						className="fixed right-5 top-5 z-[120]"
+					>
+						<div className="flex items-center gap-2 rounded-xl bg-[#202020] px-4 py-3 text-sm font-medium text-white shadow-xl">
+							<Check size={16} />
+							{successMessage}
+						</div>
+					</motion.div>
+				)}
+			</AnimatePresence>
+
+			{/* ERROR */}
 
 			{error && (
 				<div className="mx-auto mt-5 max-w-7xl px-5 sm:px-6 lg:px-8">
@@ -605,9 +1304,7 @@ export default function WishlistPage() {
 			)}
 
 			<div className="mx-auto max-w-7xl px-5 py-10 sm:px-6 sm:py-12 lg:px-8 lg:py-16">
-				{/* ----------------------------------------------------------------
-				    PAGE INTRO
-				---------------------------------------------------------------- */}
+				{/* PAGE INTRO */}
 
 				<div className="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
 					<div>
@@ -633,9 +1330,7 @@ export default function WishlistPage() {
 					)}
 				</div>
 
-				{/* ----------------------------------------------------------------
-				    EMPTY STATE / GRID
-				---------------------------------------------------------------- */}
+				{/* EMPTY */}
 
 				{wishlist.length === 0 ? (
 					<EmptyWishlist />
@@ -647,17 +1342,15 @@ export default function WishlistPage() {
 									key={product.id}
 									product={product}
 									index={index}
-									onRemove={removeFromWishlist}
-									onAddToCart={addToCart}
+									adding={addingId === product.id}
+									removing={removingId === product.id}
+									onRemove={() => void removeFromWishlist(product.id)}
+									onAddToCart={() => void handleAddToCart(product)}
 								/>
 							))}
 						</AnimatePresence>
 					</div>
 				)}
-
-				{/* ----------------------------------------------------------------
-				    BOTTOM MESSAGE
-				---------------------------------------------------------------- */}
 
 				{wishlist.length > 0 && (
 					<div className="mx-auto mt-12 flex max-w-xl items-center justify-center gap-3 text-center">
@@ -671,6 +1364,24 @@ export default function WishlistPage() {
 					</div>
 				)}
 			</div>
+
+			{/* CUSTOMIZATION MODAL */}
+
+			{customizationOpen && selectedProduct && (
+				<CustomizationModal
+					product={selectedProduct}
+					values={customizationValues}
+					files={customizationFiles}
+					validationError={customizationValidationError}
+					adding={customizationAdding}
+					onClose={closeCustomizationModal}
+					onTextChange={handleTextChange}
+					onSinglePhotoChange={handleSinglePhotoChange}
+					onMultiplePhotoChange={handleMultiplePhotoChange}
+					onRemovePhoto={removePhoto}
+					onSubmit={handleCustomizationSubmit}
+				/>
+			)}
 		</main>
 	);
 }
@@ -706,16 +1417,24 @@ function WishlistHeader() {
 interface WishlistCardProps {
 	product: WishlistProduct;
 	index: number;
-	onRemove: (productId: WishlistProduct["id"]) => void;
-	onAddToCart: (product: WishlistProduct) => void;
+	adding: boolean;
+	removing: boolean;
+	onRemove: () => void;
+	onAddToCart: () => void;
 }
 
 function WishlistCard({
 	product,
 	index,
+	adding,
+	removing,
 	onRemove,
 	onAddToCart,
 }: WishlistCardProps) {
+	const customizeRequirements = parseCustomizeRequirements(
+		product.customizeReqs,
+	);
+
 	const hasDiscount =
 		product.originalPrice !== undefined &&
 		product.originalPrice > product.price;
@@ -741,22 +1460,15 @@ function WishlistCard({
 			}}
 			className="group overflow-hidden rounded-2xl border border-[#E7D5C8] bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
 		>
-			{/* ----------------------------------------------------------------
-			    IMAGE
-			---------------------------------------------------------------- */}
+			{/* IMAGE */}
 
 			<div className="relative aspect-square overflow-hidden bg-[#F2E9E2]">
 				{product.image ? (
-					<Image
+					<img
 						src={product.image}
 						alt={product.name}
-						fill
-						sizes="
-							(max-width: 640px) 100vw,
-							(max-width: 1024px) 50vw,
-							25vw
-						"
-						className="object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+						loading="lazy"
+						className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
 					/>
 				) : (
 					<div className="flex h-full w-full items-center justify-center">
@@ -768,7 +1480,7 @@ function WishlistCard({
 					</div>
 				)}
 
-				{/* Badge */}
+				{/* BADGE */}
 
 				{product.badge && (
 					<div className="absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-[#85161B] shadow-sm backdrop-blur-sm">
@@ -776,21 +1488,24 @@ function WishlistCard({
 					</div>
 				)}
 
-				{/* Remove */}
+				{/* REMOVE */}
 
 				<button
 					type="button"
-					onClick={() => onRemove(product.id)}
+					onClick={onRemove}
+					disabled={removing}
 					aria-label={`Remove ${product.name} from wishlist`}
-					className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#85161B] shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-105 hover:bg-[#85161B] hover:text-white"
+					className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#85161B] shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-105 hover:bg-[#85161B] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
 				>
-					<Trash2 size={15} />
+					{removing ? (
+						<span className="h-4 w-4 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
+					) : (
+						<Trash2 size={15} />
+					)}
 				</button>
 			</div>
 
-			{/* ----------------------------------------------------------------
-			    CONTENT
-			---------------------------------------------------------------- */}
+			{/* CONTENT */}
 
 			<div className="p-4 sm:p-5">
 				{product.category && (
@@ -802,6 +1517,12 @@ function WishlistCard({
 				<h2 className="line-clamp-2 min-h-[44px] text-base font-semibold leading-snug text-[#2E2E2E]">
 					{product.name}
 				</h2>
+
+				{product.description && (
+					<p className="mt-2 line-clamp-2 text-xs leading-5 text-[#2E2E2E]/45">
+						{product.description}
+					</p>
+				)}
 
 				{/* PRICE */}
 
@@ -825,18 +1546,34 @@ function WishlistCard({
 					)}
 				</div>
 
-				{/* ----------------------------------------------------------------
-				    ACTIONS
-				---------------------------------------------------------------- */}
+				{/* CUSTOMIZATION INDICATOR */}
+
+				{customizeRequirements.length > 0 && (
+					<div className="mt-3 rounded-lg bg-[#F7F4F1] px-3 py-2 text-[10px] font-medium text-[#85161B]">
+						Personalization required
+					</div>
+				)}
+
+				{/* ACTIONS */}
 
 				<div className="mt-4 grid grid-cols-[1fr_auto] gap-2">
 					<button
 						type="button"
-						onClick={() => onAddToCart(product)}
-						className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#85161B] px-4 py-3 text-xs font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#721318] hover:shadow-md active:translate-y-0"
+						onClick={onAddToCart}
+						disabled={adding || removing}
+						className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#85161B] px-4 py-3 text-xs font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#721318] hover:shadow-md active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
 					>
-						<ShoppingCart size={15} />
-						Add to Cart
+						{adding ? (
+							<span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+						) : (
+							<ShoppingBag size={15} />
+						)}
+
+						{adding
+							? "Adding..."
+							: customizeRequirements.length > 0
+								? "Customize & Add"
+								: "Add to Cart"}
 					</button>
 
 					<Link
@@ -849,6 +1586,306 @@ function WishlistCard({
 				</div>
 			</div>
 		</motion.article>
+	);
+}
+
+/* ============================================================================
+   CUSTOMIZATION MODAL
+============================================================================ */
+
+interface CustomizationModalProps {
+	product: WishlistProduct;
+	values: Record<string, string>;
+	files: Record<string, File[]>;
+	validationError: string;
+	adding: boolean;
+	onClose: () => void;
+	onTextChange: (key: string, value: string, max: number) => void;
+	onSinglePhotoChange: (
+		requirement: CustomizeRequirement,
+		file: File | undefined,
+	) => void;
+	onMultiplePhotoChange: (
+		requirement: CustomizeRequirement,
+		fileList: FileList | null,
+	) => void;
+	onRemovePhoto: (key: string, index: number) => void;
+	onSubmit: () => void;
+}
+
+function CustomizationModal({
+	product,
+	values,
+	files,
+	validationError,
+	adding,
+	onClose,
+	onTextChange,
+	onSinglePhotoChange,
+	onMultiplePhotoChange,
+	onRemovePhoto,
+	onSubmit,
+}: CustomizationModalProps) {
+	const requirements = parseCustomizeRequirements(product.customizeReqs);
+
+	return (
+		<div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+			{/* BACKDROP */}
+
+			<button
+				type="button"
+				aria-label="Close customization"
+				onClick={onClose}
+				disabled={adding}
+				className="absolute inset-0 cursor-default bg-black/45 backdrop-blur-[2px]"
+			/>
+
+			{/* MODAL */}
+
+			<div className="relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-[26px] bg-white shadow-2xl">
+				{/* HEADER */}
+
+				<div className="flex items-start justify-between gap-4 border-b border-[#E8DED7] px-5 py-4 sm:px-6">
+					<div className="min-w-0">
+						<p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#85161B]">
+							Personalize
+						</p>
+
+						<h2 className="mt-1 line-clamp-2 text-lg font-semibold text-[#202020]">
+							{product.name}
+						</h2>
+
+						<p className="mt-1 text-xs text-black/45">
+							Add the details required for your custom order.
+						</p>
+					</div>
+
+					<button
+						type="button"
+						onClick={onClose}
+						disabled={adding}
+						className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F7F4F1] text-black/55 transition hover:bg-[#F0EAE5] hover:text-[#85161B] disabled:opacity-50"
+					>
+						<X size={18} />
+					</button>
+				</div>
+
+				{/* FORM */}
+
+				<div className="overflow-y-auto px-5 py-5 sm:px-6">
+					<div className="space-y-5">
+						{requirements.map((requirement) => {
+							/*
+							 * IMPORTANT:
+							 *
+							 * requirement.placeholder
+							 *
+							 * is ONLY:
+							 *
+							 * "To Be Printed Inside"
+							 *
+							 * for:
+							 *
+							 * insidename:text:10:To Be Printed Inside
+							 *
+							 * The backend key "insidename"
+							 * is never displayed.
+							 */
+
+							const label = requirement.placeholder;
+
+							const textValue = values[requirement.key] || "";
+
+							const requirementFiles = files[requirement.key] || [];
+
+							return (
+								<div key={requirement.key}>
+									{/* LABEL */}
+
+									<label className="mb-2 flex items-center justify-between gap-3">
+										<span className="text-sm font-semibold text-[#202020]">
+											{label}
+										</span>
+
+										{requirement.optional ? (
+											<span className="text-[10px] font-medium text-black/35">
+												Optional
+											</span>
+										) : (
+											<span className="text-[10px] font-semibold text-[#85161B]">
+												Required
+											</span>
+										)}
+									</label>
+
+									{/* TEXT */}
+
+									{requirement.type === "text" && (
+										<div>
+											<input
+												type="text"
+												value={textValue}
+												onChange={(e) =>
+													onTextChange(
+														requirement.key,
+														e.target.value,
+														requirement.max,
+													)
+												}
+												maxLength={requirement.max}
+												placeholder={label}
+												className="w-full rounded-xl border border-[#DED6D0] bg-white px-4 py-3 text-sm text-[#202020] outline-none transition placeholder:text-black/30 focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
+											/>
+
+											<div className="mt-1.5 flex justify-end">
+												<span className="text-[10px] text-black/35">
+													{textValue.length}/{requirement.max}
+												</span>
+											</div>
+										</div>
+									)}
+
+									{/* SINGLE PHOTO */}
+
+									{requirement.type === "photo" && (
+										<div>
+											<label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#DED6D0] bg-[#FBF9F7] px-4 py-7 text-center transition hover:border-[#85161B]/50 hover:bg-[#85161B]/[0.02]">
+												<Upload size={20} className="text-[#85161B]" />
+
+												<span className="mt-2 text-sm font-medium text-[#202020]">
+													{requirementFiles.length > 0
+														? "Change image"
+														: "Upload image"}
+												</span>
+
+												<span className="mt-1 text-[10px] text-black/40">
+													PNG, JPG, WEBP • Max 10 MB
+												</span>
+
+												<input
+													type="file"
+													accept="image/*"
+													className="hidden"
+													onChange={(e) =>
+														onSinglePhotoChange(
+															requirement,
+															e.target.files?.[0],
+														)
+													}
+												/>
+											</label>
+
+											{requirementFiles.length > 0 && (
+												<div className="mt-2 flex items-center justify-between rounded-lg bg-[#F7F4F1] px-3 py-2">
+													<span className="max-w-[80%] truncate text-xs text-black/65">
+														{requirementFiles[0].name}
+													</span>
+
+													<button
+														type="button"
+														onClick={() => onRemovePhoto(requirement.key, 0)}
+														className="text-black/35 transition hover:text-red-600"
+													>
+														<Trash2 size={15} />
+													</button>
+												</div>
+											)}
+										</div>
+									)}
+
+									{/* MULTIPLE PHOTOS */}
+
+									{requirement.type === "photos" && (
+										<div>
+											<label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#DED6D0] bg-[#FBF9F7] px-4 py-7 text-center transition hover:border-[#85161B]/50 hover:bg-[#85161B]/[0.02]">
+												<Upload size={20} className="text-[#85161B]" />
+
+												<span className="mt-2 text-sm font-medium text-[#202020]">
+													Select photos
+												</span>
+
+												<span className="mt-1 text-[10px] text-black/40">
+													Up to {requirement.max} photos • Each max 10 MB
+												</span>
+
+												<input
+													type="file"
+													accept="image/*"
+													multiple
+													className="hidden"
+													onChange={(e) =>
+														onMultiplePhotoChange(requirement, e.target.files)
+													}
+												/>
+											</label>
+
+											{requirementFiles.length > 0 && (
+												<div className="mt-3 space-y-2">
+													{requirementFiles.map((file, index) => (
+														<div
+															key={`${file.name}-${file.lastModified}-${index}`}
+															className="flex items-center justify-between rounded-lg bg-[#F7F4F1] px-3 py-2"
+														>
+															<span className="max-w-[80%] truncate text-xs text-black/65">
+																{file.name}
+															</span>
+
+															<button
+																type="button"
+																onClick={() =>
+																	onRemovePhoto(requirement.key, index)
+																}
+																className="text-black/35 transition hover:text-red-600"
+															>
+																<Trash2 size={15} />
+															</button>
+														</div>
+													))}
+												</div>
+											)}
+										</div>
+									)}
+								</div>
+							);
+						})}
+					</div>
+
+					{/* VALIDATION ERROR */}
+
+					{validationError && (
+						<div
+							role="alert"
+							className="mt-5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-xs font-medium text-red-600"
+						>
+							{validationError}
+						</div>
+					)}
+				</div>
+
+				{/* FOOTER */}
+
+				<div className="border-t border-[#E8DED7] bg-white px-5 py-4 sm:px-6">
+					<button
+						type="button"
+						onClick={onSubmit}
+						disabled={adding}
+						className="flex h-11 w-full items-center justify-center gap-2 rounded-full bg-[#85161B] text-sm font-semibold text-white transition hover:bg-[#721318] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+					>
+						{adding ? (
+							<>
+								<span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+								Adding to cart...
+							</>
+						) : (
+							<>
+								<ShoppingBag size={17} />
+								Add to cart
+							</>
+						)}
+					</button>
+				</div>
+			</div>
+		</div>
 	);
 }
 

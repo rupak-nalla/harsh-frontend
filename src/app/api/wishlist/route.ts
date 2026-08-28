@@ -4,39 +4,57 @@ const API_URL = "https://printinghouseujjain.in";
 
 export async function GET(request: NextRequest) {
 	try {
-		/*
-		 * Forward the incoming session cookie so the backend
-		 * knows which user's wishlist to return.
-		 */
 		const incomingCookie = request.headers.get("cookie");
 
-		const response = await fetch(`${API_URL}/api/wishlist`, {
+		const backendUrl = `${API_URL}/api/wishlist`;
+
+		console.log("=================================");
+		console.log("WISHLIST PROXY");
+		console.log("Backend URL:", backendUrl);
+		console.log("Method: GET");
+		console.log("Has Cookie:", Boolean(incomingCookie));
+
+		const response = await fetch(backendUrl, {
 			method: "GET",
 			headers: {
 				Accept: "application/json",
-				...(incomingCookie ? { Cookie: incomingCookie } : {}),
+
+				...(incomingCookie
+					? {
+							Cookie: incomingCookie,
+						}
+					: {}),
 			},
 			cache: "no-store",
 		});
 
 		const text = await response.text();
 
+		console.log("Backend Status:", response.status);
+		console.log("Backend Response:", text);
+		console.log("=================================");
+
 		let data: unknown;
 
 		try {
-			data = JSON.parse(text);
+			data = text ? JSON.parse(text) : {};
 		} catch {
 			data = {
 				message: text || "Invalid response from wishlist server.",
 			};
 		}
 
-		console.log("BACKEND WISHLIST RESPONSE:", data);
-
+		/*
+		 * Forward the backend response to the browser.
+		 */
 		const nextResponse = NextResponse.json(data, {
 			status: response.status,
 		});
 
+		/*
+		 * Forward any Set-Cookie header returned by
+		 * the backend.
+		 */
 		const setCookie = response.headers.get("set-cookie");
 
 		if (setCookie) {
@@ -45,11 +63,16 @@ export async function GET(request: NextRequest) {
 
 		return nextResponse;
 	} catch (error) {
-		console.error("Wishlist fetch proxy error:", error);
+		console.error("Wishlist proxy error:", error);
 
 		return NextResponse.json(
 			{
+				status: 500,
 				message: "Unable to connect to wishlist server.",
+				error:
+					error instanceof Error
+						? error.message
+						: "Unknown error",
 			},
 			{
 				status: 500,
@@ -57,3 +80,4 @@ export async function GET(request: NextRequest) {
 		);
 	}
 }
+
