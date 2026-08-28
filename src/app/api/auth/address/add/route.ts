@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
 		const formData = new FormData();
 
 		const fields = [
+			"name",
 			"phone",
 			"flat_house_building",
 			"road_area_colony",

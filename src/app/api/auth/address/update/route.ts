@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
 
 		const fields = [
 			"id",
+			"name",
 			"phone",
 			"flat_house_building",
 			"road_area_colony",

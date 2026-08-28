@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { FormEvent, useEffect, useState } from "react";
@@ -9,7 +10,6 @@ import {
 	MapPin,
 	Package,
 	Heart,
-	Settings,
 	LogOut,
 	ArrowRight,
 	Pencil,
@@ -25,6 +25,7 @@ import { useRouter } from "next/navigation";
 type Address = {
 	id: number;
 	user_id: number;
+	name: string; // Receiver's name
 	phone: string;
 	flat_house_building: string;
 	road_area_colony: string;
@@ -46,6 +47,7 @@ type UserResponse = {
 };
 
 type AddressForm = {
+	name: string; // Receiver's name
 	phone: string;
 	flat_house_building: string;
 	road_area_colony: string;
@@ -56,6 +58,7 @@ type AddressForm = {
 };
 
 const emptyAddress: AddressForm = {
+	name: "",
 	phone: "",
 	flat_house_building: "",
 	road_area_colony: "",
@@ -81,7 +84,10 @@ export default function ProfilePage() {
 	const [showDeleteModal, setShowDeleteModal] = useState(false);
 	const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-	const [editingAddress, setEditingAddress] = useState<Address | null>(null);
+	const [editingAddress, setEditingAddress] = useState<Address | null>(
+		null,
+	);
+
 	const [deletingAddress, setDeletingAddress] = useState<Address | null>(
 		null,
 	);
@@ -138,7 +144,7 @@ export default function ProfilePage() {
 
 			try {
 				data = text ? JSON.parse(text) : {};
-			} catch (parseError) {
+			} catch {
 				console.error("Invalid JSON from user API:", text);
 
 				throw new Error(
@@ -280,6 +286,9 @@ export default function ProfilePage() {
 		setEditingAddress(address);
 
 		setAddressForm({
+			// Receiver's name
+			name: address.name || "",
+
 			phone: address.phone || "",
 			flat_house_building: address.flat_house_building || "",
 			road_area_colony: address.road_area_colony || "",
@@ -316,7 +325,12 @@ export default function ProfilePage() {
 	) => {
 		event.preventDefault();
 
+		/*
+		 * Receiver's name is required.
+		 */
+
 		if (
+			!addressForm.name.trim() ||
 			!addressForm.phone.trim() ||
 			!addressForm.flat_house_building.trim() ||
 			!addressForm.road_area_colony.trim() ||
@@ -334,28 +348,53 @@ export default function ProfilePage() {
 
 			const formData = new FormData();
 
+			/*
+			 * IMPORTANT:
+			 *
+			 * Backend expects the field to be called "name".
+			 * Here "name" represents the RECEIVER'S NAME.
+			 */
+
+			formData.append("name", addressForm.name.trim());
+
 			formData.append("phone", addressForm.phone.trim());
+
 			formData.append(
 				"flat_house_building",
 				addressForm.flat_house_building.trim(),
 			);
+
 			formData.append(
 				"road_area_colony",
 				addressForm.road_area_colony.trim(),
 			);
-			formData.append("landmark", addressForm.landmark.trim());
-			formData.append("city", addressForm.city.trim());
-			formData.append("state", addressForm.state.trim());
-			formData.append("pincode", addressForm.pincode.trim());
+
+			formData.append(
+				"landmark",
+				addressForm.landmark.trim(),
+			);
+
+			formData.append(
+				"city",
+				addressForm.city.trim(),
+			);
+
+			formData.append(
+				"state",
+				addressForm.state.trim(),
+			);
+
+			formData.append(
+				"pincode",
+				addressForm.pincode.trim(),
+			);
 
 			let endpoint = "/api/auth/address/add";
 
-			/*
-			 * For editing we send the address ID.
-			 *
-			 * Your backend's update_user endpoint is used
-			 * for updating the existing address.
-			 */
+			/* =====================================================
+			   EDIT ADDRESS
+			===================================================== */
+
 			if (editingAddress) {
 				endpoint = "/api/auth/address/update";
 
@@ -430,11 +469,14 @@ export default function ProfilePage() {
 
 			formData.append("id", String(addressId));
 
-			const response = await fetch("/api/auth/address/set-primary", {
-				method: "POST",
-				body: formData,
-				credentials: "include",
-			});
+			const response = await fetch(
+				"/api/auth/address/set-primary",
+				{
+					method: "POST",
+					body: formData,
+					credentials: "include",
+				},
+			);
 
 			const text = await response.text();
 
@@ -495,11 +537,14 @@ export default function ProfilePage() {
 				String(deletingAddress.id),
 			);
 
-			const response = await fetch("/api/auth/address/delete", {
-				method: "POST",
-				body: formData,
-				credentials: "include",
-			});
+			const response = await fetch(
+				"/api/auth/address/delete",
+				{
+					method: "POST",
+					body: formData,
+					credentials: "include",
+				},
+			);
 
 			const text = await response.text();
 
@@ -692,7 +737,9 @@ export default function ProfilePage() {
 				)}
 
 				<div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.5fr_1fr]">
-					{/* LEFT */}
+					{/* =================================================
+					   LEFT
+					================================================= */}
 
 					<div className="space-y-6">
 						{/* PERSONAL INFORMATION */}
@@ -777,7 +824,7 @@ export default function ProfilePage() {
 							</div>
 						</div>
 
-						{/* ADDRESSES */}
+						{/* SAVED ADDRESSES */}
 
 						<div className="overflow-hidden rounded-2xl border border-[#E9DED7] bg-white">
 							<div className="flex items-center justify-between border-b border-[#EEE6E1] px-5 py-4 sm:px-6">
@@ -841,7 +888,9 @@ export default function ProfilePage() {
 						</div>
 					</div>
 
-					{/* RIGHT */}
+					{/* =================================================
+					   RIGHT
+					================================================= */}
 
 					<div className="space-y-6">
 						{/* QUICK ACCESS */}
@@ -871,13 +920,6 @@ export default function ProfilePage() {
 									title="Wishlist"
 									subtitle="Your saved products"
 								/>
-
-								{/* <AccountLink
-									href="/settings"
-									icon={<Settings size={18} />}
-									title="Account Settings"
-									subtitle="Password and preferences"
-								/> */}
 							</div>
 						</div>
 
@@ -888,7 +930,10 @@ export default function ProfilePage() {
 								<Package size={19} />
 							</div>
 
-							<h3 className="mt-5 text-xl font-semibold" style={{ color: "#FFFF" }}>
+							<h3
+								className="mt-5 text-xl font-semibold"
+								style={{ color: "#FFFF" }}
+							>
 								Your Printing House journey
 							</h3>
 
@@ -941,6 +986,7 @@ export default function ProfilePage() {
 							value={profileName}
 							onChange={setProfileName}
 							icon={<User size={17} />}
+							required
 						/>
 
 						<FormInput
@@ -993,7 +1039,24 @@ export default function ProfilePage() {
 						onSubmit={handleAddressSubmit}
 						className="space-y-4"
 					>
+						{/* RECEIVER'S NAME */}
+
+						<FormInput
+							label="Receiver's name"
+							value={addressForm.name}
+							onChange={(value) =>
+								updateAddressField(
+									"name",
+									value,
+								)
+							}
+							icon={<User size={17} />}
+							required
+						/>
+
 						<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+							{/* PHONE */}
+
 							<FormInput
 								label="Phone number"
 								value={addressForm.phone}
@@ -1009,6 +1072,8 @@ export default function ProfilePage() {
 								icon={<Phone size={17} />}
 								required
 							/>
+
+							{/* PINCODE */}
 
 							<FormInput
 								label="Pincode"
@@ -1027,6 +1092,8 @@ export default function ProfilePage() {
 							/>
 						</div>
 
+						{/* FLAT / HOUSE / BUILDING */}
+
 						<FormInput
 							label="Flat / House / Building"
 							value={
@@ -1041,6 +1108,8 @@ export default function ProfilePage() {
 							icon={<MapPin size={17} />}
 							required
 						/>
+
+						{/* ROAD / AREA / COLONY */}
 
 						<FormInput
 							label="Road / Area / Colony"
@@ -1057,6 +1126,8 @@ export default function ProfilePage() {
 							required
 						/>
 
+						{/* LANDMARK */}
+
 						<FormInput
 							label="Landmark"
 							value={addressForm.landmark}
@@ -1070,6 +1141,8 @@ export default function ProfilePage() {
 						/>
 
 						<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+							{/* CITY */}
+
 							<FormInput
 								label="City"
 								value={addressForm.city}
@@ -1082,6 +1155,8 @@ export default function ProfilePage() {
 								icon={<MapPin size={17} />}
 								required
 							/>
+
+							{/* STATE */}
 
 							<FormInput
 								label="State"
@@ -1097,11 +1172,13 @@ export default function ProfilePage() {
 							/>
 						</div>
 
+						{/* INFO */}
+
 						<div className="rounded-xl border border-[#E9DED7] bg-[#FCFAF8] px-4 py-3 text-xs text-[#2E2E2E]/55">
 							{editingAddress
-								? "Update the address details and save your changes."
+								? "Update the receiver and address details, then save your changes."
 								: addresses.length === 0
-									? "This will automatically become your primary address."
+									? "This will automatically become your primary delivery address."
 									: "You can make this address primary after adding it."}
 						</div>
 
@@ -1150,10 +1227,36 @@ export default function ProfilePage() {
 						</p>
 
 						<div className="mt-5 rounded-xl bg-[#FCFAF8] p-4 text-left text-xs leading-5 text-[#2E2E2E]/60">
+							{/* RECEIVER NAME */}
+
+							<strong>
+								{deletingAddress.name ||
+									"Receiver"}
+							</strong>
+
+							<br />
+
+							{deletingAddress.phone && (
+								<>
+									Phone:{" "}
+									{deletingAddress.phone}
+									<br />
+								</>
+							)}
+
 							{deletingAddress.flat_house_building}
 							<br />
+
 							{deletingAddress.road_area_colony}
 							<br />
+
+							{deletingAddress.landmark && (
+								<>
+									{deletingAddress.landmark}
+									<br />
+								</>
+							)}
+
 							{deletingAddress.city},{" "}
 							{deletingAddress.state} -{" "}
 							{deletingAddress.pincode}
@@ -1299,8 +1402,10 @@ function AddressCard({
 
 					<div className="min-w-0">
 						<div className="flex flex-wrap items-center gap-2">
+							{/* RECEIVER'S NAME */}
+
 							<p className="text-sm font-semibold text-[#2E2E2E]">
-								Address
+								{address.name || "Receiver"}
 							</p>
 
 							{address.primary && (
@@ -1314,6 +1419,7 @@ function AddressCard({
 						<p className="mt-2 text-xs leading-5 text-[#2E2E2E]/60">
 							{address.flat_house_building}
 							<br />
+
 							{address.road_area_colony}
 							<br />
 
@@ -1326,6 +1432,7 @@ function AddressCard({
 
 							{address.city}, {address.state}
 							<br />
+
 							India - {address.pincode}
 						</p>
 
@@ -1615,3 +1722,4 @@ function AccountLink({
 		</Link>
 	);
 }
+

@@ -14,6 +14,7 @@ import {
 	CreditCard,
 	AlertCircle,
 	Plus,
+	Store,
 } from "lucide-react";
 
 /* =========================================================
@@ -70,10 +71,6 @@ type RazorpayInstance = {
    CART TYPES
 ========================================================= */
 
-/*
-   These fields match the actual /cart response.
-*/
-
 type CartItem = {
 	id: string;
 	name: string;
@@ -100,10 +97,6 @@ type RawCartItem = {
 
 	description?: string;
 };
-
-/* =========================================================
-   CART RESPONSE
-========================================================= */
 
 type CartResponse = {
 	status?: number;
@@ -132,70 +125,69 @@ type CheckoutResponse = {
 };
 
 /* =========================================================
-   AUTH USER RESPONSE (/api/auth/user)
-
-   Actual response:
-   {
-     "status": 200,
-     "message": "Success",
-     "login_status": true,
-     "name": "Nalla Rupak",
-     "phone": "9154048555",
-     "email": "nallarupak@gmail.com",
-     "addresses": [
-       {
-         "id": 1,
-         "user_id": 17,
-         "phone": "9154048555",
-         "flat_house_building": "23-1/6-24, RAJARAJESHWARA COLONY, CHUNNAMBATTIWADA",
-         "road_area_colony": "ASDFGHJ",
-         "landmark": "23-1/6-24, RAJARAJESHWARA COLONY, CHUNNAMBATTIWADA",
-         "city": "Mancherial",
-         "state": "Telangana",
-         "pincode": 504208,
-         "primary": false
-       }
-     ]
-   }
-
-   This single endpoint tells us whether the user is logged in
-   AND (when logged in) gives us their name/phone/email plus
-   saved addresses — no separate /api/init call needed.
+   ADDRESS TYPES
 ========================================================= */
+
+/*
+ * IMPORTANT:
+ *
+ * `name` here means RECEIVER'S NAME.
+ *
+ * It is NOT an "address name".
+ *
+ * This matches the address structure used by the
+ * profile page / add_address / edit_address APIs.
+ */
 
 type RawAddress = {
 	id?: string | number;
 	user_id?: string | number;
+
+	name?: string;
 	phone?: string;
+
 	flat_house_building?: string;
 	road_area_colony?: string;
 	landmark?: string;
+
 	city?: string;
 	state?: string;
 	pincode?: number | string;
+
 	primary?: boolean;
 };
 
 type Address = {
 	id: string;
+
+	receiverName: string;
 	phone: string;
+
 	flatHouseBuilding: string;
 	roadAreaColony: string;
 	landmark: string;
+
 	city: string;
 	state: string;
 	pincode: string;
+
 	isDefault: boolean;
 };
+
+/* =========================================================
+   AUTH USER RESPONSE
+========================================================= */
 
 type AuthUserResponse = {
 	status?: number;
 	message?: string;
 	login_status?: boolean;
+
 	name?: string;
 	phone?: string;
 	email?: string;
-	addresses?: RawAddress[];
+
+	addresses?: RawAddress[] | RawAddress | null;
 };
 
 /* =========================================================
@@ -232,27 +224,52 @@ function normalizeCartItem(raw: RawCartItem): CartItem {
 
 /* =========================================================
    NORMALIZE ADDRESS
-
-   Keeps the backend's fields separate (flat_house_building,
-   road_area_colony, landmark, city, state, pincode) instead of
-   flattening them into one string, since /api/checkout expects
-   them individually.
 ========================================================= */
 
 function normalizeAddress(raw: RawAddress, index: number): Address {
-	const id = String(raw.id ?? `addr-${index}`);
-
 	return {
-		id,
+		id: String(raw.id ?? `addr-${index}`),
+
+		/*
+		 * IMPORTANT:
+		 * Backend `name` = receiver's name.
+		 */
+		receiverName: raw.name ?? "",
+
 		phone: raw.phone ?? "",
+
 		flatHouseBuilding: raw.flat_house_building ?? "",
+
 		roadAreaColony: raw.road_area_colony ?? "",
+
 		landmark: raw.landmark ?? "",
+
 		city: raw.city ?? "",
+
 		state: raw.state ?? "",
+
 		pincode: raw.pincode !== undefined ? String(raw.pincode) : "",
+
 		isDefault: Boolean(raw.primary),
 	};
+}
+
+/* =========================================================
+   NORMALIZE ADDRESSES SAFELY
+========================================================= */
+
+function normalizeAddresses(
+	addresses: AuthUserResponse["addresses"],
+): RawAddress[] {
+	if (Array.isArray(addresses)) {
+		return addresses;
+	}
+
+	if (addresses && typeof addresses === "object") {
+		return [addresses];
+	}
+
+	return [];
 }
 
 /* =========================================================
@@ -289,6 +306,8 @@ function CheckoutView() {
 
 	const [deliveryFee, setDeliveryFee] = useState(0);
 
+	const [cartDeliveryFee, setCartDeliveryFee] = useState(0);
+
 	const [grandTotal, setGrandTotal] = useState(0);
 
 	const [loadingCart, setLoadingCart] = useState(true);
@@ -296,7 +315,7 @@ function CheckoutView() {
 	const [cartError, setCartError] = useState("");
 
 	/* =======================================================
-	   AUTH + SAVED ADDRESS STATE
+	   AUTH + ADDRESS STATE
 	======================================================= */
 
 	const [checkingAuth, setCheckingAuth] = useState(true);
@@ -305,19 +324,36 @@ function CheckoutView() {
 
 	const [savedAddresses, setSavedAddresses] = useState<Address[]>([]);
 
-	// "new" means "use the manual address form below".
-	// Any other value is the id of a selected saved address.
 	const [selectedAddressId, setSelectedAddressId] = useState<string>("new");
+
+	/* =======================================================
+	   DELIVERY METHOD
+	======================================================= */
+
+	const [deliveryMethod, setDeliveryMethod] = useState<"standard" | "pickup">(
+		"standard",
+	);
 
 	/* =======================================================
 	   FORM STATE
 	======================================================= */
 
 	const [formData, setFormData] = useState({
+		/*
+		 * CONTACT / ACCOUNT DETAILS
+		 */
 		firstName: "",
 		lastName: "",
 		email: "",
 		phone: "",
+
+		/*
+		 * ADDRESS DETAILS
+		 *
+		 * IMPORTANT:
+		 * receiverName is the receiver's name.
+		 */
+		receiverName: "",
 
 		flatHouseBuilding: "",
 		roadAreaColony: "",
@@ -360,24 +396,13 @@ function CheckoutView() {
 				throw new Error(data?.message || "Unable to load your cart.");
 			}
 
-			/* =================================================
-			   CART ITEMS
-			================================================= */
-
 			const rawItems = data.cart ?? [];
 
 			const normalizedItems = rawItems.map(normalizeCartItem);
 
-			console.log("NORMALIZED CART ITEMS:", normalizedItems);
-
 			setItems(normalizedItems);
 
-			/* =================================================
-			   ITEM COUNT
-
-			   Backend:
-			   products_count: 3
-			================================================= */
+			/* ITEM COUNT */
 
 			const calculatedItemCount = normalizedItems.reduce(
 				(sum, item) => sum + item.quantity,
@@ -394,12 +419,7 @@ function CheckoutView() {
 					: calculatedItemCount,
 			);
 
-			/* =================================================
-			   SUBTOTAL
-
-			   Backend:
-			   total_price: 537
-			================================================= */
+			/* SUBTOTAL */
 
 			const calculatedSubtotal = normalizedItems.reduce(
 				(sum, item) => sum + item.selling_price * item.quantity,
@@ -414,12 +434,7 @@ function CheckoutView() {
 
 			setSubtotal(safeSubtotal);
 
-			/* =================================================
-			   DELIVERY
-
-			   Backend:
-			   delivery_fee: 90
-			================================================= */
+			/* DELIVERY */
 
 			const backendDeliveryFee = Number(data.delivery_fee ?? 0);
 
@@ -427,14 +442,11 @@ function CheckoutView() {
 				? backendDeliveryFee
 				: 0;
 
+			setCartDeliveryFee(safeDeliveryFee);
+
 			setDeliveryFee(safeDeliveryFee);
 
-			/* =================================================
-			   GRAND TOTAL
-
-			   Backend:
-			   grand_total: 627
-			================================================= */
+			/* GRAND TOTAL */
 
 			const calculatedGrandTotal = safeSubtotal + safeDeliveryFee;
 
@@ -459,33 +471,38 @@ function CheckoutView() {
 	};
 
 	/* =======================================================
-	   APPLY A SAVED ADDRESS TO THE FORM
-
-	   Only touches the address-related fields. Name/email
-	   always come from the account, not from the address
-	   record.
+	   APPLY SAVED ADDRESS
 	======================================================= */
 
 	const applyAddressToForm = (addr: Address) => {
 		setFormData((previous) => ({
 			...previous,
+
+			/*
+			 * IMPORTANT:
+			 * Apply receiver's name from
+			 * saved address.
+			 */
+			receiverName: addr.receiverName || previous.receiverName,
+
 			phone: addr.phone || previous.phone,
+
 			flatHouseBuilding: addr.flatHouseBuilding,
+
 			roadAreaColony: addr.roadAreaColony,
+
 			landmark: addr.landmark,
+
 			city: addr.city,
+
 			state: addr.state,
+
 			pincode: addr.pincode,
 		}));
 	};
 
 	/* =======================================================
-	   CHECK LOGIN + LOAD ACCOUNT DETAILS (/api/auth/user)
-
-	   Single source of truth when logged in: name, phone,
-	   email, and saved addresses all come from this one call —
-	   nothing here is re-typed by the user unless they choose
-	   "Add a new address".
+	   LOAD ACCOUNT
 	======================================================= */
 
 	const loadAccount = async () => {
@@ -511,23 +528,24 @@ function CheckoutView() {
 			}
 
 			/* =================================================
-			   RECEIVER NAME / CONTACT DETAILS
-
-			   The API returns a single "name" field rather than
-			   first/last, so split it. This name + email + phone
-			   apply account-wide — they don't vary per address.
+			   ACCOUNT DETAILS
 			================================================= */
 
 			const nameParts = (data.name ?? "").trim().split(/\s+/).filter(Boolean);
 
 			const firstName = nameParts[0] ?? "";
+
 			const lastName = nameParts.slice(1).join(" ");
 
 			setFormData((previous) => ({
 				...previous,
+
 				firstName: firstName || previous.firstName,
+
 				lastName: lastName || previous.lastName,
+
 				email: data.email || previous.email,
+
 				phone: data.phone || previous.phone,
 			}));
 
@@ -535,7 +553,9 @@ function CheckoutView() {
 			   SAVED ADDRESSES
 			================================================= */
 
-			const rawAddresses = data.addresses ?? [];
+			const rawAddresses = normalizeAddresses(data.addresses);
+
+			console.log("NORMALIZED RAW ADDRESSES:", rawAddresses);
 
 			const normalized = rawAddresses.map((raw, index) =>
 				normalizeAddress(raw, index),
@@ -550,6 +570,7 @@ function CheckoutView() {
 					normalized.find((addr) => addr.isDefault) ?? normalized[0];
 
 				setSelectedAddressId(defaultAddress.id);
+
 				applyAddressToForm(defaultAddress);
 			} else {
 				setSelectedAddressId("new");
@@ -557,8 +578,8 @@ function CheckoutView() {
 		} catch (error) {
 			console.error("Load account failed:", error);
 
-			// Treat as logged out — the manual address form still works.
 			setIsLoggedIn(false);
+
 			setSavedAddresses([]);
 		} finally {
 			setCheckingAuth(false);
@@ -568,8 +589,25 @@ function CheckoutView() {
 	useEffect(() => {
 		fetchCart();
 		loadAccount();
+
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
+
+	/* =======================================================
+	   UPDATE TOTAL
+	======================================================= */
+
+	useEffect(() => {
+		if (deliveryMethod === "pickup") {
+			setDeliveryFee(0);
+
+			setGrandTotal(subtotal);
+		} else {
+			setDeliveryFee(cartDeliveryFee);
+
+			setGrandTotal(subtotal + cartDeliveryFee);
+		}
+	}, [deliveryMethod, subtotal, cartDeliveryFee]);
 
 	/* =======================================================
 	   HANDLE INPUT
@@ -585,28 +623,61 @@ function CheckoutView() {
 	};
 
 	/* =======================================================
-	   HANDLE SELECTING A SAVED ADDRESS / "ADD NEW"
+	   HANDLE DELIVERY METHOD
+	======================================================= */
+
+	const handleDeliveryMethodChange = (method: "standard" | "pickup") => {
+		setDeliveryMethod(method);
+
+		setPaymentError("");
+
+		if (method === "pickup") {
+			setDeliveryFee(0);
+
+			setGrandTotal(subtotal);
+		} else {
+			setDeliveryFee(cartDeliveryFee);
+
+			setGrandTotal(subtotal + cartDeliveryFee);
+		}
+	};
+
+	/* =======================================================
+	   HANDLE ADDRESS SELECTION
 	======================================================= */
 
 	const handleSelectAddress = (id: string) => {
 		setSelectedAddressId(id);
 
+		/*
+		 * ADD NEW ADDRESS
+		 */
+
 		if (id === "new") {
-			// Keep the account's name/email/phone — only clear the
-			// address-specific fields so a new delivery address can
-			// be entered.
 			setFormData((previous) => ({
 				...previous,
+
+				receiverName: "",
+
 				flatHouseBuilding: "",
+
 				roadAreaColony: "",
+
 				landmark: "",
+
 				city: "",
+
 				state: "",
+
 				pincode: "",
 			}));
 
 			return;
 		}
+
+		/*
+		 * SAVED ADDRESS
+		 */
 
 		const address = savedAddresses.find((addr) => addr.id === id);
 
@@ -620,6 +691,34 @@ function CheckoutView() {
 	======================================================= */
 
 	const validateForm = () => {
+		/*
+		 * PICKUP
+		 */
+
+		if (deliveryMethod === "pickup") {
+			if (!formData.firstName.trim()) {
+				return "Please enter your first name.";
+			}
+
+			if (!formData.lastName.trim()) {
+				return "Please enter your last name.";
+			}
+
+			if (!formData.email.trim()) {
+				return "Please enter your email address.";
+			}
+
+			if (!formData.phone.trim()) {
+				return "Please enter your phone number.";
+			}
+
+			return null;
+		}
+
+		/*
+		 * STANDARD DELIVERY
+		 */
+
 		if (!formData.firstName.trim()) {
 			return "Please enter your first name.";
 		}
@@ -636,6 +735,14 @@ function CheckoutView() {
 			return "Please enter your phone number.";
 		}
 
+		/*
+		 * RECEIVER NAME
+		 */
+
+		if (!formData.receiverName.trim()) {
+			return "Please enter the receiver's name.";
+		}
+
 		if (!formData.flatHouseBuilding.trim()) {
 			return "Please enter your flat / house / building.";
 		}
@@ -643,8 +750,6 @@ function CheckoutView() {
 		if (!formData.roadAreaColony.trim()) {
 			return "Please enter your road / area / colony.";
 		}
-
-		// Landmark is optional — no validation.
 
 		if (!formData.city.trim()) {
 			return "Please enter your city.";
@@ -672,6 +777,11 @@ function CheckoutView() {
 			);
 		}
 
+		/*
+		 * Payment/contact name.
+		 *
+		 * This is the logged-in customer's name.
+		 */
 		const fullName = `${formData.firstName} ${formData.lastName}`.trim();
 
 		const options: RazorpayOptions = {
@@ -684,8 +794,10 @@ function CheckoutView() {
 			description: "Personalized Gifts & Custom Printing",
 
 			prefill: {
-				name: fullName,
+				name: formData.receiverName || fullName,
+
 				email: formData.email,
+
 				contact: formData.phone,
 			},
 
@@ -693,17 +805,14 @@ function CheckoutView() {
 				color: "#85161B",
 			},
 
-			/* ===============================================
-			   SUCCESS CALLBACK
-			=============================================== */
+			/* ===========================================
+			   SUCCESS
+			=========================================== */
 
 			handler: async (response: RazorpayResponse) => {
 				console.log("RAZORPAY SUCCESS:", response);
 
 				try {
-					/*
-					 * Send all 3 Razorpay values to /api/verify_payment
-					 */
 					const verifyResponse = await fetch("/api/verify_payment", {
 						method: "POST",
 
@@ -715,7 +824,9 @@ function CheckoutView() {
 
 						body: JSON.stringify({
 							razorpay_order_id: response.razorpay_order_id,
+
 							razorpay_signature: response.razorpay_signature,
+
 							razorpay_payment_id: response.razorpay_payment_id,
 						}),
 					});
@@ -727,36 +838,21 @@ function CheckoutView() {
 
 					console.log("VERIFY PAYMENT RESPONSE:", verifyData);
 
-					/*
-					 * Check HTTP response status
-					 */
 					if (!verifyResponse.ok) {
 						throw new Error(
 							verifyData.message || "Payment verification failed.",
 						);
 					}
 
-					/*
-					 * API returns:
-					 * {
-					 *   "status": 200,
-					 *   "message": "Success."
-					 * }
-					 */
 					if (verifyData.status !== 200 || verifyData.message !== "Success.") {
 						throw new Error(
 							verifyData.message || "Payment could not be verified.",
 						);
 					}
 
-					/* =======================================
-		   PAYMENT VERIFIED
-		======================================= */
-
 					setPaymentSuccess(true);
-					setPaymentError("");
 
-					console.log("PAYMENT VERIFIED SUCCESSFULLY");
+					setPaymentError("");
 				} catch (error) {
 					console.error("Payment verification failed:", error);
 
@@ -769,9 +865,10 @@ function CheckoutView() {
 					setIsProcessingPayment(false);
 				}
 			},
-			/* ===============================================
-			   USER CLOSED RAZORPAY
-			=============================================== */
+
+			/* ===========================================
+			   DISMISS
+			=========================================== */
 
 			modal: {
 				ondismiss: () => {
@@ -784,9 +881,9 @@ function CheckoutView() {
 
 		const razorpay = new window.Razorpay(options);
 
-		/* ===============================================
+		/* ===========================================
 		   PAYMENT FAILED
-		=============================================== */
+		=========================================== */
 
 		razorpay.on("payment.failed", (response: unknown) => {
 			console.error("RAZORPAY PAYMENT FAILED:", response);
@@ -807,43 +904,92 @@ function CheckoutView() {
 		e.preventDefault();
 
 		setPaymentError("");
+
 		setPaymentSuccess(false);
 
-		/* ===============================================
-		   EMPTY CART
-		=============================================== */
+		/* EMPTY CART */
 
 		if (items.length === 0) {
 			setPaymentError("Your cart is empty.");
+
 			return;
 		}
 
-		/* ===============================================
-		   VALIDATION
-		=============================================== */
+		/* VALIDATION */
 
 		const validationError = validateForm();
 
 		if (validationError) {
 			setPaymentError(validationError);
+
 			return;
 		}
 
 		setIsProcessingPayment(true);
 
 		try {
-			/* ===========================================
-			   STEP 1
-			   CREATE RAZORPAY ORDER
-
-			   If a saved address is selected, its fields
-			   (already applied to formData by
-			   applyAddressToForm) are what get sent — so a
-			   saved address always goes out exactly as
-			   stored, not retyped.
-			=========================================== */
-
 			const fullName = `${formData.firstName} ${formData.lastName}`.trim();
+
+			/* =================================================
+			   CHECKOUT PAYLOAD
+			================================================= */
+
+			const checkoutPayload: Record<string, unknown> = {
+				/*
+				 * Customer/contact details
+				 */
+				name: fullName,
+
+				email: formData.email,
+
+				phone: formData.phone,
+
+				delivery_method: deliveryMethod,
+			};
+
+			/* =================================================
+			   STANDARD DELIVERY
+			================================================= */
+
+			if (deliveryMethod === "standard") {
+				/*
+				 * IMPORTANT:
+				 *
+				 * `receiver_name` identifies the person
+				 * who will receive the order.
+				 *
+				 * This is separate from the customer's
+				 * account name above.
+				 */
+				checkoutPayload.receiver_name = formData.receiverName;
+
+				checkoutPayload.flat_house_building = formData.flatHouseBuilding;
+
+				checkoutPayload.road_area_colony = formData.roadAreaColony;
+
+				if (formData.landmark.trim()) {
+					checkoutPayload.landmark = formData.landmark;
+				}
+
+				checkoutPayload.city = formData.city;
+
+				checkoutPayload.state = formData.state;
+
+				checkoutPayload.pincode = formData.pincode;
+
+				/*
+				 * Saved address ID
+				 */
+
+				checkoutPayload.savedAddressId =
+					isLoggedIn && selectedAddressId !== "new" ? selectedAddressId : null;
+			}
+
+			console.log("CHECKOUT PAYLOAD:", checkoutPayload);
+
+			/* =================================================
+			   CREATE ORDER
+			================================================= */
 
 			const response = await fetch("/api/checkout", {
 				method: "POST",
@@ -854,35 +1000,12 @@ function CheckoutView() {
 
 				credentials: "include",
 
-				body: JSON.stringify({
-					name: fullName,
-
-					email: formData.email,
-
-					phone: formData.phone,
-
-					flat_house_building: formData.flatHouseBuilding,
-
-					road_area_colony: formData.roadAreaColony,
-
-					landmark: formData.landmark || undefined,
-
-					city: formData.city,
-
-					state: formData.state,
-
-					pincode: formData.pincode,
-
-					// Lets the backend know whether this order used a
-					// previously saved address or a freshly entered one.
-					savedAddressId:
-						isLoggedIn && selectedAddressId !== "new"
-							? selectedAddressId
-							: null,
-				}),
+				body: JSON.stringify(checkoutPayload),
 			});
 
-			const data: CheckoutResponse = await response.json().catch(() => ({}));
+			const data: CheckoutResponse = await response
+				.json()
+				.catch(() => ({}) as CheckoutResponse);
 
 			console.log("CHECKOUT RESPONSE:", data);
 
@@ -890,17 +1013,13 @@ function CheckoutView() {
 				throw new Error(data?.message || "Unable to create payment order.");
 			}
 
-			/* ===========================================
-			   API KEY
-			=========================================== */
+			/* API KEY */
 
-			const apiKey = data.result.key;
+			const apiKey = data.result?.key;
 
-			/* ===========================================
-			   ORDER ID
-			=========================================== */
+			/* ORDER ID */
 
-			const orderId = data.result.order_id;
+			const orderId = data.result?.order_id;
 
 			if (!apiKey) {
 				throw new Error("Razorpay API key was not returned by the server.");
@@ -915,10 +1034,7 @@ function CheckoutView() {
 				orderId,
 			});
 
-			/* ===========================================
-			   STEP 2
-			   OPEN RAZORPAY
-			=========================================== */
+			/* OPEN RAZORPAY */
 
 			openRazorpay(apiKey, orderId);
 		} catch (error) {
@@ -1074,22 +1190,21 @@ function CheckoutView() {
 	}
 
 	/* =======================================================
-	   MAIN CHECKOUT
+	   UI CONDITIONS
 	======================================================= */
 
-	// Show the manual address form when the user isn't logged in,
-	// hasn't finished the auth check yet, has no saved addresses,
-	// or has explicitly chosen "Add a new address".
 	const showAddressForm =
-		!isLoggedIn ||
-		checkingAuth ||
-		savedAddresses.length === 0 ||
-		selectedAddressId === "new";
+		deliveryMethod === "standard" &&
+		(!isLoggedIn ||
+			checkingAuth ||
+			savedAddresses.length === 0 ||
+			selectedAddressId === "new");
 
-	// Name/email are always account-driven once logged in, so lock
-	// those two fields instead of letting them silently drift from
-	// what /api/auth/user returned.
 	const lockContactFields = isLoggedIn && !checkingAuth;
+
+	/* =======================================================
+	   MAIN CHECKOUT
+	======================================================= */
 
 	return (
 		<main className="min-h-screen bg-[#FBF9F7]">
@@ -1141,188 +1256,509 @@ function CheckoutView() {
 					onSubmit={handlePayment}
 					className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px] lg:gap-8"
 				>
-					{/* =================================================
-					    LEFT COLUMN
-					================================================= */}
+					{/* LEFT COLUMN */}
 
 					<div className="space-y-6">
-						{/* DELIVERY INFORMATION */}
+						{/* =================================================
+						    DELIVERY METHOD
+						================================================= */}
 
 						<section className="overflow-hidden rounded-2xl border border-[#E8DED7] bg-white">
 							<div className="border-b border-[#E8DED7] px-5 py-4 sm:px-6">
 								<div className="flex items-center gap-3">
 									<div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F7D6BF]/40">
-										<MapPin size={17} className="text-[#85161B]" />
+										<Truck size={17} className="text-[#85161B]" />
 									</div>
 
 									<div>
 										<h2 className="font-semibold text-[#2E2E2E]">
-											Delivery Information
+											Delivery Method
 										</h2>
 
 										<p className="mt-0.5 text-xs text-[#2E2E2E]/45">
-											{isLoggedIn
-												? "Choose a saved address or add a new one."
-												: "Where should we deliver your order?"}
+											Choose how you would like to receive your order.
 										</p>
 									</div>
 								</div>
 							</div>
 
-							<div className="p-5 sm:p-6">
-								{/* RECEIVER NAME (LOGGED-IN USERS) */}
+							<div className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2 sm:p-6">
+								{/* STANDARD */}
 
-								{lockContactFields && (
-									<div className="mb-6 flex items-center justify-between rounded-xl border border-[#E8DED7] bg-[#FCFBFA] px-4 py-3">
+								<button
+									type="button"
+									onClick={() => handleDeliveryMethodChange("standard")}
+									className={`
+										flex
+										items-center
+										gap-3
+										rounded-xl
+										border
+										p-4
+										text-left
+										transition
+										${
+											deliveryMethod === "standard"
+												? "border-[#85161B] bg-[#FFF9F6]"
+												: "border-[#DED6D0] bg-[#FCFBFA] hover:border-[#85161B]/40"
+										}
+									`}
+								>
+									<div
+										className={`
+											flex
+											h-5
+											w-5
+											shrink-0
+											items-center
+											justify-center
+											rounded-full
+											border-2
+											${deliveryMethod === "standard" ? "border-[#85161B]" : "border-[#DED6D0]"}
+										`}
+									>
+										{deliveryMethod === "standard" && (
+											<div className="h-2.5 w-2.5 rounded-full bg-[#85161B]" />
+										)}
+									</div>
+
+									<div className="flex-1">
+										<p className="text-sm font-semibold text-[#2E2E2E]">
+											Standard Delivery
+										</p>
+
+										<p className="mt-1 text-xs text-[#2E2E2E]/50">
+											Delivered to your address
+										</p>
+									</div>
+
+									<span className="text-sm font-semibold text-[#85161B]">
+										₹{cartDeliveryFee.toFixed(2)}
+									</span>
+								</button>
+
+								{/* PICKUP */}
+
+								<button
+									type="button"
+									onClick={() => handleDeliveryMethodChange("pickup")}
+									className={`
+										flex
+										items-center
+										gap-3
+										rounded-xl
+										border
+										p-4
+										text-left
+										transition
+										${
+											deliveryMethod === "pickup"
+												? "border-[#85161B] bg-[#FFF9F6]"
+												: "border-[#DED6D0] bg-[#FCFBFA] hover:border-[#85161B]/40"
+										}
+									`}
+								>
+									<div
+										className={`
+											flex
+											h-5
+											w-5
+											shrink-0
+											items-center
+											justify-center
+											rounded-full
+											border-2
+											${deliveryMethod === "pickup" ? "border-[#85161B]" : "border-[#DED6D0]"}
+										`}
+									>
+										{deliveryMethod === "pickup" && (
+											<div className="h-2.5 w-2.5 rounded-full bg-[#85161B]" />
+										)}
+									</div>
+
+									<div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#F7D6BF]/40">
+										<Store size={18} className="text-[#85161B]" />
+									</div>
+
+									<div className="flex-1">
+										<p className="text-sm font-semibold text-[#2E2E2E]">
+											Pickup from Store
+										</p>
+
+										<p className="mt-1 text-xs text-[#2E2E2E]/50">
+											Collect your order from our store
+										</p>
+									</div>
+
+									<span className="text-sm font-semibold text-green-600">
+										Free
+									</span>
+								</button>
+							</div>
+						</section>
+
+						{/* =================================================
+						    DELIVERY INFORMATION
+						================================================= */}
+
+						{deliveryMethod === "standard" && (
+							<section className="overflow-hidden rounded-2xl border border-[#E8DED7] bg-white">
+								<div className="border-b border-[#E8DED7] px-5 py-4 sm:px-6">
+									<div className="flex items-center gap-3">
+										<div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F7D6BF]/40">
+											<MapPin size={17} className="text-[#85161B]" />
+										</div>
+
 										<div>
-											<p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#2E2E2E]/40">
-												Receiver
-											</p>
+											<h2 className="font-semibold text-[#2E2E2E]">
+												Delivery Information
+											</h2>
 
-											<p className="mt-1 text-sm font-semibold text-[#2E2E2E]">
-												{formData.firstName} {formData.lastName}
-											</p>
-
-											<p className="mt-0.5 text-xs text-[#2E2E2E]/50">
-												{formData.email} · {formData.phone}
+											<p className="mt-0.5 text-xs text-[#2E2E2E]/45">
+												{isLoggedIn
+													? "Choose a saved address or add a new one."
+													: "Where should we deliver your order?"}
 											</p>
 										</div>
 									</div>
-								)}
+								</div>
 
-								{/* SAVED ADDRESSES (LOGGED-IN USERS ONLY) */}
+								<div className="p-5 sm:p-6">
+									{/* =====================================
+									    CUSTOMER / ACCOUNT DETAILS
+									===================================== */}
 
-								{isLoggedIn && (checkingAuth || savedAddresses.length > 0) && (
-									<div className="mb-6 space-y-3">
-										{checkingAuth ? (
-											<div className="flex items-center gap-2 py-2 text-sm text-[#2E2E2E]/50">
-												<span className="h-4 w-4 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
-												Loading saved addresses...
-											</div>
-										) : (
-											<>
-												<p className="text-xs font-semibold uppercase tracking-[0.15em] text-[#2E2E2E]/45">
-													Saved Addresses
+									{lockContactFields && (
+										<div className="mb-6 flex items-center justify-between rounded-xl border border-[#E8DED7] bg-[#FCFBFA] px-4 py-3">
+											<div>
+												<p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#2E2E2E]/40">
+													Account
 												</p>
 
-												<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-													{savedAddresses.map((addr) => {
-														const isSelected = selectedAddressId === addr.id;
+												<p className="mt-1 text-sm font-semibold text-[#2E2E2E]">
+													{formData.firstName} {formData.lastName}
+												</p>
 
-														return (
+												<p className="mt-0.5 text-xs text-[#2E2E2E]/50">
+													{formData.email} · {formData.phone}
+												</p>
+											</div>
+										</div>
+									)}
+
+									{/* =====================================
+									    SAVED ADDRESSES
+									===================================== */}
+
+									{isLoggedIn &&
+										(checkingAuth || savedAddresses.length > 0) && (
+											<div className="mb-6 space-y-3">
+												{checkingAuth ? (
+													<div className="flex items-center gap-2 py-2 text-sm text-[#2E2E2E]/50">
+														<span className="h-4 w-4 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
+														Loading saved addresses...
+													</div>
+												) : (
+													<>
+														<p className="text-xs font-semibold uppercase tracking-[0.15em] text-[#2E2E2E]/45">
+															Saved Addresses
+														</p>
+
+														<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+															{savedAddresses.map((addr) => {
+																const isSelected =
+																	selectedAddressId === addr.id;
+
+																return (
+																	<button
+																		key={addr.id}
+																		type="button"
+																		onClick={() => handleSelectAddress(addr.id)}
+																		className={`
+																				flex
+																				items-start
+																				gap-3
+																				rounded-xl
+																				border
+																				p-4
+																				text-left
+																				transition
+																				${
+																					isSelected
+																						? "border-[#85161B] bg-[#FFF9F6]"
+																						: "border-[#DED6D0] bg-[#FCFBFA] hover:border-[#85161B]/40"
+																				}
+																			`}
+																	>
+																		{/* RADIO */}
+
+																		<div
+																			className={`
+																					mt-0.5
+																					flex
+																					h-5
+																					w-5
+																					shrink-0
+																					items-center
+																					justify-center
+																					rounded-full
+																					border-2
+																					${isSelected ? "border-[#85161B]" : "border-[#DED6D0]"}
+																				`}
+																		>
+																			{isSelected && (
+																				<div className="h-2.5 w-2.5 rounded-full bg-[#85161B]" />
+																			)}
+																		</div>
+
+																		<div className="min-w-0 flex-1">
+																			{/* RECEIVER NAME */}
+
+																			<div className="flex flex-wrap items-center gap-2">
+																				<p className="text-sm font-semibold text-[#2E2E2E]">
+																					{addr.receiverName || "Receiver"}
+																				</p>
+
+																				{addr.isDefault && (
+																					<span className="rounded-full bg-[#F7D6BF]/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#85161B]">
+																						Default
+																					</span>
+																				)}
+																			</div>
+
+																			{/* ADDRESS */}
+
+																			<p className="mt-1 text-xs leading-5 text-[#2E2E2E]/55">
+																				{addr.flatHouseBuilding}
+
+																				{addr.roadAreaColony
+																					? `, ${addr.roadAreaColony}`
+																					: ""}
+
+																				{addr.landmark &&
+																				addr.landmark !== addr.flatHouseBuilding
+																					? `, ${addr.landmark}`
+																					: ""}
+
+																				{addr.city ? `, ${addr.city}` : ""}
+
+																				{addr.state ? `, ${addr.state}` : ""}
+
+																				{addr.pincode
+																					? ` - ${addr.pincode}`
+																					: ""}
+																			</p>
+
+																			{/* PHONE */}
+
+																			{addr.phone && (
+																				<p className="mt-1 text-xs text-[#2E2E2E]/45">
+																					{addr.phone}
+																				</p>
+																			)}
+																		</div>
+																	</button>
+																);
+															})}
+
+															{/* ADD NEW */}
+
 															<button
-																key={addr.id}
 																type="button"
-																onClick={() => handleSelectAddress(addr.id)}
+																onClick={() => handleSelectAddress("new")}
 																className={`
 																	flex
-																	items-start
-																	gap-3
+																	min-h-[120px]
+																	items-center
+																	justify-center
+																	gap-2
 																	rounded-xl
 																	border
+																	border-dashed
 																	p-4
-																	text-left
+																	text-sm
+																	font-semibold
 																	transition
 																	${
-																		isSelected
-																			? "border-[#85161B] bg-[#FFF9F6]"
-																			: "border-[#DED6D0] bg-[#FCFBFA] hover:border-[#85161B]/40"
+																		selectedAddressId === "new"
+																			? "border-[#85161B] bg-[#FFF9F6] text-[#85161B]"
+																			: "border-[#DED6D0] text-[#2E2E2E]/55 hover:border-[#85161B]/40 hover:text-[#85161B]"
 																	}
 																`}
 															>
-																<div
-																	className={`
-																		mt-0.5
-																		flex
-																		h-5
-																		w-5
-																		shrink-0
-																		items-center
-																		justify-center
-																		rounded-full
-																		border-2
-																		${isSelected ? "border-[#85161B]" : "border-[#DED6D0]"}
-																	`}
-																>
-																	{isSelected && (
-																		<div className="h-2.5 w-2.5 rounded-full bg-[#85161B]" />
-																	)}
-																</div>
-
-																<div className="min-w-0">
-																	<div className="flex flex-wrap items-center gap-2">
-																		<p className="text-sm font-semibold text-[#2E2E2E]">
-																			{addr.city}, {addr.state}
-																		</p>
-
-																		{addr.isDefault && (
-																			<span className="rounded-full bg-[#F7D6BF]/50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#85161B]">
-																				Default
-																			</span>
-																		)}
-																	</div>
-
-																	<p className="mt-1 text-xs leading-5 text-[#2E2E2E]/55">
-																		{addr.flatHouseBuilding}
-																		{addr.roadAreaColony
-																			? `, ${addr.roadAreaColony}`
-																			: ""}
-																		{addr.landmark &&
-																		addr.landmark !== addr.flatHouseBuilding
-																			? `, ${addr.landmark}`
-																			: ""}
-																		, {addr.pincode}
-																	</p>
-
-																	<p className="mt-1 text-xs text-[#2E2E2E]/45">
-																		{addr.phone}
-																	</p>
-																</div>
+																<Plus size={16} />
+																Add a new address
 															</button>
-														);
-													})}
-
-													{/* ADD NEW ADDRESS */}
-
-													<button
-														type="button"
-														onClick={() => handleSelectAddress("new")}
-														className={`
-															flex
-															items-center
-															justify-center
-															gap-2
-															rounded-xl
-															border
-															border-dashed
-															p-4
-															text-sm
-															font-semibold
-															transition
-															${
-																selectedAddressId === "new"
-																	? "border-[#85161B] bg-[#FFF9F6] text-[#85161B]"
-																	: "border-[#DED6D0] text-[#2E2E2E]/55 hover:border-[#85161B]/40 hover:text-[#85161B]"
-															}
-														`}
-													>
-														<Plus size={16} />
-														Add a new address
-													</button>
-												</div>
-											</>
+														</div>
+													</>
+												)}
+											</div>
 										)}
+
+									{/* =====================================
+									    NEW ADDRESS FORM
+									===================================== */}
+
+									{showAddressForm && (
+										<div className="space-y-5">
+											{/* RECEIVER DETAILS */}
+
+											<div>
+												<p className="mb-4 text-xs font-semibold uppercase tracking-[0.15em] text-[#2E2E2E]/45">
+													Receiver Details
+												</p>
+
+												<div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+													<div className="sm:col-span-2">
+														<FormInput
+															label="Receiver's name"
+															name="receiverName"
+															value={formData.receiverName}
+															onChange={handleChange}
+															placeholder="Enter receiver's full name"
+															required
+														/>
+													</div>
+
+													<div className="sm:col-span-2">
+														<FormInput
+															label="Phone number"
+															name="phone"
+															type="tel"
+															value={formData.phone}
+															onChange={handleChange}
+															placeholder="10-digit mobile number"
+															required
+														/>
+													</div>
+												</div>
+											</div>
+
+											{/* ADDRESS DETAILS */}
+
+											<div className="border-t border-[#E8DED7] pt-5">
+												<p className="mb-4 text-xs font-semibold uppercase tracking-[0.15em] text-[#2E2E2E]/45">
+													Address Details
+												</p>
+
+												<div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+													<div className="sm:col-span-2">
+														<FormInput
+															label="Flat / House / Building"
+															name="flatHouseBuilding"
+															value={formData.flatHouseBuilding}
+															onChange={handleChange}
+															placeholder="Flat no., house name, building"
+															required
+														/>
+													</div>
+
+													<div className="sm:col-span-2">
+														<FormInput
+															label="Road / Area / Colony"
+															name="roadAreaColony"
+															value={formData.roadAreaColony}
+															onChange={handleChange}
+															placeholder="Road name, area, colony"
+															required
+														/>
+													</div>
+
+													<div className="sm:col-span-2">
+														<FormInput
+															label="Landmark"
+															name="landmark"
+															value={formData.landmark}
+															onChange={handleChange}
+															placeholder="Nearby landmark (optional)"
+														/>
+													</div>
+
+													<FormInput
+														label="City"
+														name="city"
+														value={formData.city}
+														onChange={handleChange}
+														placeholder="Ujjain"
+														required
+													/>
+
+													<FormInput
+														label="State"
+														name="state"
+														value={formData.state}
+														onChange={handleChange}
+														placeholder="Madhya Pradesh"
+														required
+													/>
+
+													<FormInput
+														label="PIN code"
+														name="pincode"
+														value={formData.pincode}
+														onChange={handleChange}
+														placeholder="456001"
+														required
+													/>
+												</div>
+											</div>
+										</div>
+									)}
+								</div>
+							</section>
+						)}
+
+						{/* =================================================
+						    PICKUP INFORMATION
+						================================================= */}
+
+						{deliveryMethod === "pickup" && (
+							<section className="overflow-hidden rounded-2xl border border-[#E8DED7] bg-white">
+								<div className="border-b border-[#E8DED7] px-5 py-4 sm:px-6">
+									<div className="flex items-center gap-3">
+										<div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F7D6BF]/40">
+											<Store size={17} className="text-[#85161B]" />
+										</div>
+
+										<div>
+											<h2 className="font-semibold text-[#2E2E2E]">
+												Pickup from Store
+											</h2>
+
+											<p className="mt-0.5 text-xs text-[#2E2E2E]/45">
+												No delivery address is required.
+											</p>
+										</div>
 									</div>
-								)}
+								</div>
 
-								{/* MANUAL ADDRESS FORM */}
+								<div className="p-5 sm:p-6">
+									<div className="rounded-xl border border-[#85161B] bg-[#FFF9F6] p-5">
+										<div className="flex items-start gap-4">
+											<div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F7D6BF]/50">
+												<Store size={20} className="text-[#85161B]" />
+											</div>
 
-								{showAddressForm && (
-									<div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-										{/* Name/email are locked once we know the account's
-										    identity — phone stays editable per-address since a
-										    delivery address can have its own contact number. */}
+											<div>
+												<p className="text-sm font-semibold text-[#2E2E2E]">
+													Store Pickup
+												</p>
 
+												<p className="mt-1 text-xs leading-6 text-[#2E2E2E]/55">
+													Your order will be prepared for pickup from our store.
+													You don't need to provide a delivery address.
+												</p>
+
+												<div className="mt-3 inline-flex items-center rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+													No delivery fee
+												</div>
+											</div>
+										</div>
+									</div>
+
+									{/* CONTACT DETAILS */}
+
+									<div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
 										<FormInput
 											label="First name"
 											name="firstName"
@@ -1363,117 +1799,14 @@ function CheckoutView() {
 											placeholder="10-digit mobile number"
 											required
 										/>
-
-										<div className="sm:col-span-2">
-											<FormInput
-												label="Flat / House / Building"
-												name="flatHouseBuilding"
-												value={formData.flatHouseBuilding}
-												onChange={handleChange}
-												placeholder="Flat no., house name, building"
-												required
-											/>
-										</div>
-
-										<div className="sm:col-span-2">
-											<FormInput
-												label="Road / Area / Colony"
-												name="roadAreaColony"
-												value={formData.roadAreaColony}
-												onChange={handleChange}
-												placeholder="Road name, area, colony"
-												required
-											/>
-										</div>
-
-										<div className="sm:col-span-2">
-											<FormInput
-												label="Landmark"
-												name="landmark"
-												value={formData.landmark}
-												onChange={handleChange}
-												placeholder="Nearby landmark (optional)"
-											/>
-										</div>
-
-										<FormInput
-											label="City"
-											name="city"
-											value={formData.city}
-											onChange={handleChange}
-											placeholder="Ujjain"
-											required
-										/>
-
-										<FormInput
-											label="State"
-											name="state"
-											value={formData.state}
-											onChange={handleChange}
-											placeholder="Madhya Pradesh"
-											required
-										/>
-
-										<FormInput
-											label="PIN code"
-											name="pincode"
-											value={formData.pincode}
-											onChange={handleChange}
-											placeholder="456001"
-											required
-										/>
-									</div>
-								)}
-							</div>
-						</section>
-
-						{/* DELIVERY METHOD */}
-
-						<section className="overflow-hidden rounded-2xl border border-[#E8DED7] bg-white">
-							<div className="border-b border-[#E8DED7] px-5 py-4 sm:px-6">
-								<div className="flex items-center gap-3">
-									<div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F7D6BF]/40">
-										<Truck size={17} className="text-[#85161B]" />
-									</div>
-
-									<div>
-										<h2 className="font-semibold text-[#2E2E2E]">
-											Delivery Method
-										</h2>
-
-										<p className="mt-0.5 text-xs text-[#2E2E2E]/45">
-											Your delivery fee is calculated from the cart.
-										</p>
 									</div>
 								</div>
-							</div>
+							</section>
+						)}
 
-							<div className="p-5 sm:p-6">
-								<div className="flex items-center justify-between rounded-xl border border-[#85161B] bg-[#FFF9F6] p-4">
-									<div className="flex items-center gap-3">
-										<div className="flex h-5 w-5 items-center justify-center rounded-full border-2 border-[#85161B]">
-											<div className="h-2.5 w-2.5 rounded-full bg-[#85161B]" />
-										</div>
-
-										<div>
-											<p className="text-sm font-semibold text-[#2E2E2E]">
-												Standard Delivery
-											</p>
-
-											<p className="mt-1 text-xs text-[#2E2E2E]/50">
-												Delivery fee from cart
-											</p>
-										</div>
-									</div>
-
-									<span className="text-sm font-semibold text-[#85161B]">
-										₹{deliveryFee.toFixed(2)}
-									</span>
-								</div>
-							</div>
-						</section>
-
-						{/* PAYMENT */}
+						{/* =================================================
+						    PAYMENT
+						================================================= */}
 
 						<section className="overflow-hidden rounded-2xl border border-[#E8DED7] bg-white">
 							<div className="border-b border-[#E8DED7] px-5 py-4 sm:px-6">
@@ -1520,7 +1853,7 @@ function CheckoutView() {
 
 					<aside className="lg:sticky lg:top-24 lg:self-start">
 						<div className="overflow-hidden rounded-2xl border border-[#E8DED7] bg-white shadow-[0_10px_35px_rgba(80,40,20,0.05)]">
-							{/* SUMMARY HEADER */}
+							{/* HEADER */}
 
 							<div className="border-b border-[#E8DED7] px-5 py-4 sm:px-6">
 								<div className="flex items-center justify-between">
@@ -1540,18 +1873,10 @@ function CheckoutView() {
 								{items.map((item) => {
 									const quantity = item.quantity;
 
-									/*
-										IMPORTANT:
-										Use selling_price from backend,
-										not price.
-									*/
-
 									const itemTotal = item.selling_price * quantity;
 
 									return (
 										<div key={item.id} className="flex gap-3 p-4">
-											{/* PRODUCT IMAGE */}
-
 											<div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-[#F7F3F0]">
 												{item.image ? (
 													<img
@@ -1568,14 +1893,10 @@ function CheckoutView() {
 													</div>
 												)}
 
-												{/* QUANTITY */}
-
 												<span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#85161B] px-1 text-[10px] font-bold text-white">
 													{quantity}
 												</span>
 											</div>
-
-											{/* PRODUCT INFO */}
 
 											<div className="min-w-0 flex-1">
 												<p className="truncate text-sm font-medium text-[#2E2E2E]">
@@ -1586,8 +1907,6 @@ function CheckoutView() {
 													₹{item.selling_price.toFixed(2)} each
 												</p>
 											</div>
-
-											{/* ITEM TOTAL */}
 
 											<p className="shrink-0 text-sm font-semibold text-[#2E2E2E]">
 												₹{itemTotal.toFixed(2)}
@@ -1601,23 +1920,21 @@ function CheckoutView() {
 
 							<div className="border-t border-[#E8DED7] p-5 sm:p-6">
 								<div className="space-y-3 text-sm">
-									{/* SUBTOTAL */}
-
 									<div className="flex justify-between text-[#2E2E2E]/60">
 										<span>Subtotal</span>
 
 										<span>₹{subtotal.toFixed(2)}</span>
 									</div>
 
-									{/* DELIVERY */}
-
 									<div className="flex justify-between text-[#2E2E2E]/60">
 										<span>Delivery</span>
 
-										<span>₹{deliveryFee.toFixed(2)}</span>
+										{deliveryMethod === "pickup" ? (
+											<span className="font-medium text-green-600">Free</span>
+										) : (
+											<span>₹{deliveryFee.toFixed(2)}</span>
+										)}
 									</div>
-
-									{/* GRAND TOTAL */}
 
 									<div className="border-t border-[#E8DED7] pt-4">
 										<div className="flex items-end justify-between">
