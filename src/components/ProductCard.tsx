@@ -1,7 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Heart, ShoppingBag, Check, X, Upload, Trash2 } from "lucide-react";
+import {
+	Heart,
+	ShoppingBag,
+	Check,
+	X,
+	Upload,
+	Trash2,
+	AlertTriangle,
+	ChevronDown,
+} from "lucide-react";
 
 /* =========================================================
    TYPES
@@ -25,18 +35,20 @@ type Item = {
 	tag?: string;
 	description?: string;
 	brand?: string;
+	customizeReqs?: string | string[] | null;
 
 	/*
-	 * Backend can return customizeReqs as:
-	 *
-	 * JSON string:
-	 * '["text:10:Enter your custom name"]'
-	 *
-	 * OR:
-	 *
-	 * ["text:10:Enter your custom name"]
+	 * true = product is sold without customization
 	 */
-	customizeReqs?: string | string[] | null;
+	noCustomization?: boolean;
+
+	/*
+	 * Product options.
+	 *
+	 * Example:
+	 * options: ["Logo Printing", "Name Printing", "No Printing"]
+	 */
+	options?: string[];
 };
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -44,20 +56,6 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 /* =========================================================
    PARSE CUSTOMIZATION REQUIREMENTS
 ========================================================= */
-
-/*
- * Supported backend formats:
- *
- * 1. text:10:Enter your custom name
- * 2. photo:Upload Photo
- * 3. photos:5:Upload Photos
- *
- * Also supports the older format:
- *
- * 4. key:text:10:Enter your custom name
- * 5. key:photo:1:Upload Photo
- * 6. key:photos:5:Upload Photos
- */
 
 function parseCustomizeRequirements(
 	value?: string | string[] | null,
@@ -68,10 +66,6 @@ function parseCustomizeRequirements(
 
 	let parsed: unknown;
 
-	/* ---------------------------------------------------------
-	   VALUE MAY ALREADY BE AN ARRAY
-	--------------------------------------------------------- */
-
 	if (Array.isArray(value)) {
 		parsed = value;
 	} else {
@@ -79,7 +73,6 @@ function parseCustomizeRequirements(
 			parsed = JSON.parse(value);
 		} catch (error) {
 			console.error("Failed to parse customize_reqs:", value, error);
-
 			return [];
 		}
 	}
@@ -105,11 +98,19 @@ function parseCustomizeRequirements(
 			let max = 1;
 			let placeholder = "";
 
-			/* =====================================================
-			   FORMAT:
-
-			   text:10:Enter your custom name
-			===================================================== */
+			/*
+			 * Supported formats:
+			 *
+			 * text:10:Enter your custom name
+			 * photo:Upload Photo
+			 * photos:5:Upload Photos
+			 *
+			 * Old format:
+			 *
+			 * name:text:50:Enter name
+			 * photo:photo:1:Upload Photo
+			 * gallery:photos:5:Upload Photos
+			 */
 
 			if (
 				parts[0] === "text" ||
@@ -117,17 +118,6 @@ function parseCustomizeRequirements(
 				parts[0] === "photos"
 			) {
 				type = parts[0];
-
-				/*
-				 * TEXT / PHOTOS:
-				 *
-				 * text:10:Enter name
-				 * photos:5:Upload photos
-				 *
-				 * PHOTO:
-				 *
-				 * photo:Upload Photo
-				 */
 
 				if (type === "photo") {
 					key = "photo";
@@ -140,55 +130,42 @@ function parseCustomizeRequirements(
 						max = possibleMax;
 						placeholder = parts.slice(2).join(":").trim();
 					} else {
-						/*
-						 * Fallback:
-						 *
-						 * text:Enter your name
-						 */
 						max = type === "text" ? 100 : 1;
 						placeholder = parts.slice(1).join(":").trim();
 					}
 
+					/*
+					 * Use a deterministic key.
+					 *
+					 * Do NOT use Math.random() here because it causes
+					 * the key to change on every render.
+					 */
 					key =
 						type === "text"
-							? `text_${Math.random().toString(36).slice(2, 8)}`
-							: `photos_${Math.random().toString(36).slice(2, 8)}`;
+							? `text_${placeholder
+									.toLowerCase()
+									.replace(/[^a-z0-9]+/g, "_")
+									.slice(0, 30)}`
+							: `photos_${placeholder
+									.toLowerCase()
+									.replace(/[^a-z0-9]+/g, "_")
+									.slice(0, 30)}`;
 				}
 			} else if (
-
-			/* =====================================================
-			   OLD FORMAT:
-
-			   key:text:10:Enter name
-			   key:photo:1:Upload Photo
-			   key:photos:5:Upload Photos
-			===================================================== */
 				parts.length >= 3 &&
 				(parts[1] === "text" || parts[1] === "photo" || parts[1] === "photos")
 			) {
 				key = parts[0];
-
 				type = parts[1];
 
 				const possibleMax = Number(parts[2]);
 
 				if (Number.isFinite(possibleMax) && possibleMax >= 1) {
 					max = possibleMax;
+					placeholder = parts.slice(3).join(":").trim();
 				} else {
 					max = type === "photo" ? 1 : 100;
-				}
-
-				placeholder = parts.slice(3).join(":").trim();
-
-				/*
-				 * Handle:
-				 *
-				 * key:photo:Upload Photo
-				 */
-				if (!placeholder && parts.length >= 3) {
 					placeholder = parts.slice(2).join(":").trim();
-
-					max = type === "photo" ? 1 : 100;
 				}
 			} else {
 				return null;
@@ -200,10 +177,6 @@ function parseCustomizeRequirements(
 
 			const optional = /\(\s*optional\s*\)/i.test(placeholder);
 
-			/*
-			 * Remove optional marker from placeholder displayed
-			 * inside the actual input.
-			 */
 			const cleanPlaceholder = placeholder
 				.replace(/\s*\(\s*optional\s*\)/i, "")
 				.trim();
@@ -231,26 +204,24 @@ export default function ProductCard({
 	showOriginal?: boolean;
 }) {
 	/* =====================================================
-	   WISHLIST
-	===================================================== */
+       WISHLIST
+    ===================================================== */
 
 	const [wishlisted, setWishlisted] = useState(false);
 	const [wishlistLoading, setWishlistLoading] = useState(false);
 	const [wishlistError, setWishlistError] = useState("");
 
 	/* =====================================================
-	   CART
-	===================================================== */
+       CART
+    ===================================================== */
 
 	const [addingToCart, setAddingToCart] = useState(false);
-
 	const [addedToCart, setAddedToCart] = useState(false);
-
 	const [cartError, setCartError] = useState("");
 
 	/* =====================================================
-	   CUSTOMIZATION
-	===================================================== */
+       CUSTOMIZATION
+    ===================================================== */
 
 	const [customizationOpen, setCustomizationOpen] = useState(false);
 
@@ -266,16 +237,44 @@ export default function ProductCard({
 		useState("");
 
 	/* =====================================================
-	   PARSED CUSTOMIZATION REQUIREMENTS
-	===================================================== */
+       RAW ORDER (buyer opts out of customization for this
+       order, even though the product supports it)
+    ===================================================== */
+
+	const [rawOrder, setRawOrder] = useState(false);
+
+	/* =====================================================
+       OPTION
+    ===================================================== */
+
+	const [selectedOption, setSelectedOption] = useState("");
+
+	/* =====================================================
+       PARSED CUSTOMIZATION REQUIREMENTS
+    ===================================================== */
 
 	const customizeRequirements = parseCustomizeRequirements(item.customizeReqs);
 
-	/*
-	 * Debugging.
-	 *
-	 * You can remove this later.
-	 */
+	/* =====================================================
+       HAS OPTIONS
+    ===================================================== */
+
+	const hasOptions =
+		!item.noCustomization &&
+		Array.isArray(item.options) &&
+		item.options.length > 0;
+
+	/* =====================================================
+       DETERMINE WHETHER CUSTOMIZATION IS AVAILABLE
+    ===================================================== */
+
+	const hasCustomization =
+		!item.noCustomization && (customizeRequirements.length > 0 || hasOptions);
+
+	/* =====================================================
+       DEBUG
+    ===================================================== */
+
 	useEffect(() => {
 		console.log(
 			`Product "${item.name}" raw customizeReqs:`,
@@ -286,11 +285,18 @@ export default function ProductCard({
 			`Product "${item.name}" parsed customization requirements:`,
 			customizeRequirements,
 		);
-	}, [item.name, item.customizeReqs]);
+
+		console.log(`Product "${item.name}" options:`, item.options);
+
+		console.log(
+			`Product "${item.name}" noCustomization:`,
+			item.noCustomization,
+		);
+	}, [item.name, item.customizeReqs, item.noCustomization, item.options]);
 
 	/* =====================================================
-	   BODY SCROLL LOCK
-	===================================================== */
+       BODY SCROLL LOCK
+    ===================================================== */
 
 	useEffect(() => {
 		if (!customizationOpen) {
@@ -307,28 +313,39 @@ export default function ProductCard({
 	}, [customizationOpen]);
 
 	/* =====================================================
-	   RESET CUSTOMIZATION
-	===================================================== */
+       RESET CUSTOMIZATION
+    ===================================================== */
 
 	const resetCustomization = () => {
 		setCustomizationValues({});
 		setCustomizationFiles({});
 		setCustomizationValidationError("");
+		setSelectedOption("");
+		setRawOrder(false);
 	};
 
 	/* =====================================================
-	   OPEN MODAL
-	===================================================== */
+       OPEN MODAL
+    ===================================================== */
 
 	const openCustomizationModal = () => {
 		setCartError("");
 		setCustomizationValidationError("");
+
+		/*
+		 * Automatically select the first option if there
+		 * is only one option.
+		 */
+		if (item.options && item.options.length === 1) {
+			setSelectedOption(item.options[0]);
+		}
+
 		setCustomizationOpen(true);
 	};
 
 	/* =====================================================
-	   CLOSE MODAL
-	===================================================== */
+       CLOSE MODAL
+    ===================================================== */
 
 	const closeCustomizationModal = () => {
 		if (addingToCart) {
@@ -340,12 +357,23 @@ export default function ProductCard({
 	};
 
 	/* =====================================================
-	   ADD TO CART
-	===================================================== */
+       TOGGLE RAW ORDER
+    ===================================================== */
+
+	const handleToggleRawOrder = () => {
+		setCustomizationValidationError("");
+
+		setRawOrder((previous) => !previous);
+	};
+
+	/* =====================================================
+       ADD TO CART (customized / option-based)
+    ===================================================== */
 
 	const addToCart = async (
 		values: Record<string, string>,
 		files: Record<string, File[]>,
+		option?: string,
 	) => {
 		if (addingToCart) {
 			return;
@@ -357,47 +385,79 @@ export default function ProductCard({
 		try {
 			const formData = new FormData();
 
-			/* PRODUCT ID */
+			/* =================================================
+               PRODUCT ID
+            ================================================= */
 
 			formData.append("product_id", item.id);
 
 			/* =================================================
-			   TEXT CUSTOMIZATION
-			================================================= */
+               OPTION
+            ================================================= */
 
-			Object.entries(values).forEach(([key, value]) => {
-				const trimmedValue = value.trim();
-
-				if (trimmedValue) {
-					formData.append(key, trimmedValue);
-				}
-			});
+			if (!item.noCustomization && option?.trim()) {
+				formData.append("option", option.trim());
+			}
 
 			/* =================================================
-			   FILE CUSTOMIZATION
-			================================================= */
+               TEXT CUSTOMIZATION
+            ================================================= */
 
-			Object.entries(files).forEach(([key, fileList]) => {
-				if (!fileList.length) {
-					return;
-				}
+			if (!item.noCustomization) {
+				Object.entries(values).forEach(([key, value]) => {
+					const trimmedValue = value.trim();
 
-				/*
-				 * Single photo
-				 */
-				if (fileList.length === 1) {
-					formData.append(key, fileList[0]);
-
-					return;
-				}
-
-				/*
-				 * Multiple photos
-				 */
-				fileList.forEach((file) => {
-					formData.append(`${key}[]`, file);
+					if (trimmedValue) {
+						formData.append(key, trimmedValue);
+					}
 				});
-			});
+
+				/* =================================================
+                   FILE CUSTOMIZATION
+                ================================================= */
+
+				Object.entries(files).forEach(([key, fileList]) => {
+					if (!fileList.length) {
+						return;
+					}
+
+					/*
+					 * SINGLE PHOTO
+					 */
+					if (fileList.length === 1) {
+						formData.append(key, fileList[0]);
+
+						return;
+					}
+
+					/*
+					 * MULTIPLE PHOTOS
+					 */
+					fileList.forEach((file) => {
+						formData.append(`${key}[]`, file);
+					});
+				});
+			}
+
+			/* =================================================
+               DEBUG FOR API REQUEST
+            ================================================= */
+
+			console.log("========== ADD TO CART ==========");
+
+			for (const [key, value] of formData.entries()) {
+				if (value instanceof File) {
+					console.log(key, value.name, value.size, value.type);
+				} else {
+					console.log(key, value);
+				}
+			}
+
+			console.log("=================================");
+
+			/* =================================================
+               API
+            ================================================= */
 
 			const response = await fetch("/api/cart/add", {
 				method: "POST",
@@ -418,6 +478,7 @@ export default function ProductCard({
 			}
 
 			console.log("ADD TO CART STATUS:", response.status);
+
 			console.log("ADD TO CART RESPONSE:", data);
 
 			if (!response.ok) {
@@ -425,18 +486,6 @@ export default function ProductCard({
 					data?.message || `Unable to add product to cart (${response.status})`,
 				);
 			}
-
-			console.log("Product successfully added to cart:", data);
-
-			// const data: {
-			// 	message?: string;
-			// } = await response.json().catch(() => ({}));
-
-			// if (!response.ok) {
-			// 	throw new Error(
-			// 		data?.message || "Unable to add item to cart. Please try again.",
-			// 	);
-			// }
 
 			setAddedToCart(true);
 			setCustomizationOpen(false);
@@ -459,8 +508,94 @@ export default function ProductCard({
 	};
 
 	/* =====================================================
-	   HANDLE ADD TO CART
-	===================================================== */
+       ADD TO CART (raw / no customization for this order)
+
+       Body shape sent to the backend:
+
+       product_id: "9"
+       customize: "raw"
+
+       No option, no per-field keys, no photos — a raw order
+       is just the bare product.
+    ===================================================== */
+
+	const addRawToCart = async () => {
+		if (addingToCart) {
+			return;
+		}
+
+		setCartError("");
+		setAddingToCart(true);
+
+		try {
+			const formData = new FormData();
+
+			formData.append("product_id", item.id);
+			formData.append("customize", "raw");
+
+			console.log("========== ADD TO CART (RAW) ==========");
+
+			for (const [key, value] of formData.entries()) {
+				if (value instanceof File) {
+					console.log(key, value.name, value.size, value.type);
+				} else {
+					console.log(key, value);
+				}
+			}
+
+			console.log("========================================");
+
+			const response = await fetch("/api/cart/add", {
+				method: "POST",
+				credentials: "include",
+				body: formData,
+			});
+
+			const responseText = await response.text();
+
+			let data: any;
+
+			try {
+				data = JSON.parse(responseText);
+			} catch {
+				data = {
+					message: responseText || "Invalid response from server.",
+				};
+			}
+
+			console.log("ADD TO CART STATUS:", response.status);
+
+			console.log("ADD TO CART RESPONSE:", data);
+
+			if (!response.ok) {
+				throw new Error(
+					data?.message || `Unable to add product to cart (${response.status})`,
+				);
+			}
+
+			setAddedToCart(true);
+			setCustomizationOpen(false);
+			resetCustomization();
+
+			setTimeout(() => {
+				setAddedToCart(false);
+			}, 1800);
+		} catch (error) {
+			console.error("Add to cart failed:", error);
+
+			setCartError(
+				error instanceof Error
+					? error.message
+					: "Unable to add item to cart. Please try again.",
+			);
+		} finally {
+			setAddingToCart(false);
+		}
+	};
+
+	/* =====================================================
+       HANDLE ADD TO CART
+    ===================================================== */
 
 	const handleAddToCart = async () => {
 		if (addingToCart) {
@@ -469,32 +604,34 @@ export default function ProductCard({
 
 		setCartError("");
 
-		console.log("Add to cart clicked:", item.name);
+		/* =================================================
+           NO CUSTOMIZATION
+        ================================================= */
 
-		console.log("Customization requirements:", customizeRequirements);
+		if (item.noCustomization) {
+			await addToCart({}, {});
+			return;
+		}
 
-		/*
-		 * IMPORTANT:
-		 *
-		 * If customization requirements exist,
-		 * ALWAYS open the modal.
-		 */
+		/* =================================================
+           CUSTOMIZED PRODUCT / OPTION PRODUCT
+        ================================================= */
 
-		if (customizeRequirements.length > 0) {
+		if (hasCustomization) {
 			openCustomizationModal();
 			return;
 		}
 
-		/*
-		 * Normal product.
-		 */
+		/* =================================================
+           NORMAL PRODUCT
+        ================================================= */
 
 		await addToCart({}, {});
 	};
 
 	/* =====================================================
-	   TEXT CHANGE
-	===================================================== */
+       TEXT CHANGE
+    ===================================================== */
 
 	const handleTextChange = (key: string, value: string, max: number) => {
 		setCustomizationValues((previous) => ({
@@ -506,8 +643,8 @@ export default function ProductCard({
 	};
 
 	/* =====================================================
-	   SINGLE PHOTO
-	===================================================== */
+       SINGLE PHOTO
+    ===================================================== */
 
 	const handleSinglePhotoChange = (
 		requirement: CustomizeRequirement,
@@ -523,7 +660,6 @@ export default function ProductCard({
 			setCustomizationValidationError(
 				`${requirement.placeholder}: Please select an image file.`,
 			);
-
 			return;
 		}
 
@@ -531,7 +667,6 @@ export default function ProductCard({
 			setCustomizationValidationError(
 				`${requirement.placeholder}: Image must be 10 MB or smaller.`,
 			);
-
 			return;
 		}
 
@@ -542,8 +677,8 @@ export default function ProductCard({
 	};
 
 	/* =====================================================
-	   MULTIPLE PHOTOS
-	===================================================== */
+       MULTIPLE PHOTOS
+    ===================================================== */
 
 	const handleMultiplePhotoChange = (
 		requirement: CustomizeRequirement,
@@ -561,7 +696,6 @@ export default function ProductCard({
 			setCustomizationValidationError(
 				`${requirement.placeholder}: Please select up to ${requirement.max} photos.`,
 			);
-
 			return;
 		}
 
@@ -573,7 +707,6 @@ export default function ProductCard({
 			setCustomizationValidationError(
 				`${requirement.placeholder}: Only image files are allowed.`,
 			);
-
 			return;
 		}
 
@@ -585,7 +718,6 @@ export default function ProductCard({
 			setCustomizationValidationError(
 				`${requirement.placeholder}: Each image must be 10 MB or smaller.`,
 			);
-
 			return;
 		}
 
@@ -596,8 +728,8 @@ export default function ProductCard({
 	};
 
 	/* =====================================================
-	   REMOVE PHOTO
-	===================================================== */
+       REMOVE PHOTO
+    ===================================================== */
 
 	const removePhoto = (key: string, index: number) => {
 		setCustomizationFiles((previous) => ({
@@ -609,12 +741,28 @@ export default function ProductCard({
 	};
 
 	/* =====================================================
-	   VALIDATE CUSTOMIZATION
-	===================================================== */
+       VALIDATE CUSTOMIZATION
+    ===================================================== */
 
 	const validateCustomization = (): boolean => {
+		/* =================================================
+           OPTION
+        ================================================= */
+
+		if (hasOptions && !selectedOption.trim()) {
+			setCustomizationValidationError("Please select an option.");
+
+			return false;
+		}
+
+		/* =================================================
+           REQUIREMENTS
+        ================================================= */
+
 		for (const requirement of customizeRequirements) {
-			/* TEXT */
+			/* =================================================
+               TEXT
+            ================================================= */
 
 			if (requirement.type === "text") {
 				const value = customizationValues[requirement.key]?.trim() || "";
@@ -636,7 +784,9 @@ export default function ProductCard({
 				}
 			}
 
-			/* SINGLE PHOTO */
+			/* =================================================
+               SINGLE PHOTO
+            ================================================= */
 
 			if (requirement.type === "photo") {
 				const files = customizationFiles[requirement.key] || [];
@@ -650,7 +800,9 @@ export default function ProductCard({
 				}
 			}
 
-			/* MULTIPLE PHOTOS */
+			/* =================================================
+               MULTIPLE PHOTOS
+            ================================================= */
 
 			if (requirement.type === "photos") {
 				const files = customizationFiles[requirement.key] || [];
@@ -677,11 +829,22 @@ export default function ProductCard({
 	};
 
 	/* =====================================================
-	   SUBMIT CUSTOMIZATION
-	===================================================== */
+       SUBMIT CUSTOMIZATION
+    ===================================================== */
 
 	const handleCustomizationSubmit = async () => {
 		setCustomizationValidationError("");
+
+		/*
+		 * RAW ORDER — buyer opted out of customization for
+		 * this purchase. Skip normal validation entirely and
+		 * send the raw payload shape instead.
+		 */
+
+		if (rawOrder) {
+			await addRawToCart();
+			return;
+		}
 
 		const valid = validateCustomization();
 
@@ -689,12 +852,12 @@ export default function ProductCard({
 			return;
 		}
 
-		await addToCart(customizationValues, customizationFiles);
+		await addToCart(customizationValues, customizationFiles, selectedOption);
 	};
 
 	/* =====================================================
-	   WISHLIST
-	===================================================== */
+       WISHLIST
+    ===================================================== */
 
 	const handleToggleWishlist = async () => {
 		if (wishlistLoading) {
@@ -706,7 +869,6 @@ export default function ProductCard({
 		const previousValue = wishlisted;
 
 		setWishlisted(!previousValue);
-
 		setWishlistLoading(true);
 
 		try {
@@ -750,43 +912,52 @@ export default function ProductCard({
 	};
 
 	/* =====================================================
-	   RENDER
-	===================================================== */
+       PRODUCT URL
+    ===================================================== */
+
+	const productUrl = `/product/${item.id}`;
+
+	/* =====================================================
+       RENDER
+    ===================================================== */
 
 	return (
 		<>
 			{/* =================================================
-			    PRODUCT CARD
-			================================================= */}
+                PRODUCT CARD
+            ================================================= */}
 
 			<article
 				className="
-					group
-					w-full
-					min-w-0
-					overflow-hidden
-					rounded-[26px]
-					border
-					border-black/[0.06]
-					bg-white
-					p-2.5
-					shadow-[0_8px_30px_rgba(0,0,0,0.05)]
-					transition-all
-					duration-300
-					hover:-translate-y-1
-					hover:shadow-[0_14px_40px_rgba(0,0,0,0.09)]
-				"
+                    group
+                    w-full
+                    min-w-0
+                    overflow-hidden
+                    rounded-[26px]
+                    border
+                    border-black/[0.06]
+                    bg-white
+                    p-2.5
+                    shadow-[0_8px_30px_rgba(0,0,0,0.05)]
+                    transition-all
+                    duration-300
+                    hover:-translate-y-1
+                    hover:shadow-[0_14px_40px_rgba(0,0,0,0.09)]
+                "
 			>
 				{/* IMAGE */}
 
-				<div
+				<Link
+					href={productUrl}
+					aria-label={`View ${item.name}`}
 					className="
-						relative
-						aspect-[0.92]
-						overflow-hidden
-						rounded-[21px]
-						bg-[#F3F0EC]
-					"
+                        relative
+                        block
+                        aspect-[0.92]
+                        overflow-hidden
+                        rounded-[21px]
+                        bg-[#F3F0EC]
+                    "
 				>
 					{item.image ? (
 						<img
@@ -794,26 +965,26 @@ export default function ProductCard({
 							alt={item.name}
 							loading="lazy"
 							className="
-								h-full
-								w-full
-								object-cover
-								transition-transform
-								duration-500
-								ease-out
-								group-hover:scale-[1.035]
-							"
+                                h-full
+                                w-full
+                                object-cover
+                                transition-transform
+                                duration-500
+                                ease-out
+                                group-hover:scale-[1.035]
+                            "
 						/>
 					) : (
 						<div
 							className="
-								flex
-								h-full
-								w-full
-								items-center
-								justify-center
-								text-sm
-								text-black/40
-							"
+                                flex
+                                h-full
+                                w-full
+                                items-center
+                                justify-center
+                                text-sm
+                                text-black/40
+                            "
 						>
 							No image
 						</div>
@@ -824,20 +995,21 @@ export default function ProductCard({
 					{(item.badge || item.tag) && (
 						<div
 							className="
-								absolute
-								left-3
-								top-3
-								rounded-full
-								bg-white/95
-								px-3
-								py-1.5
-								text-[10px]
-								font-bold
-								uppercase
-								tracking-[0.08em]
-								text-[#85161B]
-								shadow-sm
-							"
+                                pointer-events-none
+                                absolute
+                                left-3
+                                top-3
+                                rounded-full
+                                bg-white/95
+                                px-3
+                                py-1.5
+                                text-[10px]
+                                font-bold
+                                uppercase
+                                tracking-[0.08em]
+                                text-[#85161B]
+                                shadow-sm
+                            "
 						>
 							{item.badge || item.tag}
 						</div>
@@ -847,7 +1019,11 @@ export default function ProductCard({
 
 					<button
 						type="button"
-						onClick={handleToggleWishlist}
+						onClick={(e) => {
+							e.preventDefault();
+							e.stopPropagation();
+							handleToggleWishlist();
+						}}
 						disabled={wishlistLoading}
 						aria-label={
 							wishlisted
@@ -855,24 +1031,25 @@ export default function ProductCard({
 								: `Add ${item.name} to wishlist`
 						}
 						className="
-							absolute
-							right-3
-							top-3
-							flex
-							h-10
-							w-10
-							items-center
-							justify-center
-							rounded-full
-							bg-white/95
-							shadow-sm
-							transition-all
-							duration-200
-							hover:scale-105
-							active:scale-90
-							disabled:cursor-not-allowed
-							disabled:opacity-70
-						"
+                            absolute
+                            right-3
+                            top-3
+                            z-10
+                            flex
+                            h-10
+                            w-10
+                            items-center
+                            justify-center
+                            rounded-full
+                            bg-white/95
+                            shadow-sm
+                            transition-all
+                            duration-200
+                            hover:scale-105
+                            active:scale-90
+                            disabled:cursor-not-allowed
+                            disabled:opacity-70
+                        "
 					>
 						<Heart
 							size={19}
@@ -882,50 +1059,120 @@ export default function ProductCard({
 							}
 						/>
 					</button>
-				</div>
+				</Link>
 
 				{/* PRODUCT INFORMATION */}
 
 				<div className="px-2 pb-1 pt-4">
-					<h3
-						className="
-							line-clamp-1
-							text-[16px]
-							font-semibold
-							leading-tight
-							tracking-[-0.01em]
-							text-[#202020]
-						"
+					{/* NAME */}
+
+					<Link
+						href={productUrl}
+						className="block"
+						aria-label={`View ${item.name}`}
 					>
-						{item.name}
-					</h3>
+						<h3
+							className="
+                                line-clamp-1
+                                text-[16px]
+                                font-semibold
+                                leading-tight
+                                tracking-[-0.01em]
+                                text-[#202020]
+                                transition-colors
+                                duration-200
+                                group-hover:text-[#85161B]
+                            "
+						>
+							{item.name}
+						</h3>
+					</Link>
+
+					{/* BRAND */}
 
 					{item.brand && (
 						<p
 							className="
-								mt-1
-								text-[12px]
-								font-medium
-								text-black/40
-							"
+                                mt-1
+                                text-[12px]
+                                font-medium
+                                text-black/40
+                            "
 						>
 							{item.brand}
 						</p>
 					)}
 
-					<p
-						className="
-							mt-1.5
-							line-clamp-2
-							min-h-[34px]
-							text-[12px]
-							leading-[1.45]
-							text-black/45
-						"
-					>
-						{item.description ||
-							"Thoughtfully designed and made to make every moment personal."}
-					</p>
+					{/* DESCRIPTION */}
+
+					<Link href={productUrl} className="block">
+						<p
+							className="
+                                mt-1.5
+                                line-clamp-2
+                                min-h-[34px]
+                                text-[12px]
+                                leading-[1.45]
+                                text-black/45
+                            "
+						>
+							{item.description ||
+								"Thoughtfully designed and made to make every moment personal."}
+						</p>
+					</Link>
+
+					{/* NO CUSTOMIZATION */}
+
+					{item.noCustomization && (
+						<div
+							className="
+                                mt-3
+                                flex
+                                items-start
+                                gap-2
+                                rounded-xl
+                                border
+                                border-amber-200
+                                bg-amber-50
+                                px-3
+                                py-2.5
+                            "
+						>
+							<AlertTriangle
+								size={14}
+								strokeWidth={2}
+								className="
+                                    mt-0.5
+                                    shrink-0
+                                    text-amber-600
+                                "
+							/>
+
+							<div className="min-w-0">
+								<p
+									className="
+                                        text-[10px]
+                                        font-semibold
+                                        leading-[1.35]
+                                        text-amber-800
+                                    "
+								>
+									Raw product only
+								</p>
+
+								<p
+									className="
+                                        mt-0.5
+                                        text-[9px]
+                                        leading-[1.4]
+                                        text-amber-700/80
+                                    "
+								>
+									No customization included. Suitable for resellers.
+								</p>
+							</div>
+						</div>
+					)}
 
 					{/* PRICE */}
 
@@ -933,11 +1180,11 @@ export default function ProductCard({
 						<div className="flex items-baseline gap-2">
 							<span
 								className="
-									text-[19px]
-									font-bold
-									tracking-tight
-									text-[#85161B]
-								"
+                                    text-[19px]
+                                    font-bold
+                                    tracking-tight
+                                    text-[#85161B]
+                                "
 							>
 								₹{item.price.toFixed(0)}
 							</span>
@@ -945,11 +1192,11 @@ export default function ProductCard({
 							{showOriginal && item.original && (
 								<span
 									className="
-											text-[12px]
-											font-medium
-											text-black/30
-											line-through
-										"
+                                            text-[12px]
+                                            font-medium
+                                            text-black/30
+                                            line-through
+                                        "
 								>
 									₹{item.original.toFixed(0)}
 								</span>
@@ -966,39 +1213,39 @@ export default function ProductCard({
 							disabled={addingToCart}
 							aria-label={`Add ${item.name} to cart`}
 							className="
-								flex
-								h-11
-								flex-1
-								items-center
-								justify-center
-								gap-2
-								rounded-full
-								border
-								border-[#85161B]/25
-								bg-white
-								text-[12px]
-								font-semibold
-								text-[#85161B]
-								transition-all
-								duration-200
-								hover:border-[#85161B]/50
-								hover:bg-[#85161B]/[0.04]
-								active:scale-95
-								disabled:cursor-not-allowed
-								disabled:opacity-60
-							"
+                                flex
+                                h-11
+                                flex-1
+                                items-center
+                                justify-center
+                                gap-2
+                                rounded-full
+                                border
+                                border-[#85161B]/25
+                                bg-white
+                                text-[12px]
+                                font-semibold
+                                text-[#85161B]
+                                transition-all
+                                duration-200
+                                hover:border-[#85161B]/50
+                                hover:bg-[#85161B]/[0.04]
+                                active:scale-95
+                                disabled:cursor-not-allowed
+                                disabled:opacity-60
+                            "
 						>
 							{addingToCart ? (
 								<span
 									className="
-										h-3.5
-										w-3.5
-										animate-spin
-										rounded-full
-										border-2
-										border-[#85161B]/30
-										border-t-[#85161B]
-									"
+                                        h-3.5
+                                        w-3.5
+                                        animate-spin
+                                        rounded-full
+                                        border-2
+                                        border-[#85161B]/30
+                                        border-t-[#85161B]
+                                    "
 								/>
 							) : addedToCart ? (
 								<Check size={16} strokeWidth={2.4} />
@@ -1011,7 +1258,7 @@ export default function ProductCard({
 									? "Adding..."
 									: addedToCart
 										? "Added"
-										: customizeRequirements.length > 0
+										: hasCustomization
 											? "Customize & Add"
 											: "Add to cart"}
 							</span>
@@ -1024,11 +1271,11 @@ export default function ProductCard({
 						<p
 							role="alert"
 							className="
-								mt-2
-								text-[11px]
-								font-medium
-								text-red-600
-							"
+                                mt-2
+                                text-[11px]
+                                font-medium
+                                text-red-600
+                            "
 						>
 							{cartError}
 						</p>
@@ -1038,11 +1285,11 @@ export default function ProductCard({
 						<p
 							role="alert"
 							className="
-								mt-2
-								text-[11px]
-								font-medium
-								text-red-600
-							"
+                                mt-2
+                                text-[11px]
+                                font-medium
+                                text-red-600
+                            "
 						>
 							{wishlistError}
 						</p>
@@ -1050,21 +1297,21 @@ export default function ProductCard({
 				</div>
 			</article>
 
-			{/* =====================================================
-			    CUSTOMIZATION MODAL
-			===================================================== */}
+			{/* =================================================
+                CUSTOMIZATION MODAL
+            ================================================= */}
 
 			{customizationOpen && (
 				<div
 					className="
-						fixed
-						inset-0
-						z-[100]
-						flex
-						items-center
-						justify-center
-						p-4
-					"
+                        fixed
+                        inset-0
+                        z-[100]
+                        flex
+                        items-center
+                        justify-center
+                        p-4
+                    "
 				>
 					{/* BACKDROP */}
 
@@ -1073,77 +1320,77 @@ export default function ProductCard({
 						aria-label="Close customization"
 						onClick={closeCustomizationModal}
 						className="
-							absolute
-							inset-0
-							cursor-default
-							bg-black/45
-							backdrop-blur-[2px]
-						"
+                            absolute
+                            inset-0
+                            cursor-default
+                            bg-black/45
+                            backdrop-blur-[2px]
+                        "
 					/>
 
 					{/* MODAL */}
 
 					<div
 						className="
-							relative
-							z-10
-							flex
-							max-h-[90vh]
-							w-full
-							max-w-lg
-							flex-col
-							overflow-hidden
-							rounded-[26px]
-							bg-white
-							shadow-2xl
-						"
+                            relative
+                            z-10
+                            flex
+                            max-h-[90vh]
+                            w-full
+                            max-w-lg
+                            flex-col
+                            overflow-hidden
+                            rounded-[26px]
+                            bg-white
+                            shadow-2xl
+                        "
 					>
 						{/* HEADER */}
 
 						<div
 							className="
-								flex
-								items-start
-								justify-between
-								gap-4
-								border-b
-								border-[#E8DED7]
-								px-5
-								py-4
-								sm:px-6
-							"
+                                flex
+                                items-start
+                                justify-between
+                                gap-4
+                                border-b
+                                border-[#E8DED7]
+                                px-5
+                                py-4
+                                sm:px-6
+                            "
 						>
 							<div className="min-w-0">
 								<p
 									className="
-										text-[10px]
-										font-bold
-										uppercase
-										tracking-[0.15em]
-										text-[#85161B]
-									"
+                                        text-[10px]
+                                        font-bold
+                                        uppercase
+                                        tracking-[0.15em]
+                                        text-[#85161B]
+                                    "
 								>
 									Personalize
 								</p>
 
 								<h2
 									className="
-										mt-1
-										line-clamp-2
-										text-lg
-										font-semibold
-										text-[#202020]
-									"
+                                        mt-1
+                                        line-clamp-2
+                                        text-lg
+                                        font-semibold
+                                        text-[#202020]
+                                    "
 								>
 									{item.name}
 								</h2>
 
 								<p
 									className="
-										mt-1
-										text-xs
-										text-black/45
-									"
+                                        mt-1
+                                        text-xs
+                                        text-black/45
+                                    "
 								>
 									Add the details required for your custom order.
 								</p>
@@ -1154,20 +1401,20 @@ export default function ProductCard({
 								onClick={closeCustomizationModal}
 								disabled={addingToCart}
 								className="
-									flex
-									h-9
-									w-9
-									shrink-0
-									items-center
-									justify-center
-									rounded-full
-									bg-[#F7F4F1]
-									text-black/55
-									transition
-									hover:bg-[#F0EAE5]
-									hover:text-[#85161B]
-									disabled:opacity-50
-								"
+                                    flex
+                                    h-9
+                                    w-9
+                                    shrink-0
+                                    items-center
+                                    justify-center
+                                    rounded-full
+                                    bg-[#F7F4F1]
+                                    text-black/55
+                                    transition
+                                    hover:bg-[#F0EAE5]
+                                    hover:text-[#85161B]
+                                    disabled:opacity-50
+                                "
 							>
 								<X size={18} />
 							</button>
@@ -1177,247 +1424,444 @@ export default function ProductCard({
 
 						<div className="overflow-y-auto px-5 py-5 sm:px-6">
 							<div className="space-y-5">
-								{customizeRequirements.map((requirement) => {
-									const label = requirement.placeholder;
+								{/* =================================================
+                                    RAW ORDER TOGGLE
+                                ================================================= */}
 
-									const textValue = customizationValues[requirement.key] || "";
+								<div
+									className="
+                                        rounded-xl
+                                        border
+                                        border-[#DED6D0]
+                                        bg-[#FBF9F7]
+                                        p-4
+                                    "
+								>
+									<label className="flex cursor-pointer items-start gap-3">
+										<input
+											type="checkbox"
+											checked={rawOrder}
+											onChange={handleToggleRawOrder}
+											className="mt-0.5 h-4 w-4 accent-[#85161B]"
+										/>
 
-									const files = customizationFiles[requirement.key] || [];
-
-									return (
-										<div key={requirement.key}>
-											{/* LABEL */}
-
-											<label
+										<div className="min-w-0">
+											<span
 												className="
-														mb-2
-														flex
-														items-center
-														justify-between
-														gap-3
-													"
+                                                    text-sm
+                                                    font-semibold
+                                                    text-[#202020]
+                                                "
 											>
-												<span className="text-sm font-semibold text-[#202020]">
-													{label}
-												</span>
+												No customization — send raw product
+											</span>
 
-												{requirement.optional ? (
-													<span className="text-[10px] font-medium text-black/35">
-														Optional
+											<p className="mt-1 text-xs text-black/45">
+												Skip personalization and receive the plain product
+												as-is.
+											</p>
+										</div>
+									</label>
+
+									{rawOrder && (
+										<div
+											className="
+                                                mt-3
+                                                flex
+                                                items-start
+                                                gap-2
+                                                rounded-lg
+                                                border
+                                                border-amber-200
+                                                bg-amber-50
+                                                px-3
+                                                py-2.5
+                                            "
+										>
+											<AlertTriangle
+												size={14}
+												strokeWidth={2}
+												className="mt-0.5 shrink-0 text-amber-600"
+											/>
+
+											<p className="text-[11px] leading-[1.5] text-amber-800">
+												A raw product will be delivered without any
+												customization applied — preferably suited for resellers.
+												Please confirm this is what you want before adding to
+												cart.
+											</p>
+										</div>
+									)}
+								</div>
+
+								{!rawOrder && (
+									<>
+										{/* =================================================
+                                            OPTION
+                                        ================================================= */}
+
+										{hasOptions && (
+											<div>
+												<label
+													htmlFor={`option-${item.id}`}
+													className="
+                                                        mb-2
+                                                        flex
+                                                        items-center
+                                                        justify-between
+                                                        gap-3
+                                                    "
+												>
+													<span
+														className="
+                                                            text-sm
+                                                            font-semibold
+                                                            text-[#202020]
+                                                        "
+													>
+														Select option
 													</span>
-												) : (
-													<span className="text-[10px] font-semibold text-[#85161B]">
+
+													<span
+														className="
+                                                            text-[10px]
+                                                            font-semibold
+                                                            text-[#85161B]
+                                                        "
+													>
 														Required
 													</span>
-												)}
-											</label>
+												</label>
 
-											{/* TEXT */}
-
-											{requirement.type === "text" && (
-												<div>
-													<input
-														type="text"
-														value={textValue}
-														onChange={(e) =>
-															handleTextChange(
-																requirement.key,
-																e.target.value,
-																requirement.max,
-															)
-														}
-														maxLength={requirement.max}
-														placeholder={requirement.placeholder}
+												<div className="relative">
+													<select
+														id={`option-${item.id}`}
+														value={selectedOption}
+														onChange={(e) => {
+															setSelectedOption(e.target.value);
+															setCustomizationValidationError("");
+														}}
 														className="
-																w-full
-																rounded-xl
-																border
-																border-[#DED6D0]
-																bg-white
-																px-4
-																py-3
-																text-sm
-																text-[#202020]
-																outline-none
-																transition
-																placeholder:text-black/30
-																focus:border-[#85161B]
-																focus:ring-2
-																focus:ring-[#85161B]/10
-															"
+                                                            w-full
+                                                            appearance-none
+                                                            rounded-xl
+                                                            border
+                                                            border-[#DED6D0]
+                                                            bg-white
+                                                            px-4
+                                                            py-3
+                                                            pr-10
+                                                            text-sm
+                                                            text-[#202020]
+                                                            outline-none
+                                                            transition
+                                                            focus:border-[#85161B]
+                                                            focus:ring-2
+                                                            focus:ring-[#85161B]/10
+                                                        "
+													>
+														<option value="">Select an option</option>
+
+														{item.options?.map((option, index) => (
+															<option key={`${option}-${index}`} value={option}>
+																{option}
+															</option>
+														))}
+													</select>
+
+													<ChevronDown
+														size={17}
+														className="
+                                                            pointer-events-none
+                                                            absolute
+                                                            right-4
+                                                            top-1/2
+                                                            -translate-y-1/2
+                                                            text-black/40
+                                                        "
 													/>
-
-													<div className="mt-1.5 flex justify-end">
-														<span className="text-[10px] text-black/35">
-															{textValue.length}/{requirement.max}
-														</span>
-													</div>
 												</div>
-											)}
+											</div>
+										)}
 
-											{/* SINGLE PHOTO */}
+										{/* =================================================
+                                            CUSTOMIZATION REQUIREMENTS
+                                        ================================================= */}
 
-											{requirement.type === "photo" && (
-												<div>
+										{customizeRequirements.map((requirement) => {
+											const label = requirement.placeholder;
+
+											const textValue =
+												customizationValues[requirement.key] || "";
+
+											const files = customizationFiles[requirement.key] || [];
+
+											return (
+												<div key={requirement.key}>
+													{/* LABEL */}
+
 													<label
 														className="
-																flex
-																cursor-pointer
-																flex-col
-																items-center
-																justify-center
-																rounded-xl
-																border
-																border-dashed
-																border-[#DED6D0]
-																bg-[#FBF9F7]
-																px-4
-																py-7
-																text-center
-																transition
-																hover:border-[#85161B]/50
-																hover:bg-[#85161B]/[0.02]
-															"
+                                                            mb-2
+                                                            flex
+                                                            items-center
+                                                            justify-between
+                                                            gap-3
+                                                        "
 													>
-														<Upload size={20} className="text-[#85161B]" />
-
-														<span className="mt-2 text-sm font-medium text-[#202020]">
-															{files.length > 0
-																? "Change image"
-																: "Upload image"}
+														<span
+															className="
+                                                                text-sm
+                                                                font-semibold
+                                                                text-[#202020]
+                                                            "
+														>
+															{label}
 														</span>
 
-														<span className="mt-1 text-[10px] text-black/40">
-															PNG, JPG, WEBP • Max 10 MB
-														</span>
-
-														<input
-															type="file"
-															accept="image/*"
-															className="hidden"
-															onChange={(e) =>
-																handleSinglePhotoChange(
-																	requirement,
-																	e.target.files?.[0],
-																)
-															}
-														/>
+														{requirement.optional ? (
+															<span
+																className="
+                                                                    text-[10px]
+                                                                    font-medium
+                                                                    text-black/35
+                                                                "
+															>
+																Optional
+															</span>
+														) : (
+															<span
+																className="
+                                                                    text-[10px]
+                                                                    font-semibold
+                                                                    text-[#85161B]
+                                                                "
+															>
+																Required
+															</span>
+														)}
 													</label>
 
-													{files.length > 0 && (
-														<div
-															className="
-																	mt-2
-																	flex
-																	items-center
-																	justify-between
-																	rounded-lg
-																	bg-[#F7F4F1]
-																	px-3
-																	py-2
-																"
-														>
-															<span className="max-w-[80%] truncate text-xs text-black/65">
-																{files[0].name}
-															</span>
+													{/* =================================================
+                                                        TEXT
+                                                    ================================================= */}
 
-															<button
-																type="button"
-																onClick={() => removePhoto(requirement.key, 0)}
-																className="text-black/35 transition hover:text-red-600"
-															>
-																<Trash2 size={15} />
-															</button>
+													{requirement.type === "text" && (
+														<div>
+															<input
+																type="text"
+																value={textValue}
+																onChange={(e) =>
+																	handleTextChange(
+																		requirement.key,
+																		e.target.value,
+																		requirement.max,
+																	)
+																}
+																maxLength={requirement.max}
+																placeholder={requirement.placeholder}
+																className="
+                                                                    w-full
+                                                                    rounded-xl
+                                                                    border
+                                                                    border-[#DED6D0]
+                                                                    bg-white
+                                                                    px-4
+                                                                    py-3
+                                                                    text-sm
+                                                                    text-[#202020]
+                                                                    outline-none
+                                                                    transition
+                                                                    placeholder:text-black/30
+                                                                    focus:border-[#85161B]
+                                                                    focus:ring-2
+                                                                    focus:ring-[#85161B]/10
+                                                                "
+															/>
+
+															<div className="mt-1.5 flex justify-end">
+																<span className="text-[10px] text-black/35">
+																	{textValue.length}/{requirement.max}
+																</span>
+															</div>
 														</div>
 													)}
-												</div>
-											)}
 
-											{/* MULTIPLE PHOTOS */}
+													{/* =================================================
+                                                        SINGLE PHOTO
+                                                    ================================================= */}
 
-											{requirement.type === "photos" && (
-												<div>
-													<label
-														className="
-																flex
-																cursor-pointer
-																flex-col
-																items-center
-																justify-center
-																rounded-xl
-																border
-																border-dashed
-																border-[#DED6D0]
-																bg-[#FBF9F7]
-																px-4
-																py-7
-																text-center
-																transition
-																hover:border-[#85161B]/50
-																hover:bg-[#85161B]/[0.02]
-															"
-													>
-														<Upload size={20} className="text-[#85161B]" />
+													{requirement.type === "photo" && (
+														<div>
+															<label
+																className="
+                                                                    flex
+                                                                    cursor-pointer
+                                                                    flex-col
+                                                                    items-center
+                                                                    justify-center
+                                                                    rounded-xl
+                                                                    border
+                                                                    border-dashed
+                                                                    border-[#DED6D0]
+                                                                    bg-[#FBF9F7]
+                                                                    px-4
+                                                                    py-7
+                                                                    text-center
+                                                                    transition
+                                                                    hover:border-[#85161B]/50
+                                                                    hover:bg-[#85161B]/[0.02]
+                                                                "
+															>
+																<Upload size={20} className="text-[#85161B]" />
 
-														<span className="mt-2 text-sm font-medium text-[#202020]">
-															Select photos
-														</span>
+																<span className="mt-2 text-sm font-medium text-[#202020]">
+																	{files.length > 0
+																		? "Change image"
+																		: "Upload image"}
+																</span>
 
-														<span className="mt-1 text-[10px] text-black/40">
-															Up to {requirement.max} photos • Each max 10 MB
-														</span>
+																<span className="mt-1 text-[10px] text-black/40">
+																	PNG, JPG, WEBP
+																	{" • "}
+																	Max 10 MB
+																</span>
 
-														<input
-															type="file"
-															accept="image/*"
-															multiple
-															className="hidden"
-															onChange={(e) =>
-																handleMultiplePhotoChange(
-																	requirement,
-																	e.target.files,
-																)
-															}
-														/>
-													</label>
+																<input
+																	type="file"
+																	accept="image/*"
+																	className="hidden"
+																	onChange={(e) =>
+																		handleSinglePhotoChange(
+																			requirement,
+																			e.target.files?.[0],
+																		)
+																	}
+																/>
+															</label>
 
-													{files.length > 0 && (
-														<div className="mt-3 space-y-2">
-															{files.map((file, index) => (
+															{files.length > 0 && (
 																<div
-																	key={`${file.name}-${file.lastModified}-${index}`}
 																	className="
-																				flex
-																				items-center
-																				justify-between
-																				rounded-lg
-																				bg-[#F7F4F1]
-																				px-3
-																				py-2
-																			"
+                                                                        mt-2
+                                                                        flex
+                                                                        items-center
+                                                                        justify-between
+                                                                        rounded-lg
+                                                                        bg-[#F7F4F1]
+                                                                        px-3
+                                                                        py-2
+                                                                    "
 																>
 																	<span className="max-w-[80%] truncate text-xs text-black/65">
-																		{file.name}
+																		{files[0].name}
 																	</span>
 
 																	<button
 																		type="button"
 																		onClick={() =>
-																			removePhoto(requirement.key, index)
+																			removePhoto(requirement.key, 0)
 																		}
 																		className="text-black/35 transition hover:text-red-600"
 																	>
 																		<Trash2 size={15} />
 																	</button>
 																</div>
-															))}
+															)}
+														</div>
+													)}
+
+													{/* =================================================
+                                                        MULTIPLE PHOTOS
+                                                    ================================================= */}
+
+													{requirement.type === "photos" && (
+														<div>
+															<label
+																className="
+                                                                    flex
+                                                                    cursor-pointer
+                                                                    flex-col
+                                                                    items-center
+                                                                    justify-center
+                                                                    rounded-xl
+                                                                    border
+                                                                    border-dashed
+                                                                    border-[#DED6D0]
+                                                                    bg-[#FBF9F7]
+                                                                    px-4
+                                                                    py-7
+                                                                    text-center
+                                                                    transition
+                                                                    hover:border-[#85161B]/50
+                                                                    hover:bg-[#85161B]/[0.02]
+                                                                "
+															>
+																<Upload size={20} className="text-[#85161B]" />
+
+																<span className="mt-2 text-sm font-medium text-[#202020]">
+																	Select photos
+																</span>
+
+																<span className="mt-1 text-[10px] text-black/40">
+																	Up to {requirement.max} photos
+																	{" • "}
+																	Each max 10 MB
+																</span>
+
+																<input
+																	type="file"
+																	accept="image/*"
+																	multiple
+																	className="hidden"
+																	onChange={(e) =>
+																		handleMultiplePhotoChange(
+																			requirement,
+																			e.target.files,
+																		)
+																	}
+																/>
+															</label>
+
+															{files.length > 0 && (
+																<div className="mt-3 space-y-2">
+																	{files.map((file, index) => (
+																		<div
+																			key={`${file.name}-${file.lastModified}-${index}`}
+																			className="
+                                                                                flex
+                                                                                items-center
+                                                                                justify-between
+                                                                                rounded-lg
+                                                                                bg-[#F7F4F1]
+                                                                                px-3
+                                                                                py-2
+                                                                            "
+																		>
+																			<span className="max-w-[80%] truncate text-xs text-black/65">
+																				{file.name}
+																			</span>
+
+																			<button
+																				type="button"
+																				onClick={() =>
+																					removePhoto(requirement.key, index)
+																				}
+																				className="text-black/35 transition hover:text-red-600"
+																			>
+																				<Trash2 size={15} />
+																			</button>
+																		</div>
+																	))}
+																</div>
+															)}
 														</div>
 													)}
 												</div>
-											)}
-										</div>
-									);
-								})}
+											);
+										})}
+									</>
+								)}
 							</div>
 
 							{/* VALIDATION ERROR */}
@@ -1426,17 +1870,17 @@ export default function ProductCard({
 								<div
 									role="alert"
 									className="
-										mt-5
-										rounded-xl
-										border
-										border-red-200
-										bg-red-50
-										px-3.5
-										py-3
-										text-xs
-										font-medium
-										text-red-600
-									"
+                                        mt-5
+                                        rounded-xl
+                                        border
+                                        border-red-200
+                                        bg-red-50
+                                        px-3.5
+                                        py-3
+                                        text-xs
+                                        font-medium
+                                        text-red-600
+                                    "
 								>
 									{customizationValidationError}
 								</div>
@@ -1447,49 +1891,49 @@ export default function ProductCard({
 
 						<div
 							className="
-								border-t
-								border-[#E8DED7]
-								bg-white
-								px-5
-								py-4
-								sm:px-6
-							"
+                                border-t
+                                border-[#E8DED7]
+                                bg-white
+                                px-5
+                                py-4
+                                sm:px-6
+                            "
 						>
 							<button
 								type="button"
 								onClick={handleCustomizationSubmit}
 								disabled={addingToCart}
 								className="
-									flex
-									h-11
-									w-full
-									items-center
-									justify-center
-									gap-2
-									rounded-full
-									bg-[#85161B]
-									text-sm
-									font-semibold
-									text-white
-									transition
-									hover:bg-[#721318]
-									active:scale-[0.99]
-									disabled:cursor-not-allowed
-									disabled:opacity-60
-								"
+                                    flex
+                                    h-11
+                                    w-full
+                                    items-center
+                                    justify-center
+                                    gap-2
+                                    rounded-full
+                                    bg-[#85161B]
+                                    text-sm
+                                    font-semibold
+                                    text-white
+                                    transition
+                                    hover:bg-[#721318]
+                                    active:scale-[0.99]
+                                    disabled:cursor-not-allowed
+                                    disabled:opacity-60
+                                "
 							>
 								{addingToCart ? (
 									<>
 										<span
 											className="
-												h-4
-												w-4
-												animate-spin
-												rounded-full
-												border-2
-												border-white/30
-												border-t-white
-											"
+                                                h-4
+                                                w-4
+                                                animate-spin
+                                                rounded-full
+                                                border-2
+                                                border-white/30
+                                                border-t-white
+                                            "
 										/>
 										Adding to cart...
 									</>
