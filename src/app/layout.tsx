@@ -109,12 +109,44 @@ export default function RootLayout({
 			className={`${geistSans.variable} ${geistMono.variable} antialiased`}
 		>
 			<body className="min-h-screen bg-[#FFF9F4]">
+				{/* =================================================
+				    FIXED HEADER
+				================================================= */}
+
 				<SiteHeader />
+
+				{/* =================================================
+				    FIXED ANNOUNCEMENT STRIP
+				================================================= */}
 
 				<AnnouncementStrip />
 
-				{children}
+				{/* =================================================
+				    PAGE CONTENT
+
+				    Mobile:
+				    Navbar       = 64px
+				    Strip        = 40px
+				    Total        = 104px
+
+				    Desktop:
+				    Navbar       = 72px
+				    Strip        = 40px
+				    Total        = 112px
+				================================================= */}
+
+				<main className="pt-[104px] sm:pt-[112px]">{children}</main>
+
+				{/* =================================================
+				    SUPPORT
+				================================================= */}
+
 				<SupportBubble />
+
+				{/* =================================================
+				    FOOTER
+				================================================= */}
+
 				<SiteFooter />
 			</body>
 		</html>

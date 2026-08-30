@@ -2,110 +2,202 @@
 
 import Link from "next/link";
 import React from "react";
-import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-	HiOutlineShoppingCart,
-	HiOutlineSearch,
-	HiOutlineUser,
-	HiOutlineHeart,
-	HiOutlineMenu,
-	HiOutlineX,
-} from "react-icons/hi";
+	ShoppingCart,
+	Search,
+	User,
+	Heart,
+	Menu,
+	X,
+	ClipboardList,
+	ArrowRight,
+	House,
+	Store,
+} from "lucide-react";
 
 export default function SiteHeader() {
-	const router = useRouter();
-
 	const [mobileOpen, setMobileOpen] = React.useState(false);
 	const [searchOpen, setSearchOpen] = React.useState(false);
 	const [searchValue, setSearchValue] = React.useState("");
-
-	const navItems = [
-		{ href: "/", label: "Home" },
-		{ href: "/shop", label: "Shop" },
-	];
 
 	const closeMobileMenu = () => {
 		setMobileOpen(false);
 	};
 
-	/* =========================================================
-	   SEARCH
-	========================================================= */
-
 	const handleSearch = (e: React.FormEvent) => {
 		e.preventDefault();
 
-		const trimmedSearch = searchValue.trim();
+		const value = searchValue.trim();
 
-		if (!trimmedSearch) return;
+		if (!value) return;
 
-		setSearchOpen(false);
-		setMobileOpen(false);
-
-		router.push(`/shop?search=${encodeURIComponent(trimmedSearch)}`);
+		window.location.href = `/shop?search=${encodeURIComponent(value)}`;
 	};
 
 	return (
 		<>
-			{/* =====================================================
-			    MAIN NAVBAR
-			===================================================== */}
+			{/* =========================================================
+			    FIXED NAVBAR
+			========================================================= */}
 
-			<motion.header
-				initial={{ y: -20, opacity: 0 }}
-				animate={{ y: 0, opacity: 1 }}
-				transition={{ duration: 0.4 }}
-				className="sticky top-0 z-50 isolate w-full border-b border-border/70 bg-background"
+			<header
+				className="
+					fixed
+					left-0
+					right-0
+					top-0
+					z-[100]
+					w-full
+					border-b
+					border-[#e9dfd8]
+					bg-[#fffaf7]
+				"
 			>
-				<div className="mx-auto flex h-[72px] max-w-7xl items-center gap-4 bg-background px-4 sm:px-6 lg:px-8">
+				<div
+					className="
+						mx-auto
+						flex
+						h-16
+						w-full
+						max-w-7xl
+						items-center
+						gap-2
+						px-3
+						sm:h-[72px]
+						sm:gap-4
+						sm:px-6
+						lg:px-8
+					"
+				>
 					{/* =================================================
-					    LOGO
+					    BRAND
 					================================================= */}
 
 					<Link
 						href="/"
 						onClick={closeMobileMenu}
-						className="flex shrink-0 items-center gap-2.5 transition-opacity hover:opacity-80"
+						className="
+							flex
+							min-w-0
+							shrink-0
+							items-center
+							gap-2
+							transition-opacity
+							hover:opacity-80
+							sm:gap-2.5
+						"
 					>
 						<img
 							src="https://printinghouseujjain.in/assets/logo.png"
 							alt="Printing House"
-							className="h-10 w-10 object-contain"
+							className="
+								h-9
+								w-9
+								shrink-0
+								object-contain
+								sm:h-10
+								sm:w-10
+							"
 						/>
 
-						<div className="hidden sm:block">
-							<div className="text-lg font-bold leading-none tracking-tight">
+						<div className="min-w-0">
+							<div
+								className="
+									whitespace-nowrap
+									text-[15px]
+									font-bold
+									leading-none
+									tracking-tight
+									text-[#171717]
+									sm:text-lg
+								"
+							>
 								Printing House
 							</div>
 
-							<div className="mt-1 text-[9px] font-medium uppercase tracking-[0.16em] text-foreground/45">
-								You think... We Create...
+							<div
+								className="
+									mt-1
+									whitespace-nowrap
+									text-[7px]
+									font-medium
+									uppercase
+									tracking-[0.12em]
+									text-[#8c817b]
+									sm:text-[9px]
+									sm:tracking-[0.16em]
+								"
+							>
+								You Think... We Create...
 							</div>
 						</div>
 					</Link>
 
 					{/* =================================================
-					    DESKTOP NAVIGATION
+					    DESKTOP NAV
+					    HOME + SHOP ONLY
 					================================================= */}
 
-					<nav className="ml-6 hidden items-center gap-1 md:flex lg:ml-10">
-						{navItems.map((item) => (
-							<Link
-								key={item.href}
-								href={item.href}
-								className="rounded-lg px-3.5 py-2 text-sm font-medium text-foreground/65 transition-all duration-200 hover:bg-muted/10 hover:text-[#85161B]"
-							>
-								{item.label}
-							</Link>
-						))}
+					<nav
+						className="
+							ml-5
+							hidden
+							items-center
+							gap-1
+							md:flex
+							lg:ml-16
+						"
+					>
+						<Link
+							href="/"
+							className="
+								rounded-lg
+								px-3.5
+								py-2
+								text-sm
+								font-medium
+								text-[#625b57]
+								transition
+								hover:bg-[#f5eee9]
+								hover:text-[#85161b]
+							"
+						>
+							Home
+						</Link>
+
+						<Link
+							href="/shop"
+							className="
+								rounded-lg
+								px-3.5
+								py-2
+								text-sm
+								font-medium
+								text-[#625b57]
+								transition
+								hover:bg-[#f5eee9]
+								hover:text-[#85161b]
+							"
+						>
+							Shop
+						</Link>
 					</nav>
 
 					{/* =================================================
-					    RIGHT ACTIONS
+					    RIGHT SIDE
 					================================================= */}
 
-					<div className="ml-auto flex items-center gap-1.5 bg-background sm:gap-2">
+					<div
+						className="
+							ml-auto
+							flex
+							shrink-0
+							items-center
+							gap-1
+							sm:gap-2
+						"
+					>
 						{/* =================================================
 						    SEARCH
 						================================================= */}
@@ -113,20 +205,49 @@ export default function SiteHeader() {
 						<AnimatePresence mode="wait">
 							{searchOpen ? (
 								<motion.form
-									key="search-input"
-									initial={{ width: 40, opacity: 0 }}
-									animate={{ width: 240, opacity: 1 }}
-									exit={{ width: 40, opacity: 0 }}
-									transition={{ duration: 0.2 }}
+									key="search-form"
+									initial={{
+										width: 40,
+										opacity: 0,
+									}}
+									animate={{
+										width: 250,
+										opacity: 1,
+									}}
+									exit={{
+										width: 40,
+										opacity: 0,
+									}}
+									transition={{
+										duration: 0.2,
+									}}
 									onSubmit={handleSearch}
-									className="flex h-10 items-center overflow-hidden rounded-xl border border-border bg-background focus-within:border-[#85161B] focus-within:ring-2 focus-within:ring-[#85161B]/10"
+									className="
+										flex
+										h-10
+										overflow-hidden
+										rounded-xl
+										border
+										border-[#e5dbd5]
+										bg-white
+										focus-within:border-[#85161b]
+									"
 								>
 									<button
 										type="submit"
 										aria-label="Search"
-										className="flex h-10 w-10 shrink-0 items-center justify-center bg-background text-foreground/60 transition hover:text-[#85161B]"
+										className="
+											flex
+											h-10
+											w-10
+											shrink-0
+											items-center
+											justify-center
+											text-[#625b57]
+											hover:text-[#85161b]
+										"
 									>
-										<HiOutlineSearch size={20} />
+										<Search size={20} strokeWidth={1.8} />
 									</button>
 
 									<input
@@ -135,7 +256,15 @@ export default function SiteHeader() {
 										value={searchValue}
 										onChange={(e) => setSearchValue(e.target.value)}
 										placeholder="Search products..."
-										className="min-w-0 flex-1 bg-background pr-2 text-sm text-foreground outline-none placeholder:text-foreground/40"
+										className="
+											min-w-0
+											flex-1
+											bg-white
+											text-sm
+											text-[#171717]
+											outline-none
+											placeholder:text-[#aaa19b]
+										"
 									/>
 
 									<button
@@ -145,24 +274,41 @@ export default function SiteHeader() {
 											setSearchValue("");
 										}}
 										aria-label="Close search"
-										className="mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background text-foreground/40 transition hover:bg-muted/10 hover:text-foreground"
+										className="
+											mr-1
+											flex
+											h-8
+											w-8
+											items-center
+											justify-center
+											rounded-lg
+											text-[#8b817c]
+											hover:bg-[#f5eee9]
+										"
 									>
-										<HiOutlineX size={17} />
+										<X size={17} strokeWidth={1.8} />
 									</button>
 								</motion.form>
 							) : (
-								<motion.button
-									key="search-button"
-									initial={{ opacity: 0 }}
-									animate={{ opacity: 1 }}
-									exit={{ opacity: 0 }}
+								<button
 									type="button"
 									aria-label="Search"
 									onClick={() => setSearchOpen(true)}
-									className="flex h-10 w-10 items-center justify-center rounded-xl bg-background text-foreground/70 transition hover:bg-muted/10 hover:text-[#85161B]"
+									className="
+										flex
+										h-10
+										w-10
+										items-center
+										justify-center
+										rounded-xl
+										text-[#625b57]
+										transition
+										hover:bg-[#f5eee9]
+										hover:text-[#85161b]
+									"
 								>
-									<HiOutlineSearch size={20} />
-								</motion.button>
+									<Search size={21} strokeWidth={1.8} />
+								</button>
 							)}
 						</AnimatePresence>
 
@@ -173,21 +319,78 @@ export default function SiteHeader() {
 						<Link
 							href="/wishlist"
 							aria-label="Wishlist"
-							className="hidden h-10 w-10 items-center justify-center rounded-xl bg-background text-foreground/70 transition hover:bg-muted/10 hover:text-[#85161B] sm:flex"
+							className="
+								hidden
+								h-10
+								w-10
+								items-center
+								justify-center
+								rounded-xl
+								text-[#625b57]
+								transition
+								hover:bg-[#f5eee9]
+								hover:text-[#85161b]
+								sm:flex
+							"
 						>
-							<HiOutlineHeart size={20} />
+							<Heart size={21} strokeWidth={1.8} />
 						</Link>
 
 						{/* =================================================
-						    ACCOUNT
+						    PROFILE
 						================================================= */}
 
 						<Link
 							href="/profile"
-							aria-label="Account"
-							className="hidden h-10 w-10 items-center justify-center rounded-xl bg-background text-foreground/70 transition hover:bg-muted/10 hover:text-[#85161B] sm:flex"
+							aria-label="Profile"
+							className="
+								hidden
+								h-10
+								w-10
+								items-center
+								justify-center
+								rounded-xl
+								text-[#625b57]
+								transition
+								hover:bg-[#f5eee9]
+								hover:text-[#85161b]
+								sm:flex
+							"
 						>
-							<HiOutlineUser size={20} />
+							<User size={21} strokeWidth={1.8} />
+						</Link>
+
+						{/* =================================================
+						    ORDERS
+						    ONE DESKTOP BUTTON
+						================================================= */}
+
+						<Link
+							href="/orders"
+							aria-label="Orders"
+							className="
+								hidden
+								h-10
+								items-center
+								gap-2
+								rounded-xl
+								border
+								border-[#e7ddd7]
+								bg-white
+								px-3
+								text-sm
+								font-medium
+								text-[#292421]
+								transition
+								hover:border-[#85161b]/30
+								hover:bg-[#fdf7f3]
+								hover:text-[#85161b]
+								md:flex
+							"
+						>
+							<ClipboardList size={20} strokeWidth={1.8} />
+
+							<span>Orders</span>
 						</Link>
 
 						{/* =================================================
@@ -196,10 +399,28 @@ export default function SiteHeader() {
 
 						<Link
 							href="/cart"
-							aria-label="Shopping cart"
-							className="relative flex h-10 items-center gap-2 rounded-xl border border-border bg-background px-3 text-sm font-medium transition-all hover:border-[#85161B]/30 hover:bg-muted/10"
+							aria-label="Cart"
+							className="
+								flex
+								h-10
+								items-center
+								gap-2
+								rounded-xl
+								border
+								border-[#e7ddd7]
+								bg-white
+								px-2.5
+								text-sm
+								font-medium
+								text-[#292421]
+								transition
+								hover:border-[#85161b]/30
+								hover:bg-[#fdf7f3]
+								hover:text-[#85161b]
+								sm:px-3
+							"
 						>
-							<HiOutlineShoppingCart size={20} />
+							<ShoppingCart size={21} strokeWidth={1.8} />
 
 							<span className="hidden sm:inline">Cart</span>
 						</Link>
@@ -212,9 +433,23 @@ export default function SiteHeader() {
 							href="https://wa.me/918827882713?text=Hi"
 							target="_blank"
 							rel="noopener noreferrer"
-							className="hidden items-center gap-1.5 rounded-xl bg-[#25D366] px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90 lg:flex"
+							className="
+								hidden
+								h-10
+								items-center
+								gap-2
+								rounded-xl
+								bg-[#20c763]
+								px-4
+								text-sm
+								font-semibold
+								text-white
+								transition
+								hover:bg-[#19b956]
+								lg:flex
+							"
 						>
-							<span>💬</span>
+							<span className="text-sm">💬</span>
 							WhatsApp
 						</a>
 
@@ -227,20 +462,32 @@ export default function SiteHeader() {
 							aria-label={mobileOpen ? "Close menu" : "Open menu"}
 							aria-expanded={mobileOpen}
 							onClick={() => setMobileOpen((value) => !value)}
-							className="flex h-10 w-10 items-center justify-center rounded-xl bg-background text-foreground transition hover:bg-muted/10 md:hidden"
+							className="
+								flex
+								h-10
+								w-10
+								items-center
+								justify-center
+								rounded-xl
+								text-[#625b57]
+								transition
+								hover:bg-[#f5eee9]
+								hover:text-[#85161b]
+								md:hidden
+							"
 						>
 							{mobileOpen ? (
-								<HiOutlineX size={23} />
+								<X size={23} strokeWidth={1.8} />
 							) : (
-								<HiOutlineMenu size={23} />
+								<Menu size={23} strokeWidth={1.8} />
 							)}
 						</button>
 					</div>
 				</div>
-			</motion.header>
+			</header>
 
 			{/* =========================================================
-			    MOBILE SIDEBAR
+			    MOBILE MENU
 			========================================================= */}
 
 			<AnimatePresence>
@@ -249,181 +496,534 @@ export default function SiteHeader() {
 						{/* BACKDROP */}
 
 						<motion.div
-							initial={{ opacity: 0 }}
-							animate={{ opacity: 1 }}
-							exit={{ opacity: 0 }}
-							transition={{ duration: 0.2 }}
+							initial={{
+								opacity: 0,
+							}}
+							animate={{
+								opacity: 1,
+							}}
+							exit={{
+								opacity: 0,
+							}}
+							transition={{
+								duration: 0.2,
+							}}
+							className="
+								fixed
+								inset-0
+								z-[110]
+								bg-black/40
+								md:hidden
+							"
 							onClick={closeMobileMenu}
-							className="fixed inset-0 z-[60] bg-black/40 md:hidden"
 						/>
 
-						{/* SIDEBAR */}
+						{/* DRAWER */}
 
 						<motion.aside
-							initial={{ x: "100%" }}
-							animate={{ x: 0 }}
-							exit={{ x: "100%" }}
+							initial={{
+								x: "100%",
+							}}
+							animate={{
+								x: 0,
+							}}
+							exit={{
+								x: "100%",
+							}}
 							transition={{
 								type: "spring",
 								stiffness: 350,
 								damping: 35,
 							}}
-							className="fixed right-0 top-0 z-[70] flex h-full w-[82%] max-w-[360px] flex-col overflow-hidden border-l border-border bg-background shadow-2xl md:hidden"
+							className="
+								fixed
+								right-0
+								top-0
+								z-[120]
+								flex
+								h-full
+								w-[88%]
+								max-w-[420px]
+								flex-col
+								overflow-hidden
+								border-l
+								border-[#e7ddd7]
+								bg-[#fffaf7]
+								shadow-2xl
+								md:hidden
+							"
 						>
-							{/* SIDEBAR HEADER */}
+							{/* =================================================
+							    DRAWER HEADER
+							================================================= */}
 
-							<div className="flex h-[72px] shrink-0 items-center justify-between border-b border-border bg-background px-5">
-								<div className="flex items-center gap-2.5">
+							<div
+								className="
+									flex
+									h-[76px]
+									shrink-0
+									items-center
+									justify-between
+									border-b
+									border-[#e7ddd7]
+									bg-[#fffaf7]
+									px-5
+								"
+							>
+								<Link
+									href="/"
+									onClick={closeMobileMenu}
+									className="
+										flex
+										items-center
+										gap-2.5
+									"
+								>
 									<img
 										src="https://printinghouseujjain.in/assets/logo.png"
 										alt="Printing House"
-										className="h-9 w-9 object-contain"
+										className="
+											h-10
+											w-10
+											shrink-0
+											object-contain
+										"
 									/>
-									<div>
-										<div className="text-base font-bold">Printing House</div>
 
-										<div className="text-[8px] font-medium uppercase tracking-[0.15em] text-foreground/40">
-											You think... We Create...
+									<div>
+										<div
+											className="
+												whitespace-nowrap
+												text-[17px]
+												font-bold
+												leading-none
+												tracking-tight
+												text-[#171717]
+											"
+										>
+											Printing House
+										</div>
+
+										<div
+											className="
+												mt-1
+												whitespace-nowrap
+												text-[8px]
+												font-medium
+												uppercase
+												tracking-[0.15em]
+												text-[#8c817b]
+											"
+										>
+											You Think... We Create...
 										</div>
 									</div>
-								</div>
+								</Link>
 
 								<button
 									type="button"
 									onClick={closeMobileMenu}
 									aria-label="Close menu"
-									className="flex h-10 w-10 items-center justify-center rounded-xl bg-background text-foreground/70 transition hover:bg-muted/10 hover:text-[#85161B]"
+									className="
+										flex
+										h-10
+										w-10
+										shrink-0
+										items-center
+										justify-center
+										rounded-xl
+										text-[#625b57]
+										transition
+										hover:bg-[#f5eee9]
+										hover:text-[#85161b]
+									"
 								>
-									<HiOutlineX size={23} />
+									<X size={25} strokeWidth={1.8} />
 								</button>
 							</div>
 
-							{/* SIDEBAR CONTENT */}
+							{/* =================================================
+							    DRAWER CONTENT
+							================================================= */}
 
-							<div className="flex-1 overflow-y-auto bg-background px-5 py-6">
+							<div
+								className="
+									flex-1
+									overflow-y-auto
+									px-5
+									py-8
+								"
+							>
 								{/* SEARCH */}
 
-								<div>
-									<p className="mb-3 px-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-foreground/40">
-										Search
-									</p>
+								<p
+									className="
+										mb-3
+										px-1
+										text-[11px]
+										font-semibold
+										uppercase
+										tracking-[0.18em]
+										text-[#948983]
+									"
+								>
+									Search
+								</p>
 
-									<form
-										onSubmit={(e) => {
-											handleSearch(e);
-											closeMobileMenu();
-										}}
-										className="flex items-center rounded-xl border border-border bg-background px-3 focus-within:border-[#85161B] focus-within:ring-2 focus-within:ring-[#85161B]/10"
+								<form
+									onSubmit={handleSearch}
+									className="
+										flex
+										h-[54px]
+										items-center
+										rounded-2xl
+										border
+										border-[#e5dbd5]
+										bg-white
+										px-4
+										transition
+										focus-within:border-[#85161b]
+										focus-within:ring-2
+										focus-within:ring-[#85161b]/10
+									"
+								>
+									<Search
+										size={21}
+										strokeWidth={1.8}
+										className="
+											mr-3
+											shrink-0
+											text-[#948983]
+										"
+									/>
+
+									<input
+										type="search"
+										value={searchValue}
+										onChange={(e) => setSearchValue(e.target.value)}
+										placeholder="Search products..."
+										className="
+											w-full
+											bg-transparent
+											text-[16px]
+											text-[#171717]
+											outline-none
+											placeholder:text-[#aaa19b]
+										"
+									/>
+								</form>
+
+								{/* =================================================
+								    MENU
+								================================================= */}
+
+								<div className="mt-10">
+									<p
+										className="
+											mb-3
+											px-1
+											text-[11px]
+											font-semibold
+											uppercase
+											tracking-[0.18em]
+											text-[#948983]
+										"
 									>
-										<HiOutlineSearch
-											size={19}
-											className="mr-2 shrink-0 text-foreground/40"
-										/>
-
-										<input
-											type="search"
-											value={searchValue}
-											onChange={(e) => setSearchValue(e.target.value)}
-											placeholder="Search products..."
-											className="w-full bg-background py-3 text-sm outline-none placeholder:text-foreground/40"
-										/>
-									</form>
-								</div>
-
-								{/* MENU */}
-
-								<div className="mt-7">
-									<p className="mb-3 px-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-foreground/40">
 										Menu
 									</p>
 
 									<nav className="space-y-1">
-										{navItems.map((item) => (
-											<Link
-												key={item.href}
-												href={item.href}
-												onClick={closeMobileMenu}
-												className="flex items-center justify-between rounded-xl bg-background px-4 py-3.5 text-sm font-medium text-foreground/75 transition hover:bg-muted/10 hover:text-[#85161B]"
-											>
-												<span>{item.label}</span>
+										{/* HOME */}
 
-												<span className="text-foreground/30">→</span>
-											</Link>
-										))}
+										<Link
+											href="/"
+											onClick={closeMobileMenu}
+											className="
+												flex
+												min-h-[58px]
+												items-center
+												justify-between
+												rounded-xl
+												px-4
+												text-[16px]
+												font-medium
+												text-[#171717]
+												transition
+												hover:bg-[#f5eee9]
+												hover:text-[#85161b]
+											"
+										>
+											<span className="flex items-center">
+												<span
+													className="
+														flex
+														h-10
+														w-10
+														shrink-0
+														items-center
+														justify-center
+													"
+												>
+													<House size={20} strokeWidth={1.8} />
+												</span>
+												Home
+											</span>
+
+											<ArrowRight
+												size={16}
+												strokeWidth={1.6}
+												className="text-[#b1a59e]"
+											/>
+										</Link>
+
+										{/* SHOP */}
+
+										<Link
+											href="/shop"
+											onClick={closeMobileMenu}
+											className="
+												flex
+												min-h-[58px]
+												items-center
+												justify-between
+												rounded-xl
+												px-4
+												text-[16px]
+												font-medium
+												text-[#171717]
+												transition
+												hover:bg-[#f5eee9]
+												hover:text-[#85161b]
+											"
+										>
+											<span className="flex items-center">
+												<span
+													className="
+														flex
+														h-10
+														w-10
+														shrink-0
+														items-center
+														justify-center
+													"
+												>
+													<Store size={20} strokeWidth={1.8} />
+												</span>
+												Shop
+											</span>
+
+											<ArrowRight
+												size={16}
+												strokeWidth={1.6}
+												className="text-[#b1a59e]"
+											/>
+										</Link>
+
+										{/* ORDERS */}
+
+										<Link
+											href="/orders"
+											onClick={closeMobileMenu}
+											className="
+												flex
+												min-h-[58px]
+												items-center
+												justify-between
+												rounded-xl
+												px-4
+												text-[16px]
+												font-medium
+												text-[#171717]
+												transition
+												hover:bg-[#f5eee9]
+												hover:text-[#85161b]
+											"
+										>
+											<span className="flex items-center">
+												<span
+													className="
+														flex
+														h-10
+														w-10
+														shrink-0
+														items-center
+														justify-center
+													"
+												>
+													<ClipboardList size={20} strokeWidth={1.8} />
+												</span>
+												Orders
+											</span>
+
+											<ArrowRight
+												size={16}
+												strokeWidth={1.6}
+												className="text-[#b1a59e]"
+											/>
+										</Link>
 									</nav>
 								</div>
 
-								{/* ACCOUNT */}
+								{/* =================================================
+								    ACCOUNT
+								================================================= */}
 
-								<div className="mt-7">
-									<p className="mb-3 px-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-foreground/40">
+								<div className="mt-10">
+									<p
+										className="
+											mb-3
+											px-1
+											text-[11px]
+											font-semibold
+											uppercase
+											tracking-[0.18em]
+											text-[#948983]
+										"
+									>
 										Account
 									</p>
 
 									<div className="space-y-1">
+										{/* ACCOUNT */}
+
 										<Link
 											href="/profile"
 											onClick={closeMobileMenu}
-											className="flex items-center gap-3 rounded-xl bg-background px-4 py-3.5 text-sm font-medium text-foreground/75 transition hover:bg-muted/10 hover:text-[#85161B]"
+											className="
+												flex
+												min-h-[58px]
+												items-center
+												rounded-xl
+												px-4
+												text-[16px]
+												font-medium
+												text-[#171717]
+												transition
+												hover:bg-[#f5eee9]
+												hover:text-[#85161b]
+											"
 										>
-											<HiOutlineUser size={20} />
+											<span
+												className="
+													flex
+													h-10
+													w-10
+													shrink-0
+													items-center
+													justify-center
+												"
+											>
+												<User size={20} strokeWidth={1.8} />
+											</span>
 											Account
 										</Link>
+
+										{/* WISHLIST */}
 
 										<Link
 											href="/wishlist"
 											onClick={closeMobileMenu}
-											className="flex items-center gap-3 rounded-xl bg-background px-4 py-3.5 text-sm font-medium text-foreground/75 transition hover:bg-muted/10 hover:text-[#85161B]"
+											className="
+												flex
+												min-h-[58px]
+												items-center
+												rounded-xl
+												px-4
+												text-[16px]
+												font-medium
+												text-[#171717]
+												transition
+												hover:bg-[#f5eee9]
+												hover:text-[#85161b]
+											"
 										>
-											<HiOutlineHeart size={20} />
+											<span
+												className="
+													flex
+													h-10
+													w-10
+													shrink-0
+													items-center
+													justify-center
+												"
+											>
+												<Heart size={20} strokeWidth={1.8} />
+											</span>
 											Wishlist
 										</Link>
+
+										{/* CART */}
 
 										<Link
 											href="/cart"
 											onClick={closeMobileMenu}
-											className="flex items-center justify-between rounded-xl bg-background px-4 py-3.5 text-sm font-medium text-foreground/75 transition hover:bg-muted/10 hover:text-[#85161B]"
+											className="
+												flex
+												min-h-[58px]
+												items-center
+												rounded-xl
+												px-4
+												text-[16px]
+												font-medium
+												text-[#171717]
+												transition
+												hover:bg-[#f5eee9]
+												hover:text-[#85161b]
+											"
 										>
-											<div className="flex items-center gap-3">
-												<HiOutlineShoppingCart size={20} />
-												Cart
-											</div>
+											<span
+												className="
+													flex
+													h-10
+													w-10
+													shrink-0
+													items-center
+													justify-center
+												"
+											>
+												<ShoppingCart size={20} strokeWidth={1.8} />
+											</span>
+											Cart
 										</Link>
 									</div>
 								</div>
 							</div>
 
-							{/* WHATSAPP */}
+							{/* =================================================
+							    WHATSAPP
+							================================================= */}
 
-							{/* =========================================================
-    WHATSAPP — MOBILE
-========================================================= */}
-
-							<div className="shrink-0 border-t border-border bg-background p-5">
+							<div
+								className="
+									shrink-0
+									border-t
+									border-[#e7ddd7]
+									bg-[#fffaf7]
+									p-4
+								"
+							>
 								<a
 									href="https://wa.me/918827882713?text=Hi"
 									target="_blank"
 									rel="noopener noreferrer"
-									aria-label="Chat with us on WhatsApp"
 									className="
-			flex
-			h-11
-			w-full
-			items-center
-			justify-center
-			gap-2
-			rounded-xl
-			bg-[#25D366]
-			px-4
-			text-sm
-			font-semibold
-			text-white
-			transition
-			hover:bg-[#20BD5A]
-			active:scale-[0.98]
-		"
+										flex
+										h-[54px]
+										w-full
+										items-center
+										justify-center
+										gap-2
+										rounded-2xl
+										bg-[#20c763]
+										text-[16px]
+										font-semibold
+										text-white
+										transition
+										hover:bg-[#19b956]
+									"
 								>
-									<span className="text-base">💬</span>
+									<span>💬</span>
+
 									<span>Chat with us on WhatsApp</span>
 								</a>
 							</div>

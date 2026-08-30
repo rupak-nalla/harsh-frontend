@@ -80,3 +80,23 @@ h1,h2,h3,h4 { font-family: 'Playfair Display', serif; color: var(--text) }
         animation: none;
     }
 }
+
+
+.announcement-strip__track {
+	animation: announcement-scroll 35s linear infinite;
+	will-change: transform;
+}
+
+@keyframes announcement-scroll {
+	0% {
+		transform: translateX(0);
+	}
+
+	100% {
+		transform: translateX(-33.333333%);
+	}
+}
+
+.announcement-strip__track:hover {
+	animation-play-state: paused;
+}
