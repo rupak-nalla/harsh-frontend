@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
 		const backendFormData = new FormData();
 
-		backendFormData.append("command_type", "user");
+		backendFormData.append("command_type", "admin");
 
 		console.log("=================================");
 		console.log("ADMIN ORDERS PROXY");
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
 		if (setCookie) {
 			nextResponse.headers.set("set-cookie", setCookie);
 		}
-
+        console.log(nextResponse);
 		return nextResponse;
 	} catch (error) {
 		console.error("Admin orders proxy error:", error);
