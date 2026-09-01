@@ -691,56 +691,50 @@ export default function AdminProductsPage() {
             useState(false);
     
         const handleLogout = async () => {
-            if (loggingOut) return;
-    
-            setLoggingOut(true);
-    
-            try {
-                const response = await fetch(
-                    "/api/admin/logout?command_type=admin",
-                    {
-                        method: "POST",
-                        credentials: "include",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                        cache: "no-store",
-                    },
-                );
-    
-                if (!response.ok) {
-                    const data = await response
-                        .json()
-                        .catch(() => ({}));
-    
-                    throw new Error(
-                        (data as { message?: string })
-                            ?.message ||
-                            "Unable to logout.",
-                    );
-                }
-    
-                /*
-                 * Change this route if your admin login page
-                 * uses a different URL.
-                 */
-                router.replace("/login");
-                // router.refresh();
-            } catch (error) {
-                console.error(
-                    "Admin logout failed:",
-                    error,
-                );
-    
-                alert(
-                    error instanceof Error
-                        ? error.message
-                        : "Unable to logout. Please try again.",
-                );
-    
-                setLoggingOut(false);
-            }
-        };
+					if (loggingOut) return;
+
+					setLoggingOut(true);
+
+					try {
+						const response = await fetch(
+							"/api/admin/logout?command_type=admin",
+							{
+								method: "POST",
+								credentials: "include",
+								headers: {
+									"Content-Type": "application/json",
+								},
+								cache: "no-store",
+							},
+						);
+
+						if (!response.ok) {
+							const data = await response.json().catch(() => ({}));
+
+							throw new Error(
+								(data as { message?: string })?.message || "Unable to logout.",
+							);
+						}
+
+						/*
+						 * Change this route if your admin login page
+						 * uses a different URL.
+						 */
+
+						router.replace("/login");
+						// router.refresh();
+					} catch (error) {
+						console.error("Admin logout failed:", error);
+
+						alert(
+							error instanceof Error
+								? error.message
+								: "Unable to logout. Please try again.",
+						);
+
+						setLoggingOut(false);
+					}
+				};
 	useEffect(() => {
 		fetchProducts();
 	}, []);

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -12,11 +11,11 @@ import {
 	Loader2,
 	AlertCircle,
 	MapPin,
-} from "lucide-react";
-import {
-    
-    Store,
-    LogOut,
+	Store,
+	LogOut,
+	Package,
+	User,
+	CalendarDays,
 } from "lucide-react";
 
 /* ============================================================================
@@ -117,6 +116,17 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 /* ============================================================================
+   STATUS DOT
+============================================================================ */
+
+const STATUS_DOTS: Record<string, string> = {
+	Delivered: "bg-[#31824A]",
+	Processing: "bg-[#3973B9]",
+	Shipped: "bg-[#8B4FC7]",
+	Pending: "bg-[#B56B27]",
+};
+
+/* ============================================================================
    PARSE CART
 ============================================================================ */
 
@@ -134,15 +144,9 @@ function parseCart(
 	try {
 		const parsed = JSON.parse(cart);
 
-		return Array.isArray(parsed)
-			? parsed
-			: [];
+		return Array.isArray(parsed) ? parsed : [];
 	} catch (error) {
-		console.error(
-			"Failed to parse order cart:",
-			error,
-		);
-
+		console.error("Failed to parse order cart:", error);
 		return [];
 	}
 }
@@ -210,25 +214,19 @@ function formatAddress(
 			String(value).trim() !== "",
 	);
 
-	return parts.length > 0
-		? parts.join(", ")
-		: "—";
+	return parts.length > 0 ? parts.join(", ") : "—";
 }
 
 /* ============================================================================
    FORMAT STATUS
 ============================================================================ */
 
-function formatStatus(
-	status: unknown,
-): string {
+function formatStatus(status: unknown): string {
 	if (!status) {
 		return "Pending";
 	}
 
-	const value = String(status)
-		.trim()
-		.toLowerCase();
+	const value = String(status).trim().toLowerCase();
 
 	switch (value) {
 		case "pending":
@@ -262,54 +260,41 @@ function formatStatus(
    FORMAT DATE
 ============================================================================ */
 
-function formatDate(
-	value: unknown,
-): string {
+function formatDate(value: unknown): string {
 	if (!value) {
 		return "—";
 	}
 
 	const valueString = String(value);
 
-	const date = new Date(
-		valueString,
-	);
+	const date = new Date(valueString);
 
 	if (Number.isNaN(date.getTime())) {
 		return valueString;
 	}
 
-	return date.toLocaleDateString(
-		"en-IN",
-		{
-			day: "2-digit",
-			month: "short",
-			year: "numeric",
-		},
-	);
+	return date.toLocaleDateString("en-IN", {
+		day: "2-digit",
+		month: "short",
+		year: "numeric",
+	});
 }
 
 /* ============================================================================
    FORMAT AMOUNT
 ============================================================================ */
 
-function formatAmount(
-	value: unknown,
-): number {
+function formatAmount(value: unknown): number {
 	const amount = Number(value);
 
-	return Number.isFinite(amount)
-		? amount
-		: 0;
+	return Number.isFinite(amount) ? amount : 0;
 }
 
 /* ============================================================================
    GET CUSTOMER
 ============================================================================ */
 
-function getCustomerName(
-	order: BackendOrder,
-): string {
+function getCustomerName(order: BackendOrder): string {
 	const userId = order.user_id;
 
 	if (
@@ -327,36 +312,28 @@ function getCustomerName(
    NORMALIZE ORDER
 ============================================================================ */
 
-function normalizeOrder(
-	order: BackendOrder,
-): Order {
-	const cartProducts = parseCart(
-		order.cart,
-	);
+function normalizeOrder(order: BackendOrder): Order {
+	const cartProducts = parseCart(order.cart);
 
-	const firstProduct =
-		cartProducts[0];
+	const firstProduct = cartProducts[0];
 
 	const productName =
 		firstProduct?.name ||
-		(cartProducts.length > 0
-			? "Order items"
-			: "—");
+		(cartProducts.length > 0 ? "Order items" : "—");
 
-	const calculatedItems =
-		cartProducts.reduce(
-			(total, product) => {
-				const quantity =
-					Number(
-						product.quantity ??
-							product.qty ??
-							1,
-					) || 1;
+	const calculatedItems = cartProducts.reduce(
+		(total, product) => {
+			const quantity =
+				Number(
+					product.quantity ??
+						product.qty ??
+						1,
+				) || 1;
 
-				return total + quantity;
-			},
-			0,
-		);
+			return total + quantity;
+		},
+		0,
+	);
 
 	const items =
 		Number(order.products_count) ||
@@ -364,12 +341,8 @@ function normalizeOrder(
 		1;
 
 	const amount =
-		formatAmount(
-			order.grand_total,
-		) ||
-		formatAmount(
-			order.total_price,
-		);
+		formatAmount(order.grand_total) ||
+		formatAmount(order.total_price);
 
 	const dateValue =
 		order.created_at ??
@@ -379,13 +352,9 @@ function normalizeOrder(
 		order.date;
 
 	return {
-		id: String(
-			order.order_id ??
-				order.id,
-		),
+		id: String(order.order_id ?? order.id),
 
-		customer:
-			getCustomerName(order),
+		customer: getCustomerName(order),
 
 		product: productName,
 
@@ -393,17 +362,11 @@ function normalizeOrder(
 
 		amount,
 
-		status: formatStatus(
-			order.order_status,
-		),
+		status: formatStatus(order.order_status),
 
-		date: formatDate(
-			dateValue,
-		),
+		date: formatDate(dateValue),
 
-		address: formatAddress(
-			order.address,
-		),
+		address: formatAddress(order.address),
 	};
 }
 
@@ -411,9 +374,7 @@ function normalizeOrder(
    EXTRACT ORDERS
 ============================================================================ */
 
-function extractOrders(
-	data: unknown,
-): Order[] {
+function extractOrders(data: unknown): Order[] {
 	if (
 		typeof data !== "object" ||
 		data === null
@@ -421,28 +382,20 @@ function extractOrders(
 		return [];
 	}
 
-	const response =
-		data as {
-			orders?: unknown;
-		};
+	const response = data as {
+		orders?: unknown;
+	};
 
-	if (
-		!Array.isArray(
-			response.orders,
-		)
-	) {
+	if (!Array.isArray(response.orders)) {
 		return [];
 	}
 
 	return response.orders
 		.filter(
 			(order): order is BackendOrder =>
-				typeof order ===
-					"object" &&
+				typeof order === "object" &&
 				order !== null &&
-				!Array.isArray(
-					order,
-				),
+				!Array.isArray(order),
 		)
 		.map(normalizeOrder);
 }
@@ -452,22 +405,16 @@ function extractOrders(
 ============================================================================ */
 
 export default function AdminOrdersPage() {
-	const [orders, setOrders] =
-		useState<Order[]>([]);
+	const router = useRouter();
 
-	const [query, setQuery] =
-		useState("");
-
+	const [orders, setOrders] = useState<Order[]>([]);
+	const [query, setQuery] = useState("");
 	const [statusFilter, setStatusFilter] =
-		useState<OrderStatus | "All">(
-			"All",
-		);
+		useState<OrderStatus | "All">("All");
 
-	const [isLoading, setIsLoading] =
-		useState(true);
-
-	const [error, setError] =
-		useState("");
+	const [isLoading, setIsLoading] = useState(true);
+	const [error, setError] = useState("");
+	const [loggingOut, setLoggingOut] = useState(false);
 
 	/* ========================================================================
 	   FETCH ORDERS
@@ -481,37 +428,22 @@ export default function AdminOrdersPage() {
 				setIsLoading(true);
 				setError("");
 
-				const response =
-					await fetch(
-						"/api/admin/orders",
-						{
-							method: "GET",
-							credentials:
-								"include",
-							cache: "no-store",
-						},
-					);
-
-				const text =
-					await response.text();
-
-				console.log(
-					"Admin orders HTTP status:",
-					response.status,
+				const response = await fetch(
+					"/api/admin/orders",
+					{
+						method: "GET",
+						credentials: "include",
+						cache: "no-store",
+					},
 				);
 
-				console.log(
-					"Admin orders raw response:",
-					text,
-				);
+				const text = await response.text();
 
 				let data: unknown;
 
 				try {
 					data = text
-						? JSON.parse(
-								text,
-							)
+						? JSON.parse(text)
 						: {};
 				} catch {
 					throw new Error(
@@ -524,40 +456,22 @@ export default function AdminOrdersPage() {
 						"Unable to fetch admin orders.";
 
 					if (
-						typeof data ===
-							"object" &&
-						data !==
-							null &&
-						"message" in
-							data &&
-						typeof data.message ===
-							"string"
+						typeof data === "object" &&
+						data !== null &&
+						"message" in data &&
+						typeof data.message === "string"
 					) {
-						message =
-							data.message;
+						message = data.message;
 					}
 
-					throw new Error(
-						message,
-					);
+					throw new Error(message);
 				}
 
 				const fetchedOrders =
-					extractOrders(
-						data,
-					);
+					extractOrders(data);
 
-				console.log(
-					"Extracted admin orders:",
-					fetchedOrders,
-				);
-
-				if (
-					isMounted
-				) {
-					setOrders(
-						fetchedOrders,
-					);
+				if (isMounted) {
+					setOrders(fetchedOrders);
 				}
 			} catch (error) {
 				console.error(
@@ -565,27 +479,18 @@ export default function AdminOrdersPage() {
 					error,
 				);
 
-				if (
-					isMounted
-				) {
-					setOrders(
-						[],
-					);
+				if (isMounted) {
+					setOrders([]);
 
 					setError(
-						error instanceof
-							Error
+						error instanceof Error
 							? error.message
 							: "Unable to fetch orders. Please try again.",
 					);
 				}
 			} finally {
-				if (
-					isMounted
-				) {
-					setIsLoading(
-						false,
-					);
+				if (isMounted) {
+					setIsLoading(false);
 				}
 			}
 		};
@@ -601,114 +506,86 @@ export default function AdminOrdersPage() {
 	   FILTER
 	========================================================================= */
 
-	const filteredOrders =
-		useMemo(() => {
-			const normalizedQuery =
-				query
-					.trim()
-					.toLowerCase();
+	const filteredOrders = useMemo(() => {
+		const normalizedQuery =
+			query.trim().toLowerCase();
 
-			return orders.filter(
-				(order) => {
-					const matchesStatus =
-						statusFilter ===
-							"All" ||
-						order.status.toLowerCase() ===
-							statusFilter.toLowerCase();
+		return orders.filter((order) => {
+			const matchesStatus =
+				statusFilter === "All" ||
+				order.status.toLowerCase() ===
+					statusFilter.toLowerCase();
 
-					const matchesQuery =
-						normalizedQuery ===
-							"" ||
-						order.id
-							.toLowerCase()
-							.includes(
-								normalizedQuery,
-							) ||
-						order.customer
-							.toLowerCase()
-							.includes(
-								normalizedQuery,
-							) ||
-						order.product
-							.toLowerCase()
-							.includes(
-								normalizedQuery,
-							) ||
-						order.address
-							.toLowerCase()
-							.includes(
-								normalizedQuery,
-							);
+			const matchesQuery =
+				normalizedQuery === "" ||
+				order.id
+					.toLowerCase()
+					.includes(normalizedQuery) ||
+				order.customer
+					.toLowerCase()
+					.includes(normalizedQuery) ||
+				order.product
+					.toLowerCase()
+					.includes(normalizedQuery) ||
+				order.address
+					.toLowerCase()
+					.includes(normalizedQuery);
 
-					return (
-						matchesStatus &&
-						matchesQuery
-					);
+			return matchesStatus && matchesQuery;
+		});
+	}, [orders, query, statusFilter]);
+
+	/* ========================================================================
+	   LOGOUT
+	========================================================================= */
+
+	const handleLogout = async () => {
+		if (loggingOut) return;
+
+		setLoggingOut(true);
+
+		try {
+			const response = await fetch(
+				"/api/admin/logout?command_type=admin",
+				{
+					method: "POST",
+					credentials: "include",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					cache: "no-store",
 				},
 			);
-		}, [
-			orders,
-			query,
-			statusFilter,
-		]);
-    
 
+			if (!response.ok) {
+				const data = await response
+					.json()
+					.catch(() => ({}));
 
-        const router = useRouter();
-        const [loggingOut, setLoggingOut] =
-                    useState(false);
-            
-                const handleLogout = async () => {
-                    if (loggingOut) return;
-            
-                    setLoggingOut(true);
-            
-                    try {
-                        const response = await fetch(
-                            "/api/admin/logout?command_type=admin",
-                            {
-                                method: "POST",
-                                credentials: "include",
-                                headers: {
-                                    "Content-Type": "application/json",
-                                },
-                                cache: "no-store",
-                            },
-                        );
-            
-                        if (!response.ok) {
-                            const data = await response
-                                .json()
-                                .catch(() => ({}));
-            
-                            throw new Error(
-                                (data as { message?: string })
-                                    ?.message ||
-                                    "Unable to logout.",
-                            );
-                        }
-            
-                        /*
-                         * Change this route if your admin login page
-                         * uses a different URL.
-                         */
-                        router.replace("/login");
-                        // router.refresh();
-                    } catch (error) {
-                        console.error(
-                            "Admin logout failed:",
-                            error,
-                        );
-            
-                        alert(
-                            error instanceof Error
-                                ? error.message
-                                : "Unable to logout. Please try again.",
-                        );
-            
-                        setLoggingOut(false);
-                    }
-                };
+				throw new Error(
+					(data as { message?: string })
+						?.message ||
+						"Unable to logout.",
+				);
+			}
+
+			router.replace("/login");
+		} catch (error) {
+			console.error(
+				"Admin logout failed:",
+				error,
+			);
+
+			alert(
+				error instanceof Error
+					? error.message
+					: "Unable to logout. Please try again.",
+			);
+
+			setLoggingOut(false);
+		}
+	};
+
 	/* ========================================================================
 	   RENDER
 	========================================================================= */
@@ -722,6 +599,11 @@ export default function AdminOrdersPage() {
 					font-family: 'Fraunces', Georgia, serif;
 				}
 			`}</style>
+
+			{/* ================================================================
+			    HEADER
+			================================================================ */}
+
 			<header
 				className="
 					sticky
@@ -740,41 +622,24 @@ export default function AdminOrdersPage() {
 						h-full
 						items-center
 						justify-between
-						px-5
+						px-4
 						sm:px-6
 						lg:px-8
 					"
 				>
-					{/* BRAND */}
-
-					<Link href="/admin" className="group flex items-center gap-3">
-						<div
-							className="
-								flex
-								h-10
-								w-10
-								items-center
-								justify-center
-								rounded-xl
-								text-white
-								shadow-sm
-								transition
-								group-hover:scale-[1.02]
-							"
-						>
+					<Link
+						href="/admin"
+						className="group flex min-w-0 items-center gap-2.5 sm:gap-3"
+					>
+						<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl">
 							<img
 								src="https://printinghouseujjain.in/assets/logo.png"
 								alt="Printing House"
-								className="
-											h-10
-											w-10
-											shrink-0
-											object-contain
-										"
+								className="h-10 w-10 object-contain"
 							/>
 						</div>
 
-						<div className="hidden sm:block">
+						<div className="hidden min-w-0 sm:block">
 							<p
 								className="
 									text-[10px]
@@ -787,22 +652,13 @@ export default function AdminOrdersPage() {
 								Printing House
 							</p>
 
-							<p
-								className="
-									mt-0.5
-									text-sm
-									font-semibold
-									text-[#2E2E2E]
-								"
-							>
+							<p className="mt-0.5 text-sm font-semibold text-[#2E2E2E]">
 								Admin Dashboard
 							</p>
 						</div>
 					</Link>
 
-					{/* RIGHT NAV */}
-
-					<div className="flex items-center gap-2 sm:gap-3">
+					<div className="flex shrink-0 items-center gap-2 sm:gap-3">
 						{/* STOREFRONT */}
 
 						<Link
@@ -826,12 +682,15 @@ export default function AdminOrdersPage() {
 								sm:flex
 							"
 						>
-							<Store size={16} strokeWidth={1.8} />
+							<Store
+								size={16}
+								strokeWidth={1.8}
+							/>
 
 							<span>Storefront</span>
 						</Link>
 
-						{/* ADMIN PROFILE */}
+						{/* PROFILE */}
 
 						<div
 							className="
@@ -842,8 +701,9 @@ export default function AdminOrdersPage() {
 								border
 								border-[#E8DED7]
 								bg-white
-								px-2.5
+								px-2
 								py-2
+								sm:px-2.5
 							"
 						>
 							<div
@@ -851,6 +711,7 @@ export default function AdminOrdersPage() {
 									flex
 									h-8
 									w-8
+									shrink-0
 									items-center
 									justify-center
 									rounded-full
@@ -864,9 +725,13 @@ export default function AdminOrdersPage() {
 							</div>
 
 							<div className="hidden text-left md:block">
-								<p className="text-xs font-semibold text-[#2E2E2E]">Admin</p>
+								<p className="text-xs font-semibold text-[#2E2E2E]">
+									Admin
+								</p>
 
-								<p className="text-[10px] text-[#2E2E2E]/45">Administrator</p>
+								<p className="text-[10px] text-[#2E2E2E]/45">
+									Administrator
+								</p>
 							</div>
 						</div>
 
@@ -884,7 +749,7 @@ export default function AdminOrdersPage() {
 								border
 								border-[#85161B]/20
 								bg-white
-								px-3.5
+								px-3
 								py-2.5
 								text-sm
 								font-medium
@@ -908,38 +773,75 @@ export default function AdminOrdersPage() {
 										border-2
 										border-[#85161B]/25
 										border-t-[#85161B]
-										group-hover:border-white/30
-										group-hover:border-t-white
 									"
 								/>
 							) : (
-								<LogOut size={16} strokeWidth={1.9} />
+								<LogOut
+									size={16}
+									strokeWidth={1.9}
+								/>
 							)}
 
 							<span className="hidden sm:inline">
-								{loggingOut ? "Logging out..." : "Logout"}
+								{loggingOut
+									? "Logging out..."
+									: "Logout"}
 							</span>
 						</button>
 					</div>
 				</div>
 			</header>
-			<div className="mx-auto max-w-8xl px-5 py-10 sm:px-6 lg:px-8">
-				{/* HEADER */}
+
+			{/* ================================================================
+			    CONTENT
+			================================================================ */}
+
+			<div className="mx-auto w-full max-w-[1500px] px-4 py-7 sm:px-6 sm:py-10 lg:px-8">
+				{/* BACK */}
 
 				<Link
 					href="/admin"
-					className="inline-flex items-center gap-2 text-sm font-medium text-[#2E2E2E]/55 transition-colors hover:text-[#85161B]"
+					className="
+						inline-flex
+						items-center
+						gap-2
+						text-sm
+						font-medium
+						text-[#2E2E2E]/55
+						transition-colors
+						hover:text-[#85161B]
+					"
 				>
 					<ArrowLeft size={16} />
-					Back to dashboard
+					<span>Back to dashboard</span>
 				</Link>
 
-				<div className="mt-6">
-					<p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#85161B]">
+				{/* PAGE TITLE */}
+
+				<div className="mt-5 sm:mt-6">
+					<p
+						className="
+							text-[11px]
+							font-semibold
+							uppercase
+							tracking-[0.18em]
+							text-[#85161B]
+							sm:text-xs
+						"
+					>
 						Orders
 					</p>
 
-					<h1 className="font-display mt-1 text-3xl font-bold text-[#2E2E2E] sm:text-4xl">
+					<h1
+						className="
+							font-display
+							mt-1
+							text-3xl
+							font-bold
+							text-[#2E2E2E]
+							sm:text-4xl
+						"
+					>
 						All Orders
 					</h1>
 
@@ -950,67 +852,151 @@ export default function AdminOrdersPage() {
 					</p>
 				</div>
 
-				{/* FILTERS */}
+				{/* ============================================================
+				    SEARCH
+				============================================================ */}
 
-				<div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-					<div className="relative w-full sm:max-w-xs">
+				<div className="mt-5">
+					<div className="relative w-full sm:max-w-md">
 						<Search
-							size={16}
-							className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#2E2E2E]/35"
+							size={17}
+							className="
+								pointer-events-none
+								absolute
+								left-3.5
+								top-1/2
+								-translate-y-1/2
+								text-[#2E2E2E]/35
+							"
 						/>
 
 						<input
 							type="text"
 							value={query}
-							onChange={(e) => setQuery(e.target.value)}
+							onChange={(e) =>
+								setQuery(e.target.value)
+							}
 							placeholder="Search order, customer, product..."
-							className="w-full rounded-xl border border-[#E8DED7] bg-white py-2.5 pl-10 pr-4 text-sm text-[#2E2E2E] outline-none transition placeholder:text-[#2E2E2E]/35 focus:border-[#85161B]/40 focus:ring-2 focus:ring-[#85161B]/10"
+							className="
+								w-full
+								rounded-xl
+								border
+								border-[#E8DED7]
+								bg-white
+								py-3
+								pl-10
+								pr-4
+								text-sm
+								text-[#2E2E2E]
+								outline-none
+								transition
+								placeholder:text-[#2E2E2E]/35
+								focus:border-[#85161B]/40
+								focus:ring-2
+								focus:ring-[#85161B]/10
+							"
 						/>
-					</div>
-
-					<div className="flex flex-wrap gap-2">
-						{STATUS_FILTERS.map((status) => (
-							<button
-								key={status}
-								type="button"
-								onClick={() => setStatusFilter(status)}
-								className={`whitespace-nowrap rounded-full px-3.5 py-2 text-xs font-medium transition-all ${
-									statusFilter === status
-										? "bg-[#85161B] text-white shadow-sm"
-										: "border border-[#E8DED7] bg-white text-[#2E2E2E]/60 hover:border-[#85161B]/30"
-								}`}
-							>
-								{status}
-							</button>
-						))}
 					</div>
 				</div>
 
-				{/* ERROR */}
+				{/* ============================================================
+				    STATUS FILTERS
+				============================================================ */}
+
+				<div
+					className="
+						mt-3
+						-flex
+						flex
+						gap-2
+						overflow-x-auto
+						pb-1
+						[-ms-overflow-style:none]
+						[scrollbar-width:none]
+						[&::-webkit-scrollbar]:hidden
+						sm:flex-wrap
+						sm:overflow-visible
+					"
+				>
+					{STATUS_FILTERS.map((status) => (
+						<button
+							key={status}
+							type="button"
+							onClick={() =>
+								setStatusFilter(status)
+							}
+							className={`
+								shrink-0
+								whitespace-nowrap
+								rounded-full
+								px-4
+								py-2.5
+								text-xs
+								font-medium
+								transition-all
+								sm:px-3.5
+								sm:py-2
+								${
+									statusFilter === status
+										? "bg-[#85161B] text-white shadow-sm"
+										: "border border-[#E8DED7] bg-white text-[#2E2E2E]/60 hover:border-[#85161B]/30"
+								}
+							`}
+						>
+							{status}
+						</button>
+					))}
+				</div>
+
+				{/* ============================================================
+				    ERROR
+				============================================================ */}
 
 				{error && (
-					<div className="mt-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4">
-						<AlertCircle size={19} className="mt-0.5 shrink-0 text-red-600" />
+					<div className="mt-5 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 sm:px-5">
+						<AlertCircle
+							size={19}
+							className="mt-0.5 shrink-0 text-red-600"
+						/>
 
 						<div>
 							<p className="text-sm font-semibold text-red-700">
 								Unable to load orders
 							</p>
 
-							<p className="mt-1 text-xs text-red-600">{error}</p>
+							<p className="mt-1 text-xs text-red-600">
+								{error}
+							</p>
 						</div>
 					</div>
 				)}
 
-				{/* TABLE */}
+				{/* ============================================================
+				    ORDERS CONTAINER
+				============================================================ */}
 
-				{/* TABLE */}
-
-				<div className="mt-6 overflow-hidden rounded-2xl border border-[#E9DED7] bg-white">
+				<div className="mt-5">
 					{isLoading ? (
-						<div className="flex min-h-[350px] flex-col items-center justify-center px-6 text-center">
+						<div
+							className="
+								flex
+								min-h-[350px]
+								flex-col
+								items-center
+								justify-center
+								rounded-2xl
+								border
+								border-[#E9DED7]
+								bg-white
+								px-6
+								text-center
+							"
+						>
 							<div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F7D6BF]/40">
-								<Loader2 size={24} className="animate-spin text-[#85161B]" />
+								<Loader2
+									size={24}
+									className="animate-spin text-[#85161B]"
+								/>
 							</div>
 
 							<p className="mt-4 text-sm font-semibold text-[#2E2E2E]">
@@ -1022,143 +1008,391 @@ export default function AdminOrdersPage() {
 							</p>
 						</div>
 					) : filteredOrders.length > 0 ? (
-						<div className="w-full overflow-x-auto">
-							<table className="w-full table-fixed text-left text-sm">
-								<colgroup>
-									<col className="w-[15%]" />
-									<col className="w-[9%]" />
-									<col className="w-[17%]" />
-									<col className="w-[8%]" />
-									<col className="w-[9%]" />
-									<col className="w-[31%]" />
-									<col className="w-[11%]" />
-								</colgroup>
+						<>
+							{/* ==================================================
+							    MOBILE CARDS
+							================================================== */}
 
-								<thead>
-									<tr className="border-b border-[#EEE6E1] text-xs text-[#2E2E2E]/40">
-										<th className="px-4 py-3.5 font-medium sm:px-5">Order</th>
-
-										<th className="px-4 py-3.5 font-medium sm:px-5">
-											Customer
-										</th>
-
-										<th className="px-4 py-3.5 font-medium sm:px-5">Product</th>
-
-										<th className="px-4 py-3.5 font-medium sm:px-5">Amount</th>
-
-										<th className="px-4 py-3.5 font-medium sm:px-5">Status</th>
-
-										<th className="px-4 py-3.5 font-medium sm:px-5">Address</th>
-
-										<th className="px-4 py-3.5 font-medium sm:px-5">Date</th>
-									</tr>
-								</thead>
-
-								<tbody className="divide-y divide-[#EEE6E1]">
-									{filteredOrders.map((order, index) => (
-										<tr
+							<div className="space-y-3 lg:hidden">
+								{filteredOrders.map(
+									(order, index) => (
+										<Link
 											key={`${order.id}-${index}`}
-											className="hover:bg-[#FBF9F7]"
+											href={`/admin/orders/${order.id}`}
+											className="
+												block
+												rounded-2xl
+												border
+												border-[#E9DED7]
+												bg-white
+												p-4
+												shadow-[0_1px_2px_rgba(0,0,0,0.02)]
+												transition
+												active:scale-[0.995]
+												hover:border-[#85161B]/20
+											"
 										>
-											{/* ORDER */}
+											{/* TOP */}
 
-											<td className="px-4 py-4 sm:px-5">
-												<Link
-													href={`/admin/orders/${order.id}`}
-													className="block truncate font-semibold text-[#85161B] hover:underline"
-													title={`#${order.id}`}
-												>
-													#{order.id}
-												</Link>
-											</td>
+											<div className="flex items-start justify-between gap-3">
+												<div className="min-w-0">
+													<p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#2E2E2E]/40">
+														Order
+													</p>
 
-											{/* CUSTOMER */}
+													<p className="mt-1 truncate text-base font-bold text-[#85161B]">
+														#{order.id}
+													</p>
+												</div>
 
-											<td className="px-4 py-4 sm:px-5">
-												<span
-													className={`block truncate ${
-														order.customer === "Guest"
-															? "font-semibold text-[#8A6A5B]"
-															: "text-[#2E2E2E]"
-													}`}
-												>
-													{order.customer}
-												</span>
-											</td>
+												<div className="flex shrink-0 items-center gap-2">
+													<span
+														className={`
+															inline-flex
+															items-center
+															gap-1.5
+															rounded-full
+															px-2.5
+															py-1.5
+															text-[11px]
+															font-semibold
+															${
+																STATUS_STYLES[
+																	order.status
+																] ||
+																"bg-gray-100 text-gray-600"
+															}
+														`}
+													>
+														<span
+															className={`
+																h-1.5
+																w-1.5
+																rounded-full
+																${
+																	STATUS_DOTS[
+																		order.status
+																	] ||
+																	"bg-gray-500"
+																}
+															`}
+														/>
 
-											{/* PRODUCT */}
+														{order.status}
+													</span>
 
-											<td className="px-4 py-4 sm:px-5">
-												<div className="min-w-0" title={order.product}>
-													<p className="truncate text-[#2E2E2E]/70">
+													<ChevronRight
+														size={17}
+														className="text-[#2E2E2E]/25"
+													/>
+												</div>
+											</div>
+
+											{/* DIVIDER */}
+
+											<div className="my-3 border-t border-[#EEE6E1]" />
+
+											{/* CUSTOMER + PRODUCT */}
+
+											<div className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-2">
+												<div className="min-w-0">
+													<div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/35">
+														<User size={12} />
+														Customer
+													</div>
+
+													<p
+														className={`
+															mt-1
+															truncate
+															text-sm
+															${
+																order.customer ===
+																"Guest"
+																	? "font-semibold text-[#8A6A5B]"
+																	: "font-medium text-[#2E2E2E]"
+															}
+														`}
+													>
+														{order.customer}
+													</p>
+												</div>
+
+												<div className="min-w-0">
+													<div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/35">
+														<Package size={12} />
+														Product
+													</div>
+
+													<p
+														className="mt-1 truncate text-sm font-medium text-[#2E2E2E]"
+														title={order.product}
+													>
 														{order.product}
 													</p>
 
 													{order.items > 1 && (
-														<span className="block truncate text-[#2E2E2E]/40">
-															+{order.items - 1} more
-														</span>
+														<p className="mt-0.5 text-[11px] text-[#2E2E2E]/40">
+															+{order.items - 1} more item
+															{order.items - 1 > 1
+																? "s"
+																: ""}
+														</p>
 													)}
 												</div>
-											</td>
+											</div>
 
-											{/* AMOUNT */}
+											{/* AMOUNT + DATE */}
 
-											<td className="whitespace-nowrap px-4 py-4 font-semibold text-[#2E2E2E] sm:px-5">
-												₹{order.amount.toLocaleString("en-IN")}
-											</td>
+											<div className="mt-4 flex items-center justify-between rounded-xl bg-[#FBF9F7] px-3.5 py-3">
+												<div>
+													<p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/35">
+														Amount
+													</p>
 
-											{/* STATUS */}
+													<p className="mt-0.5 text-base font-bold text-[#2E2E2E]">
+														₹
+														{order.amount.toLocaleString(
+															"en-IN",
+														)}
+													</p>
+												</div>
 
-											<td className="px-4 py-4 sm:px-5">
-												<span
-													className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${
-														STATUS_STYLES[order.status] ||
-														"bg-gray-100 text-gray-600"
-													}`}
-												>
-													{order.status}
-												</span>
-											</td>
+												<div className="text-right">
+													<div className="flex items-center justify-end gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/35">
+														<CalendarDays size={12} />
+														Date
+													</div>
+
+													<p className="mt-0.5 text-xs font-medium text-[#2E2E2E]/60">
+														{order.date}
+													</p>
+												</div>
+											</div>
 
 											{/* ADDRESS */}
 
-											<td className="px-4 py-4 sm:px-5">
-												<div className="flex min-w-0 items-start gap-2">
+											<div className="mt-3 flex items-start gap-2.5">
+												<div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#F7D6BF]/40">
 													<MapPin
-														size={15}
-														className="mt-0.5 shrink-0 text-[#85161B]"
+														size={14}
+														className="text-[#85161B]"
 													/>
-
-													<div className="min-w-0">
-														<p
-															className="line-clamp-2 break-words text-xs leading-5 text-[#2E2E2E]/65"
-															title={order.address}
-														>
-															{order.address}
-														</p>
-													</div>
 												</div>
-											</td>
 
-											{/* DATE */}
+												<div className="min-w-0">
+													<p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/35">
+														Delivery Address
+													</p>
 
-											<td className="whitespace-nowrap px-4 py-4 text-xs text-[#2E2E2E]/45 sm:px-5">
-												{order.date}
-											</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-						</div>
+													<p
+														className="mt-1 line-clamp-2 text-xs leading-5 text-[#2E2E2E]/60"
+														title={order.address}
+													>
+														{order.address}
+													</p>
+												</div>
+											</div>
+										</Link>
+									),
+								)}
+							</div>
+
+							{/* ==================================================
+							    DESKTOP TABLE
+							================================================== */}
+
+							<div className="hidden overflow-hidden rounded-2xl border border-[#E9DED7] bg-white lg:block">
+								<div className="w-full overflow-x-auto">
+									<table className="w-full min-w-[1050px] text-left text-sm">
+										<thead>
+											<tr className="border-b border-[#EEE6E1] text-xs text-[#2E2E2E]/40">
+												<th className="px-5 py-4 font-medium">
+													Order
+												</th>
+
+												<th className="px-5 py-4 font-medium">
+													Customer
+												</th>
+
+												<th className="px-5 py-4 font-medium">
+													Product
+												</th>
+
+												<th className="px-5 py-4 font-medium">
+													Amount
+												</th>
+
+												<th className="px-5 py-4 font-medium">
+													Status
+												</th>
+
+												<th className="px-5 py-4 font-medium">
+													Address
+												</th>
+
+												<th className="px-5 py-4 font-medium">
+													Date
+												</th>
+											</tr>
+										</thead>
+
+										<tbody className="divide-y divide-[#EEE6E1]">
+											{filteredOrders.map(
+												(order, index) => (
+													<tr
+														key={`${order.id}-${index}`}
+														className="transition-colors hover:bg-[#FBF9F7]"
+													>
+														{/* ORDER */}
+
+														<td className="px-5 py-5">
+															<Link
+																href={`/admin/orders/${order.id}`}
+																className="font-semibold text-[#85161B] hover:underline"
+															>
+																#{order.id}
+															</Link>
+														</td>
+
+														{/* CUSTOMER */}
+
+														<td className="max-w-[150px] px-5 py-5">
+															<span
+																className={`
+																	block
+																	truncate
+																	${
+																		order.customer ===
+																		"Guest"
+																			? "font-semibold text-[#8A6A5B]"
+																			: "text-[#2E2E2E]"
+																	}
+																`}
+															>
+																{order.customer}
+															</span>
+														</td>
+
+														{/* PRODUCT */}
+
+														<td className="max-w-[220px] px-5 py-5">
+															<p
+																className="truncate text-[#2E2E2E]/70"
+																title={order.product}
+															>
+																{order.product}
+															</p>
+
+															{order.items > 1 && (
+																<span className="mt-0.5 block text-xs text-[#2E2E2E]/40">
+																	+{order.items - 1} more
+																</span>
+															)}
+														</td>
+
+														{/* AMOUNT */}
+
+														<td className="whitespace-nowrap px-5 py-5 font-semibold text-[#2E2E2E]">
+															₹
+															{order.amount.toLocaleString(
+																"en-IN",
+															)}
+														</td>
+
+														{/* STATUS */}
+
+														<td className="px-5 py-5">
+															<span
+																className={`
+																	inline-flex
+																	whitespace-nowrap
+																	rounded-full
+																	px-2.5
+																	py-1
+																	text-xs
+																	font-semibold
+																	${
+																		STATUS_STYLES[
+																			order.status
+																		] ||
+																		"bg-gray-100 text-gray-600"
+																	}
+																`}
+															>
+																{order.status}
+															</span>
+														</td>
+
+														{/* ADDRESS */}
+
+														<td className="max-w-[300px] px-5 py-5">
+															<div className="flex min-w-0 items-start gap-2">
+																<MapPin
+																	size={15}
+																	className="mt-0.5 shrink-0 text-[#85161B]"
+																/>
+
+																<p
+																	className="line-clamp-2 text-xs leading-5 text-[#2E2E2E]/65"
+																	title={order.address}
+																>
+																	{order.address}
+																</p>
+															</div>
+														</td>
+
+														{/* DATE */}
+
+														<td className="whitespace-nowrap px-5 py-5 text-xs text-[#2E2E2E]/45">
+															{order.date}
+														</td>
+													</tr>
+												),
+											)}
+										</tbody>
+									</table>
+								</div>
+							</div>
+						</>
 					) : (
-						<div className="px-6 py-16 text-center">
-							<div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#F7D6BF]/40">
-								<ClipboardList size={22} className="text-[#85161B]" />
+						/* ======================================================
+						   EMPTY
+						====================================================== */
+
+						<div
+							className="
+								rounded-2xl
+								border
+								border-[#E9DED7]
+								bg-white
+								px-6
+								py-16
+								text-center
+							"
+						>
+							<div
+								className="
+									mx-auto
+									flex
+									h-14
+									w-14
+									items-center
+									justify-center
+									rounded-full
+									bg-[#F7D6BF]/40
+								"
+							>
+								<ClipboardList
+									size={22}
+									className="text-[#85161B]"
+								/>
 							</div>
 
 							<p className="mt-4 text-sm font-semibold text-[#2E2E2E]">
-								{error ? "No orders available" : "No orders match your search"}
+								{error
+									? "No orders available"
+									: "No orders match your search"}
 							</p>
 
 							<p className="mt-1 text-xs text-[#2E2E2E]/45">
@@ -1166,6 +1400,22 @@ export default function AdminOrdersPage() {
 									? "Please check your admin session and try again."
 									: "Try a different keyword or status filter."}
 							</p>
+
+							{query && !error && (
+								<button
+									type="button"
+									onClick={() => setQuery("")}
+									className="
+										mt-4
+										text-xs
+										font-semibold
+										text-[#85161B]
+										underline
+									"
+								>
+									Clear search
+								</button>
+							)}
 						</div>
 					)}
 				</div>
@@ -1173,4 +1423,3 @@ export default function AdminOrdersPage() {
 		</main>
 	);
 }
-
