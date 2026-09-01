@@ -19,6 +19,8 @@ import {
 	LogOut,
 } from "lucide-react";
 
+import { useRouter } from "next/navigation";
+
 /* ============================================================================
    PRODUCT IMAGE BASE URL
 ============================================================================ */
@@ -566,7 +568,7 @@ function ProductCard({
 export default function AdminProductsPage() {
 	const [products, setProducts] =
 		useState<Product[]>([]);
-
+    const router = useRouter();
 	/*
 	 * IMPORTANT:
 	 *
