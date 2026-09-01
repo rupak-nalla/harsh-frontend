@@ -324,7 +324,10 @@ export default function ForgotPasswordPage() {
 	};
 
 	return (
-		<main className="min-h-[calc(100vh-90px)] bg-[#FBF9F7]">
+		<main
+			className="min-h-[calc(100vh-90px)] bg-[#FBF9F7] pt-[112px]
+					sm:pt-[120px]"
+		>
 			<div className="mx-auto flex min-h-[calc(100vh-90px)] max-w-6xl items-center px-5 py-10 sm:px-6 lg:px-8">
 				<div className="grid w-full overflow-hidden rounded-3xl bg-white shadow-[0_15px_60px_rgba(80,40,20,0.08)] lg:grid-cols-2">
 					{/* =====================================================
@@ -349,7 +352,9 @@ export default function ForgotPasswordPage() {
 							<div>
 								<div className="text-xl font-bold">Printing House</div>
 
-								<div className="text-xs text-white/70">You Think... We Create...</div>
+								<div className="text-xs text-white/70">
+									You Think... We Create...
+								</div>
 							</div>
 						</Link>
 

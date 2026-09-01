@@ -1207,7 +1207,10 @@ function CheckoutView() {
 	======================================================= */
 
 	return (
-		<main className="min-h-screen bg-[#FBF9F7]">
+		<main
+			className="min-h-screen bg-[#FBF9F7] pt-[112px]
+					sm:pt-[120px]"
+		>
 			{/* HEADER */}
 
 			<section className="border-b border-[#E8DED7] bg-white">

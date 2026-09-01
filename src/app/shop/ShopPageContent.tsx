@@ -632,7 +632,10 @@ export default function ShopPage() {
 
 	return (
 		<CartProvider>
-			<main className="min-h-screen bg-[#FBF9F7]">
+			<main
+				className="min-h-screen bg-[#FBF9F7] pt-[112px]
+					sm:pt-[120px]"
+			>
 				{/* HERO */}
 
 				<section className="border-b border-[#E8DED7] bg-white">

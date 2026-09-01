@@ -159,7 +159,10 @@ export default function OrderTrackingPage() {
 		((currentStageId - 1) / (trackingStages.length - 1)) * 83.34;
 
 	return (
-		<main className="min-h-screen bg-[#FAF7F4] text-[#2E2E2E]">
+		<main
+			className="min-h-screen bg-[#FAF7F4] text-[#2E2E2E] pt-[112px]
+					sm:pt-[120px]"
+		>
 			<div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
 				{/* =========================================
 				    BACK

@@ -490,46 +490,48 @@ export default function ProductPage() {
 
     if (error || !product) {
         return (
-            <main className="min-h-screen bg-[#FBF9F7]">
-                <div className="mx-auto flex min-h-screen max-w-4xl items-center justify-center px-5 py-12">
-                    <div className="w-full rounded-3xl border border-red-200 bg-white px-6 py-14 text-center shadow-[0_12px_45px_rgba(80,40,20,0.06)] sm:px-12">
-                        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-red-50">
-                            <AlertCircle
-                                size={32}
-                                className="text-red-500"
-                                strokeWidth={1.7}
-                            />
-                        </div>
+					<main
+						className="min-h-screen bg-[#FBF9F7] pt-[112px]
+					sm:pt-[120px]"
+					>
+						<div className="mx-auto flex min-h-screen max-w-4xl items-center justify-center px-5 py-12">
+							<div className="w-full rounded-3xl border border-red-200 bg-white px-6 py-14 text-center shadow-[0_12px_45px_rgba(80,40,20,0.06)] sm:px-12">
+								<div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-red-50">
+									<AlertCircle
+										size={32}
+										className="text-red-500"
+										strokeWidth={1.7}
+									/>
+								</div>
 
-                        <h1 className="mt-6 text-2xl font-bold text-[#2E2E2E]">
-                            Couldn't load this product
-                        </h1>
+								<h1 className="mt-6 text-2xl font-bold text-[#2E2E2E]">
+									Couldn't load this product
+								</h1>
 
-                        <p className="mx-auto mt-3 max-w-md text-sm leading-7 text-[#2E2E2E]/55">
-                            {error ||
-                                "This product doesn't seem to exist."}
-                        </p>
+								<p className="mx-auto mt-3 max-w-md text-sm leading-7 text-[#2E2E2E]/55">
+									{error || "This product doesn't seem to exist."}
+								</p>
 
-                        <div className="mt-7 flex items-center justify-center gap-3">
-                            <button
-                                type="button"
-                                onClick={fetchProduct}
-                                className="inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#721318]"
-                            >
-                                Try Again
-                            </button>
+								<div className="mt-7 flex items-center justify-center gap-3">
+									<button
+										type="button"
+										onClick={fetchProduct}
+										className="inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#721318]"
+									>
+										Try Again
+									</button>
 
-                            <Link
-                                href="/shop"
-                                className="inline-flex items-center gap-2 rounded-xl border border-[#DED6D0] px-6 py-3.5 text-sm font-semibold text-[#2E2E2E]/70 transition hover:border-[#85161B]/30 hover:text-[#85161B]"
-                            >
-                                Back to Shop
-                            </Link>
-                        </div>
-                    </div>
-                </div>
-            </main>
-        );
+									<Link
+										href="/shop"
+										className="inline-flex items-center gap-2 rounded-xl border border-[#DED6D0] px-6 py-3.5 text-sm font-semibold text-[#2E2E2E]/70 transition hover:border-[#85161B]/30 hover:text-[#85161B]"
+									>
+										Back to Shop
+									</Link>
+								</div>
+							</div>
+						</div>
+					</main>
+				);
     }
 
     const heroImage = product.images[activeImage];

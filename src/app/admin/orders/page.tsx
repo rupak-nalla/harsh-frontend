@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
 	ArrowLeft,
 	Search,
@@ -11,6 +12,11 @@ import {
 	Loader2,
 	AlertCircle,
 	MapPin,
+} from "lucide-react";
+import {
+    
+    Store,
+    LogOut,
 } from "lucide-react";
 
 /* ============================================================================
@@ -645,7 +651,64 @@ export default function AdminOrdersPage() {
 			query,
 			statusFilter,
 		]);
+    
 
+
+        const router = useRouter();
+        const [loggingOut, setLoggingOut] =
+                    useState(false);
+            
+                const handleLogout = async () => {
+                    if (loggingOut) return;
+            
+                    setLoggingOut(true);
+            
+                    try {
+                        const response = await fetch(
+                            "/api/admin/logout?command_type=admin",
+                            {
+                                method: "POST",
+                                credentials: "include",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                },
+                                cache: "no-store",
+                            },
+                        );
+            
+                        if (!response.ok) {
+                            const data = await response
+                                .json()
+                                .catch(() => ({}));
+            
+                            throw new Error(
+                                (data as { message?: string })
+                                    ?.message ||
+                                    "Unable to logout.",
+                            );
+                        }
+            
+                        /*
+                         * Change this route if your admin login page
+                         * uses a different URL.
+                         */
+                        router.replace("/login");
+                        // router.refresh();
+                    } catch (error) {
+                        console.error(
+                            "Admin logout failed:",
+                            error,
+                        );
+            
+                        alert(
+                            error instanceof Error
+                                ? error.message
+                                : "Unable to logout. Please try again.",
+                        );
+            
+                        setLoggingOut(false);
+                    }
+                };
 	/* ========================================================================
 	   RENDER
 	========================================================================= */
@@ -659,7 +722,207 @@ export default function AdminOrdersPage() {
 					font-family: 'Fraunces', Georgia, serif;
 				}
 			`}</style>
+			<header
+				className="
+					sticky
+					top-0
+					z-30
+					h-[76px]
+					border-b
+					border-[#E8DED7]
+					bg-[#FBF9F7]/95
+					backdrop-blur-md
+				"
+			>
+				<div
+					className="
+						flex
+						h-full
+						items-center
+						justify-between
+						px-5
+						sm:px-6
+						lg:px-8
+					"
+				>
+					{/* BRAND */}
 
+					<Link href="/admin" className="group flex items-center gap-3">
+						<div
+							className="
+								flex
+								h-10
+								w-10
+								items-center
+								justify-center
+								rounded-xl
+								text-white
+								shadow-sm
+								transition
+								group-hover:scale-[1.02]
+							"
+						>
+							<img
+								src="https://printinghouseujjain.in/assets/logo.png"
+								alt="Printing House"
+								className="
+											h-10
+											w-10
+											shrink-0
+											object-contain
+										"
+							/>
+						</div>
+
+						<div className="hidden sm:block">
+							<p
+								className="
+									text-[10px]
+									font-bold
+									uppercase
+									tracking-[0.22em]
+									text-[#85161B]
+								"
+							>
+								Printing House
+							</p>
+
+							<p
+								className="
+									mt-0.5
+									text-sm
+									font-semibold
+									text-[#2E2E2E]
+								"
+							>
+								Admin Dashboard
+							</p>
+						</div>
+					</Link>
+
+					{/* RIGHT NAV */}
+
+					<div className="flex items-center gap-2 sm:gap-3">
+						{/* STOREFRONT */}
+
+						<Link
+							href="/"
+							className="
+								hidden
+								items-center
+								gap-2
+								rounded-xl
+								border
+								border-[#E8DED7]
+								bg-white
+								px-4
+								py-2.5
+								text-sm
+								font-medium
+								text-[#2E2E2E]
+								transition
+								hover:border-[#85161B]/30
+								hover:text-[#85161B]
+								sm:flex
+							"
+						>
+							<Store size={16} strokeWidth={1.8} />
+
+							<span>Storefront</span>
+						</Link>
+
+						{/* ADMIN PROFILE */}
+
+						<div
+							className="
+								flex
+								items-center
+								gap-2.5
+								rounded-xl
+								border
+								border-[#E8DED7]
+								bg-white
+								px-2.5
+								py-2
+							"
+						>
+							<div
+								className="
+									flex
+									h-8
+									w-8
+									items-center
+									justify-center
+									rounded-full
+									bg-[#85161B]
+									text-xs
+									font-semibold
+									text-white
+								"
+							>
+								A
+							</div>
+
+							<div className="hidden text-left md:block">
+								<p className="text-xs font-semibold text-[#2E2E2E]">Admin</p>
+
+								<p className="text-[10px] text-[#2E2E2E]/45">Administrator</p>
+							</div>
+						</div>
+
+						{/* LOGOUT */}
+
+						<button
+							type="button"
+							onClick={handleLogout}
+							disabled={loggingOut}
+							className="
+								inline-flex
+								items-center
+								gap-2
+								rounded-xl
+								border
+								border-[#85161B]/20
+								bg-white
+								px-3.5
+								py-2.5
+								text-sm
+								font-medium
+								text-[#85161B]
+								transition
+								hover:border-[#85161B]
+								hover:bg-[#85161B]
+								hover:text-white
+								disabled:cursor-not-allowed
+								disabled:opacity-60
+								sm:px-4
+							"
+						>
+							{loggingOut ? (
+								<span
+									className="
+										h-4
+										w-4
+										animate-spin
+										rounded-full
+										border-2
+										border-[#85161B]/25
+										border-t-[#85161B]
+										group-hover:border-white/30
+										group-hover:border-t-white
+									"
+								/>
+							) : (
+								<LogOut size={16} strokeWidth={1.9} />
+							)}
+
+							<span className="hidden sm:inline">
+								{loggingOut ? "Logging out..." : "Logout"}
+							</span>
+						</button>
+					</div>
+				</div>
+			</header>
 			<div className="mx-auto max-w-8xl px-5 py-10 sm:px-6 lg:px-8">
 				{/* HEADER */}
 

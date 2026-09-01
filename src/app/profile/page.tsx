@@ -665,7 +665,10 @@ export default function ProfilePage() {
 
 	if (error && !user) {
 		return (
-			<main className="min-h-[calc(100vh-90px)] bg-[#FBF9F7]">
+			<main
+				className="min-h-[calc(100vh-90px)] bg-[#FBF9F7] pt-[112px]
+					sm:pt-[120px]"
+			>
 				<section className="mx-auto flex min-h-[calc(100vh-90px)] max-w-6xl items-center justify-center px-5">
 					<div className="w-full max-w-md rounded-2xl border border-red-200 bg-white p-6 text-center">
 						<div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
@@ -676,9 +679,7 @@ export default function ProfilePage() {
 							Unable to load profile
 						</h2>
 
-						<p className="mt-2 text-sm text-[#2E2E2E]/55">
-							{error}
-						</p>
+						<p className="mt-2 text-sm text-[#2E2E2E]/55">{error}</p>
 
 						<button
 							type="button"
@@ -701,7 +702,10 @@ export default function ProfilePage() {
 		addresses.find((address) => address.primary) || null;
 
 	return (
-		<main className="min-h-[calc(100vh-90px)] bg-[#FBF9F7]">
+		<main
+			className="min-h-[calc(100vh-90px)] bg-[#FBF9F7] pt-[112px]
+					sm:pt-[120px]"
+		>
 			<section className="mx-auto max-w-6xl px-5 py-10 sm:px-6 lg:px-8 lg:py-14">
 				{/* HEADER */}
 
@@ -715,8 +719,7 @@ export default function ProfilePage() {
 					</h1>
 
 					<p className="mt-2 text-sm text-[#2E2E2E]/55 sm:text-base">
-						Manage your personal information, addresses and
-						account settings.
+						Manage your personal information, addresses and account settings.
 					</p>
 				</div>
 
@@ -787,28 +790,19 @@ export default function ProfilePage() {
 									<ProfileField
 										icon={<User size={17} />}
 										label="Full name"
-										value={
-											user?.name ||
-											"Not available"
-										}
+										value={user?.name || "Not available"}
 									/>
 
 									<ProfileField
 										icon={<Mail size={17} />}
 										label="Email address"
-										value={
-											user?.email ||
-											"Not available"
-										}
+										value={user?.email || "Not available"}
 									/>
 
 									<ProfileField
 										icon={<Phone size={17} />}
 										label="Phone number"
-										value={
-											user?.phone ||
-											"Not available"
-										}
+										value={user?.phone || "Not available"}
 									/>
 
 									<ProfileField
@@ -860,8 +854,7 @@ export default function ProfilePage() {
 										</p>
 
 										<p className="mt-1 text-xs text-[#2E2E2E]/50">
-											Add an address to make
-											checkout faster.
+											Add an address to make checkout faster.
 										</p>
 									</div>
 								)}
@@ -870,18 +863,10 @@ export default function ProfilePage() {
 									<AddressCard
 										key={address.id}
 										address={address}
-										primaryLoading={
-											primaryLoading
-										}
-										onSetPrimary={
-											handleSetPrimary
-										}
-										onEdit={
-											openEditAddressModal
-										}
-										onDelete={
-											openDeleteModal
-										}
+										primaryLoading={primaryLoading}
+										onSetPrimary={handleSetPrimary}
+										onEdit={openEditAddressModal}
+										onDelete={openDeleteModal}
 									/>
 								))}
 							</div>
@@ -938,8 +923,8 @@ export default function ProfilePage() {
 							</h3>
 
 							<p className="mt-2 text-sm leading-6 text-white/85">
-								Keep track of your orders and discover more
-								personalized gifts for the people you love.
+								Keep track of your orders and discover more personalized gifts
+								for the people you love.
 							</p>
 
 							<Link
@@ -977,10 +962,7 @@ export default function ProfilePage() {
 					title="Edit personal information"
 					onClose={() => setShowProfileModal(false)}
 				>
-					<form
-						onSubmit={handleUpdateUser}
-						className="space-y-5"
-					>
+					<form onSubmit={handleUpdateUser} className="space-y-5">
 						<FormInput
 							label="Full name"
 							value={profileName}
@@ -992,25 +974,18 @@ export default function ProfilePage() {
 						<FormInput
 							label="Phone number"
 							value={profilePhone}
-							onChange={(value) =>
-								setProfilePhone(
-									value.replace(/\D/g, ""),
-								)
-							}
+							onChange={(value) => setProfilePhone(value.replace(/\D/g, ""))}
 							icon={<Phone size={17} />}
 						/>
 
 						<div className="rounded-xl bg-[#F8F1ED] px-4 py-3 text-xs text-[#2E2E2E]/55">
-							Your email address cannot be changed from
-							here.
+							Your email address cannot be changed from here.
 						</div>
 
 						<ModalButtons
 							loading={profileLoading}
 							submitText="Save changes"
-							onCancel={() =>
-								setShowProfileModal(false)
-							}
+							onCancel={() => setShowProfileModal(false)}
 						/>
 					</form>
 				</Modal>
@@ -1022,11 +997,7 @@ export default function ProfilePage() {
 
 			{showAddressModal && (
 				<Modal
-					title={
-						editingAddress
-							? "Edit address"
-							: "Add new address"
-					}
+					title={editingAddress ? "Edit address" : "Add new address"}
 					onClose={() => {
 						if (!addressLoading) {
 							setShowAddressModal(false);
@@ -1035,21 +1006,13 @@ export default function ProfilePage() {
 					}}
 					wide
 				>
-					<form
-						onSubmit={handleAddressSubmit}
-						className="space-y-4"
-					>
+					<form onSubmit={handleAddressSubmit} className="space-y-4">
 						{/* RECEIVER'S NAME */}
 
 						<FormInput
 							label="Receiver's name"
 							value={addressForm.name}
-							onChange={(value) =>
-								updateAddressField(
-									"name",
-									value,
-								)
-							}
+							onChange={(value) => updateAddressField("name", value)}
 							icon={<User size={17} />}
 							required
 						/>
@@ -1061,13 +1024,7 @@ export default function ProfilePage() {
 								label="Phone number"
 								value={addressForm.phone}
 								onChange={(value) =>
-									updateAddressField(
-										"phone",
-										value.replace(
-											/\D/g,
-											"",
-										),
-									)
+									updateAddressField("phone", value.replace(/\D/g, ""))
 								}
 								icon={<Phone size={17} />}
 								required
@@ -1079,13 +1036,7 @@ export default function ProfilePage() {
 								label="Pincode"
 								value={addressForm.pincode}
 								onChange={(value) =>
-									updateAddressField(
-										"pincode",
-										value.replace(
-											/\D/g,
-											"",
-										),
-									)
+									updateAddressField("pincode", value.replace(/\D/g, ""))
 								}
 								icon={<MapPin size={17} />}
 								required
@@ -1096,14 +1047,9 @@ export default function ProfilePage() {
 
 						<FormInput
 							label="Flat / House / Building"
-							value={
-								addressForm.flat_house_building
-							}
+							value={addressForm.flat_house_building}
 							onChange={(value) =>
-								updateAddressField(
-									"flat_house_building",
-									value,
-								)
+								updateAddressField("flat_house_building", value)
 							}
 							icon={<MapPin size={17} />}
 							required
@@ -1113,14 +1059,9 @@ export default function ProfilePage() {
 
 						<FormInput
 							label="Road / Area / Colony"
-							value={
-								addressForm.road_area_colony
-							}
+							value={addressForm.road_area_colony}
 							onChange={(value) =>
-								updateAddressField(
-									"road_area_colony",
-									value,
-								)
+								updateAddressField("road_area_colony", value)
 							}
 							icon={<MapPin size={17} />}
 							required
@@ -1131,12 +1072,7 @@ export default function ProfilePage() {
 						<FormInput
 							label="Landmark"
 							value={addressForm.landmark}
-							onChange={(value) =>
-								updateAddressField(
-									"landmark",
-									value,
-								)
-							}
+							onChange={(value) => updateAddressField("landmark", value)}
 							icon={<MapPin size={17} />}
 						/>
 
@@ -1146,12 +1082,7 @@ export default function ProfilePage() {
 							<FormInput
 								label="City"
 								value={addressForm.city}
-								onChange={(value) =>
-									updateAddressField(
-										"city",
-										value,
-									)
-								}
+								onChange={(value) => updateAddressField("city", value)}
 								icon={<MapPin size={17} />}
 								required
 							/>
@@ -1161,12 +1092,7 @@ export default function ProfilePage() {
 							<FormInput
 								label="State"
 								value={addressForm.state}
-								onChange={(value) =>
-									updateAddressField(
-										"state",
-										value,
-									)
-								}
+								onChange={(value) => updateAddressField("state", value)}
 								icon={<MapPin size={17} />}
 								required
 							/>
@@ -1184,11 +1110,7 @@ export default function ProfilePage() {
 
 						<ModalButtons
 							loading={addressLoading}
-							submitText={
-								editingAddress
-									? "Update address"
-									: "Save address"
-							}
+							submitText={editingAddress ? "Update address" : "Save address"}
 							onCancel={() => {
 								setShowAddressModal(false);
 								setEditingAddress(null);
@@ -1222,43 +1144,30 @@ export default function ProfilePage() {
 						</h3>
 
 						<p className="mt-2 text-sm leading-6 text-[#2E2E2E]/55">
-							This address will be permanently removed
-							from your account.
+							This address will be permanently removed from your account.
 						</p>
 
 						<div className="mt-5 rounded-xl bg-[#FCFAF8] p-4 text-left text-xs leading-5 text-[#2E2E2E]/60">
 							{/* RECEIVER NAME */}
-
-							<strong>
-								{deletingAddress.name ||
-									"Receiver"}
-							</strong>
-
+							<strong>{deletingAddress.name || "Receiver"}</strong>
 							<br />
-
 							{deletingAddress.phone && (
 								<>
-									Phone:{" "}
-									{deletingAddress.phone}
+									Phone: {deletingAddress.phone}
 									<br />
 								</>
 							)}
-
 							{deletingAddress.flat_house_building}
 							<br />
-
 							{deletingAddress.road_area_colony}
 							<br />
-
 							{deletingAddress.landmark && (
 								<>
 									{deletingAddress.landmark}
 									<br />
 								</>
 							)}
-
-							{deletingAddress.city},{" "}
-							{deletingAddress.state} -{" "}
+							{deletingAddress.city}, {deletingAddress.state} -{" "}
 							{deletingAddress.pincode}
 						</div>
 
@@ -1283,10 +1192,7 @@ export default function ProfilePage() {
 							>
 								{deleteLoading ? (
 									<>
-										<Loader2
-											size={16}
-											className="animate-spin"
-										/>
+										<Loader2 size={16} className="animate-spin" />
 										Deleting...
 									</>
 								) : (
@@ -1321,16 +1227,13 @@ export default function ProfilePage() {
 						</h3>
 
 						<p className="mt-2 text-sm leading-6 text-[#2E2E2E]/55">
-							You will need to sign in again to access
-							your account.
+							You will need to sign in again to access your account.
 						</p>
 
 						<div className="mt-6 flex gap-3">
 							<button
 								type="button"
-								onClick={() =>
-									setShowLogoutModal(false)
-								}
+								onClick={() => setShowLogoutModal(false)}
 								disabled={logoutLoading}
 								className="flex-1 rounded-xl border border-[#DED6D0] bg-white py-3 text-sm font-semibold text-[#2E2E2E] hover:bg-[#FCFAF8]"
 							>
@@ -1345,10 +1248,7 @@ export default function ProfilePage() {
 							>
 								{logoutLoading ? (
 									<>
-										<Loader2
-											size={16}
-											className="animate-spin"
-										/>
+										<Loader2 size={16} className="animate-spin" />
 										Signing out...
 									</>
 								) : (

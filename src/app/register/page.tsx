@@ -431,7 +431,10 @@ export default function RegisterPage() {
 	`;
 
 	return (
-		<main className="min-h-[calc(100vh-72px)] bg-[#FBF9F7]">
+		<main
+			className="min-h-[calc(100vh-72px)] bg-[#FBF9F7] pt-[112px]
+					sm:pt-[120px]"
+		>
 			<div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-6xl items-center px-5 py-8 sm:px-6 lg:px-8">
 				<div className="grid w-full overflow-hidden rounded-3xl bg-white shadow-[0_15px_60px_rgba(80,40,20,0.08)] lg:grid-cols-2">
 					{/* =====================================================
@@ -453,7 +456,9 @@ export default function RegisterPage() {
 							<div>
 								<div className="text-xl font-bold">Printing House</div>
 
-								<div className="text-xs text-white/60">You Think... We Create...</div>
+								<div className="text-xs text-white/60">
+									You Think... We Create...
+								</div>
 							</div>
 						</Link>
 
@@ -472,8 +477,9 @@ export default function RegisterPage() {
 							</h1>
 
 							<p className="mt-5 max-w-sm text-sm leading-7 text-white/70">
-								Create your Printing House account and make personalized gifts, save
-								your favourites, and keep track of every order in one place.
+								Create your Printing House account and make personalized gifts,
+								save your favourites, and keep track of every order in one
+								place.
 							</p>
 
 							<div className="mt-8 space-y-4">

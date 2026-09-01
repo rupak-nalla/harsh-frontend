@@ -587,7 +587,10 @@ export default function OrderDetailsPage() {
 	}
 
 	return (
-		<main className="min-h-screen bg-[#FBF9F7]">
+		<main
+			className="min-h-screen bg-[#FBF9F7] pt-[112px]
+					sm:pt-[120px]"
+		>
 			<section className="mx-auto max-w-6xl px-5 py-8 sm:px-6 lg:px-8 lg:py-12">
 				{/* ─────────────────────────
 				    BACK

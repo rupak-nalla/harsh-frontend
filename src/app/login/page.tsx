@@ -181,16 +181,17 @@ export default function LoginPage() {
 	};
 
 	return (
-		<main className="min-h-[calc(100vh-90px)] bg-[#FBF9F7]">
+		<main
+			className="min-h-[calc(100vh-90px)] bg-[#FBF9F7] pt-[112px]
+					sm:pt-[120px]"
+		>
 			<div className="mx-auto flex min-h-[calc(100vh-90px)] max-w-6xl items-center px-5 py-10 sm:px-6 lg:px-8">
 				<div className="grid w-full overflow-hidden rounded-3xl bg-white shadow-[0_15px_60px_rgba(80,40,20,0.08)] lg:grid-cols-2">
-
 					{/* =====================================================
 					    BRAND PANEL
 					===================================================== */}
 
 					<div className="relative hidden min-h-[620px] overflow-hidden bg-[#85161B] p-10 text-white lg:flex lg:flex-col lg:justify-between">
-
 						{/* Decorative circles */}
 
 						<div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full border border-white/10" />
@@ -210,9 +211,7 @@ export default function LoginPage() {
 							</div>
 
 							<div>
-								<div className="text-xl font-bold">
-									Printing House
-								</div>
+								<div className="text-xl font-bold">Printing House</div>
 
 								<div className="text-xs text-white/70">
 									You Think... We Create...
@@ -237,9 +236,8 @@ export default function LoginPage() {
 							</h1>
 
 							<p className="mt-5 max-w-sm text-sm leading-7 text-white/80">
-								Sign in to manage your orders, save your favourite
-								gifts, and keep your personalized creations in one
-								place.
+								Sign in to manage your orders, save your favourite gifts, and
+								keep your personalized creations in one place.
 							</p>
 
 							{/* Benefits */}
@@ -250,17 +248,12 @@ export default function LoginPage() {
 									"Track your orders",
 									"Save your favourite products",
 								].map((item) => (
-									<div
-										key={item}
-										className="flex items-center gap-3"
-									>
+									<div key={item} className="flex items-center gap-3">
 										<div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-[#F7D6BF]">
 											<CheckCircle2 size={14} />
 										</div>
 
-										<span className="text-sm text-white/75">
-											{item}
-										</span>
+										<span className="text-sm text-white/75">{item}</span>
 									</div>
 								))}
 							</div>
@@ -282,22 +275,16 @@ export default function LoginPage() {
 					===================================================== */}
 
 					<div className="flex min-h-[620px] flex-col justify-center px-6 py-10 sm:px-10 lg:px-14 xl:px-20">
-
 						{/* Mobile logo */}
 
 						<div className="mb-10 lg:hidden">
-							<Link
-								href="/"
-								className="inline-flex items-center gap-3"
-							>
+							<Link href="/" className="inline-flex items-center gap-3">
 								<div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F7D6BF] text-[#85161B]">
 									<Gift size={19} />
 								</div>
 
 								<div>
-									<div className="font-bold text-[#2E2E2E]">
-										Printing House
-									</div>
+									<div className="font-bold text-[#2E2E2E]">Printing House</div>
 
 									<div className="text-[10px] text-[#2E2E2E]/50">
 										You Think... We Create...
@@ -320,12 +307,7 @@ export default function LoginPage() {
 
 						{/* Form */}
 
-						<form
-							onSubmit={handleSubmit}
-							className="mt-8 space-y-5"
-							noValidate
-						>
-
+						<form onSubmit={handleSubmit} className="mt-8 space-y-5" noValidate>
 							{/* =================================================
 							    EMAIL
 							================================================== */}
@@ -364,11 +346,7 @@ export default function LoginPage() {
 										disabled={isLoading}
 										placeholder="you@example.com"
 										aria-invalid={Boolean(errors.email)}
-										aria-describedby={
-											errors.email
-												? "email-error"
-												: undefined
-										}
+										aria-describedby={errors.email ? "email-error" : undefined}
 										className="w-full bg-transparent py-3.5 text-sm text-[#2E2E2E] outline-none placeholder:text-[#2E2E2E]/30 disabled:cursor-not-allowed disabled:opacity-60"
 									/>
 								</div>
@@ -421,11 +399,7 @@ export default function LoginPage() {
 									<input
 										id="password"
 										name="password"
-										type={
-											showPassword
-												? "text"
-												: "password"
-										}
+										type={showPassword ? "text" : "password"}
 										value={password}
 										onChange={handlePasswordChange}
 										autoComplete="current-password"
@@ -433,37 +407,23 @@ export default function LoginPage() {
 										required
 										disabled={isLoading}
 										placeholder="Enter your password"
-										aria-invalid={Boolean(
-											errors.password
-										)}
+										aria-invalid={Boolean(errors.password)}
 										aria-describedby={
-											errors.password
-												? "password-error"
-												: undefined
+											errors.password ? "password-error" : undefined
 										}
 										className="min-w-0 flex-1 bg-transparent py-3.5 text-sm text-[#2E2E2E] outline-none placeholder:text-[#2E2E2E]/30 disabled:cursor-not-allowed disabled:opacity-60"
 									/>
 
 									<button
 										type="button"
-										onClick={() =>
-											setShowPassword(
-												(value) => !value
-											)
-										}
+										onClick={() => setShowPassword((value) => !value)}
 										disabled={isLoading}
 										aria-label={
-											showPassword
-												? "Hide password"
-												: "Show password"
+											showPassword ? "Hide password" : "Show password"
 										}
 										className="ml-2 shrink-0 rounded-md p-1 text-[#2E2E2E]/40 transition-colors hover:text-[#85161B] disabled:cursor-not-allowed disabled:opacity-50"
 									>
-										{showPassword ? (
-											<EyeOff size={18} />
-										) : (
-											<Eye size={18} />
-										)}
+										{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
 									</button>
 								</div>
 
@@ -490,9 +450,7 @@ export default function LoginPage() {
 									className="h-4 w-4 rounded border-[#D8CEC8] accent-[#85161B]"
 								/>
 
-								<span className="text-xs text-[#2E2E2E]/55">
-									Remember me
-								</span>
+								<span className="text-xs text-[#2E2E2E]/55">Remember me</span>
 							</label>
 
 							{/* =================================================
@@ -524,13 +482,11 @@ export default function LoginPage() {
 											className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
 											aria-hidden="true"
 										/>
-
 										Signing in...
 									</>
 								) : (
 									<>
 										Sign in
-
 										<ArrowRight
 											size={17}
 											className="transition-transform duration-200 group-hover:translate-x-1"
@@ -545,7 +501,6 @@ export default function LoginPage() {
 						<div className="mt-7 border-t border-[#2E2E2E]/10 pt-6 text-center">
 							<p className="text-sm text-[#2E2E2E]/50">
 								Don't have an account?{" "}
-
 								<Link
 									href="/register"
 									className="font-semibold text-[#85161B] hover:underline"

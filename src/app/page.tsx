@@ -53,7 +53,10 @@ export default function Home() {
 			{/* Popup */}
 			<OfferPopup />
 
-			<main className="w-full px-2.5 sm:px-4 md:px-6 lg:px-8">
+			<main
+				className="w-full px-2.5 sm:px-4 md:px-6 lg:px-8 pt-[112px]
+					sm:pt-[120px]"
+			>
 				<Hero />
 
 				<Container from="Home">

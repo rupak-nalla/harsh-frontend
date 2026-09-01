@@ -1516,14 +1516,15 @@ function CartView() {
 
 	if (loading) {
 		return (
-			<main className="min-h-screen bg-[#FBF9F7]">
+			<main
+				className="min-h-screen bg-[#FBF9F7] pt-[112px]
+					sm:pt-[120px]"
+			>
 				<div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-4xl items-center justify-center px-5 py-12 sm:px-6">
 					<div className="flex flex-col items-center gap-3">
 						<span className="h-8 w-8 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
 
-						<p className="text-sm text-[#2E2E2E]/50">
-							Loading your cart...
-						</p>
+						<p className="text-sm text-[#2E2E2E]/50">Loading your cart...</p>
 					</div>
 				</div>
 			</main>
@@ -1540,16 +1541,17 @@ function CartView() {
 			0
 	) {
 		return (
-			<main className="min-h-screen bg-[#FBF9F7]">
+			<main
+				className="min-h-screen bg-[#FBF9F7] pt-[112px]
+					sm:pt-[120px]"
+			>
 				<div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-4xl items-center justify-center px-5 py-12 sm:px-6">
 					<div className="w-full rounded-3xl border border-red-200 bg-white px-6 py-14 text-center shadow-[0_12px_45px_rgba(80,40,20,0.06)] sm:px-12">
 						<div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-red-50">
 							<AlertCircle
 								size={32}
 								className="text-red-500"
-								strokeWidth={
-									1.7
-								}
+								strokeWidth={1.7}
 							/>
 						</div>
 
@@ -1563,9 +1565,7 @@ function CartView() {
 
 						<button
 							type="button"
-							onClick={
-								fetchCart
-							}
+							onClick={fetchCart}
 							className="mt-7 inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-6 py-3.5 text-sm font-semibold text-white transition-all hover:bg-[#721318] hover:shadow-lg"
 						>
 							Try again
@@ -1582,16 +1582,17 @@ function CartView() {
 
 	if (items.length === 0) {
 		return (
-			<main className="min-h-screen bg-[#FBF9F7]">
+			<main
+				className="min-h-screen bg-[#FBF9F7] pt-[112px]
+					sm:pt-[120px]"
+			>
 				<div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-4xl items-center justify-center px-5 py-12 sm:px-6">
 					<div className="w-full rounded-3xl border border-[#E8DED7] bg-white px-6 py-14 text-center shadow-[0_12px_45px_rgba(80,40,20,0.06)] sm:px-12">
 						<div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[#F7D6BF]/40">
 							<ShoppingBag
 								size={32}
 								className="text-[#85161B]"
-								strokeWidth={
-									1.7
-								}
+								strokeWidth={1.7}
 							/>
 						</div>
 
@@ -1604,11 +1605,8 @@ function CartView() {
 						</h1>
 
 						<p className="mx-auto mt-3 max-w-md text-sm leading-7 text-[#2E2E2E]/55">
-							Looks like you haven't
-							added anything to your
-							cart. Find something
-							special and make it
-							personal.
+							Looks like you haven't added anything to your cart. Find something
+							special and make it personal.
 						</p>
 
 						<Link
@@ -1616,10 +1614,7 @@ function CartView() {
 							className="mt-7 inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-6 py-3.5 text-sm font-semibold text-white transition-all hover:bg-[#721318] hover:shadow-lg"
 						>
 							Continue Shopping
-
-							<ArrowRight
-								size={17}
-							/>
+							<ArrowRight size={17} />
 						</Link>
 					</div>
 				</div>
@@ -1632,26 +1627,23 @@ function CartView() {
 	========================================================================== */
 
 	return (
-		<main className="min-h-screen bg-[#FBF9F7]">
-
+		<main
+			className="min-h-screen bg-[#FBF9F7] pt-[112px]
+					sm:pt-[120px]"
+		>
 			{/* PAGE HEADER */}
 
 			<section className="border-b border-[#E8DED7] bg-white">
 				<div className="mx-auto max-w-7xl px-5 py-8 sm:px-6 lg:px-8">
-
 					<Link
 						href="/shop"
 						className="inline-flex items-center gap-2 text-sm font-medium text-[#2E2E2E]/55 transition-colors hover:text-[#85161B]"
 					>
-						<ArrowLeft
-							size={16}
-						/>
-
+						<ArrowLeft size={16} />
 						Continue Shopping
 					</Link>
 
 					<div className="mt-6">
-
 						<p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#85161B]">
 							Shopping Bag
 						</p>
@@ -1661,14 +1653,9 @@ function CartView() {
 						</h1>
 
 						<p className="mt-2 text-sm text-[#2E2E2E]/50">
-							{totalProducts}{" "}
-							{totalProducts ===
-							1
-								? "product"
-								: "products"}{" "}
-							in your cart
+							{totalProducts} {totalProducts === 1 ? "product" : "products"} in
+							your cart
 						</p>
-
 					</div>
 				</div>
 			</section>
@@ -1689,424 +1676,245 @@ function CartView() {
 			{/* CONTENT */}
 
 			<section className="mx-auto max-w-7xl px-5 py-8 sm:px-6 lg:px-8 lg:py-10">
-
 				<div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px] lg:gap-8">
-
 					{/* LEFT */}
 
 					<div>
-
 						<div className="overflow-hidden rounded-2xl border border-[#E8DED7] bg-white">
-
 							{/* HEADER */}
 
 							<div className="flex items-center justify-between border-b border-[#E8DED7] px-5 py-4 sm:px-6">
-
-								<h2 className="font-semibold text-[#2E2E2E]">
-									Cart Items
-								</h2>
+								<h2 className="font-semibold text-[#2E2E2E]">Cart Items</h2>
 
 								<button
 									type="button"
-									onClick={
-										handleClearCart
-									}
+									onClick={handleClearCart}
 									className="text-xs font-medium text-[#2E2E2E]/45 transition-colors hover:text-[#85161B]"
 								>
 									Clear cart
 								</button>
-
 							</div>
 
 							{/* PRODUCTS */}
 
 							<div className="divide-y divide-[#E8DED7]">
+								{items.map((item) => {
+									const isUpdating = updatingItemIds.has(item.cartItemId);
 
-								{items.map(
-									(item) => {
-										const isUpdating =
-											updatingItemIds.has(
-												item.cartItemId,
-											);
+									const itemTotal = item.price * item.quantity;
 
-										const itemTotal =
-											item.price *
-											item.quantity;
+									const customizationEntries = Object.entries(
+										item.customization,
+									).filter(
+										([, value]) =>
+											!looksLikeImageFilename(cleanCustomizationValue(value)) &&
+											!/\[[\s\S]*\]/.test(value),
+									);
 
-										const customizationEntries =
-											Object.entries(
-												item.customization,
-											).filter(
-												([
-													,
-													value,
-												]) =>
-													!looksLikeImageFilename(
-														cleanCustomizationValue(
-															value,
-														),
-													) &&
-													!/\[[\s\S]*\]/.test(
-														value,
-													),
-											);
+									return (
+										<div key={item.cartItemId} className="p-5 sm:p-6">
+											<div className="flex gap-4 sm:gap-5">
+												{/* PRODUCT IMAGE */}
 
-										return (
-											<div
-												key={
-													item.cartItemId
-												}
-												className="p-5 sm:p-6"
-											>
-
-												<div className="flex gap-4 sm:gap-5">
-
-													{/* PRODUCT IMAGE */}
-
-													<div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-[#F7F3F0] sm:h-28 sm:w-28">
-
-														{item.image ? (
-															<img
-																src={
-																	item.image
-																}
-																alt={
-																	item.title
-																}
-																className="h-full w-full object-cover"
-																onError={(
-																	event,
-																) => {
-																	event.currentTarget.style.display =
-																		"none";
-																}}
+												<div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-[#F7F3F0] sm:h-28 sm:w-28">
+													{item.image ? (
+														<img
+															src={item.image}
+															alt={item.title}
+															className="h-full w-full object-cover"
+															onError={(event) => {
+																event.currentTarget.style.display = "none";
+															}}
+														/>
+													) : (
+														<div className="flex h-full w-full items-center justify-center">
+															<ShoppingBag
+																size={25}
+																className="text-[#85161B]/30"
 															/>
-														) : (
-															<div className="flex h-full w-full items-center justify-center">
-																<ShoppingBag
-																	size={
-																		25
-																	}
-																	className="text-[#85161B]/30"
-																/>
-															</div>
-														)}
+														</div>
+													)}
+												</div>
 
+												{/* DETAILS */}
+
+												<div className="min-w-0 flex-1">
+													<div className="flex items-start justify-between gap-3">
+														<div className="min-w-0">
+															<h3 className="font-semibold text-[#2E2E2E]">
+																{item.title}
+															</h3>
+
+															{item.description && (
+																<p className="mt-1 line-clamp-2 text-xs leading-5 text-[#2E2E2E]/45">
+																	{item.description}
+																</p>
+															)}
+
+															<div className="mt-2 flex flex-wrap items-center gap-2">
+																<span className="text-sm font-medium text-[#85161B]">
+																	₹{item.price.toFixed(2)}
+																</span>
+
+																{item.marketPrice > item.price && (
+																	<span className="text-xs text-[#2E2E2E]/35 line-through">
+																		₹{item.marketPrice.toFixed(2)}
+																	</span>
+																)}
+															</div>
+														</div>
+
+														{/* DELETE */}
+
+														<button
+															type="button"
+															disabled={isUpdating}
+															onClick={() => handleRemove(item)}
+															aria-label={`Remove ${item.title}`}
+															className="shrink-0 rounded-lg p-2 text-[#2E2E2E]/35 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+														>
+															<Trash2 size={17} />
+														</button>
 													</div>
 
-													{/* DETAILS */}
+													{/* CUSTOMIZATION IMAGES */}
 
-													<div className="min-w-0 flex-1">
+													{item.customizationImages.length > 0 && (
+														<div className="mt-4">
+															<p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#85161B]">
+																Uploaded Images
+															</p>
 
-														<div className="flex items-start justify-between gap-3">
-
-															<div className="min-w-0">
-
-																<h3 className="font-semibold text-[#2E2E2E]">
-																	{
-																		item.title
-																	}
-																</h3>
-
-																{item.description && (
-																	<p className="mt-1 line-clamp-2 text-xs leading-5 text-[#2E2E2E]/45">
-																		{
-																			item.description
-																		}
-																	</p>
-																)}
-
-																<div className="mt-2 flex flex-wrap items-center gap-2">
-
-																	<span className="text-sm font-medium text-[#85161B]">
-																		₹
-																		{item.price.toFixed(
-																			2,
-																		)}
-																	</span>
-
-																	{item.marketPrice >
-																		item.price && (
-																		<span className="text-xs text-[#2E2E2E]/35 line-through">
-																			₹
-																			{item.marketPrice.toFixed(
-																				2,
-																			)}
-																		</span>
-																	)}
-
-																</div>
-
+															<div className="mt-2 flex flex-wrap gap-2">
+																{item.customizationImages.map((image) => (
+																	<a
+																		key={image.key}
+																		href={image.url}
+																		target="_blank"
+																		rel="noopener noreferrer"
+																		className="block h-16 w-16 overflow-hidden rounded-lg border border-[#E8DED7] bg-[#F7F3F0] transition hover:border-[#85161B]/40 hover:shadow-sm"
+																		title="View uploaded image"
+																	>
+																		<img
+																			src={image.url}
+																			alt="Uploaded customization"
+																			className="h-full w-full object-cover"
+																			onError={(event) => {
+																				event.currentTarget.style.display =
+																					"none";
+																			}}
+																		/>
+																	</a>
+																))}
 															</div>
+														</div>
+													)}
 
-															{/* DELETE */}
+													{/* TEXT CUSTOMIZATION */}
+
+													{customizationEntries.length > 0 && (
+														<div className="mt-4 rounded-lg bg-[#FBF9F7] px-3 py-2.5">
+															<p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#85161B]">
+																Customization
+															</p>
+
+															<div className="mt-1 space-y-0.5">
+																{customizationEntries.map(([key, value]) => (
+																	<p
+																		key={key}
+																		className="text-xs leading-5 text-[#2E2E2E]/60"
+																	>
+																		<span className="font-medium text-[#2E2E2E]">
+																			{formatCustomizationKey(key)}:
+																		</span>{" "}
+																		{cleanCustomizationValue(value)}
+																	</p>
+																))}
+															</div>
+														</div>
+													)}
+
+													{/* QUANTITY */}
+
+													<div className="mt-4 flex items-center justify-between gap-3">
+														<div className="flex items-center rounded-lg border border-[#DED6D0]">
+															<button
+																type="button"
+																disabled={isUpdating}
+																onClick={() => handleDecrease(item)}
+																aria-label={`Decrease quantity of ${item.title}`}
+																className="flex h-9 w-9 items-center justify-center text-[#2E2E2E]/60 transition hover:bg-[#FBF9F7] disabled:cursor-not-allowed disabled:opacity-30"
+															>
+																<Minus size={14} />
+															</button>
+
+															<div className="relative flex h-9 w-14 items-center justify-center border-x border-[#DED6D0]">
+																{isUpdating ? (
+																	<span className="h-3 w-3 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
+																) : (
+																	<input
+																		type="text"
+																		inputMode="numeric"
+																		value={
+																			quantityInputs[item.cartItemId] ??
+																			String(item.quantity)
+																		}
+																		onChange={(event) =>
+																			handleSetQuantity(
+																				item,
+																				event.target.value,
+																			)
+																		}
+																		onBlur={() => commitQuantity(item)}
+																		onKeyDown={(event) =>
+																			handleQuantityKeyDown(event, item)
+																		}
+																		aria-label={`Quantity for ${item.title}`}
+																		className="h-full w-full bg-transparent text-center text-sm font-medium text-[#2E2E2E] outline-none"
+																	/>
+																)}
+															</div>
 
 															<button
 																type="button"
-																disabled={
-																	isUpdating
-																}
-																onClick={() =>
-																	handleRemove(
-																		item,
-																	)
-																}
-																aria-label={`Remove ${item.title}`}
-																className="shrink-0 rounded-lg p-2 text-[#2E2E2E]/35 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+																disabled={isUpdating}
+																onClick={() => handleIncrease(item)}
+																aria-label={`Increase quantity of ${item.title}`}
+																className="flex h-9 w-9 items-center justify-center text-[#2E2E2E]/60 transition hover:bg-[#FBF9F7] disabled:cursor-not-allowed disabled:opacity-30"
 															>
-																<Trash2
-																	size={
-																		17
-																	}
-																/>
+																<Plus size={14} />
 															</button>
-
 														</div>
 
-														{/* CUSTOMIZATION IMAGES */}
-
-														{item.customizationImages.length >
-															0 && (
-															<div className="mt-4">
-
-																<p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#85161B]">
-																	Uploaded Images
-																</p>
-
-																<div className="mt-2 flex flex-wrap gap-2">
-
-																	{item.customizationImages.map(
-																		(
-																			image,
-																		) => (
-																			<a
-																				key={
-																					image.key
-																				}
-																				href={
-																					image.url
-																				}
-																				target="_blank"
-																				rel="noopener noreferrer"
-																				className="block h-16 w-16 overflow-hidden rounded-lg border border-[#E8DED7] bg-[#F7F3F0] transition hover:border-[#85161B]/40 hover:shadow-sm"
-																				title="View uploaded image"
-																			>
-																				<img
-																					src={
-																						image.url
-																					}
-																					alt="Uploaded customization"
-																					className="h-full w-full object-cover"
-																					onError={(
-																						event,
-																					) => {
-																						event.currentTarget.style.display =
-																							"none";
-																					}}
-																				/>
-																			</a>
-																		),
-																	)}
-
-																</div>
-
-															</div>
-														)}
-
-														{/* TEXT CUSTOMIZATION */}
-
-														{customizationEntries.length >
-															0 && (
-															<div className="mt-4 rounded-lg bg-[#FBF9F7] px-3 py-2.5">
-
-																<p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#85161B]">
-																	Customization
-																</p>
-
-																<div className="mt-1 space-y-0.5">
-
-																	{customizationEntries.map(
-																		([
-																			key,
-																			value,
-																		]) => (
-																			<p
-																				key={
-																					key
-																				}
-																				className="text-xs leading-5 text-[#2E2E2E]/60"
-																			>
-
-																				<span className="font-medium text-[#2E2E2E]">
-																					{formatCustomizationKey(
-																						key,
-																					)}
-																					:
-																				</span>{" "}
-
-																				{
-																					cleanCustomizationValue(
-																						value,
-																					)
-																				}
-
-																			</p>
-																		),
-																	)}
-
-																</div>
-
-															</div>
-														)}
-
-														{/* QUANTITY */}
-
-														<div className="mt-4 flex items-center justify-between gap-3">
-
-															<div className="flex items-center rounded-lg border border-[#DED6D0]">
-
-																<button
-																	type="button"
-																	disabled={
-																		isUpdating
-																	}
-																	onClick={() =>
-																		handleDecrease(
-																			item,
-																		)
-																	}
-																	aria-label={`Decrease quantity of ${item.title}`}
-																	className="flex h-9 w-9 items-center justify-center text-[#2E2E2E]/60 transition hover:bg-[#FBF9F7] disabled:cursor-not-allowed disabled:opacity-30"
-																>
-																	<Minus
-																		size={
-																			14
-																		}
-																	/>
-																</button>
-
-																<div className="relative flex h-9 w-14 items-center justify-center border-x border-[#DED6D0]">
-
-																	{isUpdating ? (
-																		<span className="h-3 w-3 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
-																	) : (
-																		<input
-																			type="text"
-																			inputMode="numeric"
-																			value={
-																				quantityInputs[
-																					item
-																						.cartItemId
-																				] ??
-																				String(
-																					item.quantity,
-																				)
-																			}
-																			onChange={(
-																				event,
-																			) =>
-																				handleSetQuantity(
-																					item,
-																					event
-																						.target
-																						.value,
-																				)
-																			}
-																			onBlur={() =>
-																				commitQuantity(
-																					item,
-																				)
-																			}
-																			onKeyDown={(
-																				event,
-																			) =>
-																				handleQuantityKeyDown(
-																					event,
-																					item,
-																				)
-																			}
-																			aria-label={`Quantity for ${item.title}`}
-																			className="h-full w-full bg-transparent text-center text-sm font-medium text-[#2E2E2E] outline-none"
-																		/>
-																	)}
-
-																</div>
-
-																<button
-																	type="button"
-																	disabled={
-																		isUpdating
-																	}
-																	onClick={() =>
-																		handleIncrease(
-																			item,
-																		)
-																	}
-																	aria-label={`Increase quantity of ${item.title}`}
-																	className="flex h-9 w-9 items-center justify-center text-[#2E2E2E]/60 transition hover:bg-[#FBF9F7] disabled:cursor-not-allowed disabled:opacity-30"
-																>
-																	<Plus
-																		size={
-																			14
-																		}
-																	/>
-																</button>
-
-															</div>
-
-															<p className="font-semibold text-[#85161B]">
-																₹
-																{itemTotal.toFixed(
-																	2,
-																)}
-															</p>
-
-														</div>
-
-														{/* DELIVERY */}
-
-														{item.delivery >
-															0 && (
-															<p className="mt-2 text-[11px] text-[#2E2E2E]/40">
-																Delivery: ₹
-																{item.delivery.toFixed(
-																	2,
-																)}
-															</p>
-														)}
-
+														<p className="font-semibold text-[#85161B]">
+															₹{itemTotal.toFixed(2)}
+														</p>
 													</div>
 
+													{/* DELIVERY */}
+
+													{item.delivery > 0 && (
+														<p className="mt-2 text-[11px] text-[#2E2E2E]/40">
+															Delivery: ₹{item.delivery.toFixed(2)}
+														</p>
+													)}
 												</div>
-
 											</div>
-										);
-									},
-								)}
-
+										</div>
+									);
+								})}
 							</div>
-
 						</div>
 
 						{/* TRUST FEATURES */}
 
 						<div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-
 							<div className="flex items-center gap-3 rounded-xl border border-[#E8DED7] bg-white p-4">
-
 								<div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F7D6BF]/40">
-
-									<Truck
-										size={
-											17
-										}
-										className="text-[#85161B]"
-									/>
-
+									<Truck size={17} className="text-[#85161B]" />
 								</div>
 
 								<div>
-
 									<p className="text-xs font-semibold text-[#2E2E2E]">
 										Reliable Delivery
 									</p>
@@ -2114,26 +1922,15 @@ function CartView() {
 									<p className="mt-0.5 text-[11px] text-[#2E2E2E]/50">
 										Delivered safely to your doorstep
 									</p>
-
 								</div>
-
 							</div>
 
 							<div className="flex items-center gap-3 rounded-xl border border-[#E8DED7] bg-white p-4">
-
 								<div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F7D6BF]/40">
-
-									<ShieldCheck
-										size={
-											17
-										}
-										className="text-[#85161B]"
-									/>
-
+									<ShieldCheck size={17} className="text-[#85161B]" />
 								</div>
 
 								<div>
-
 									<p className="text-xs font-semibold text-[#2E2E2E]">
 										Secure Checkout
 									</p>
@@ -2141,65 +1938,37 @@ function CartView() {
 									<p className="mt-0.5 text-[11px] text-[#2E2E2E]/50">
 										Your information is protected
 									</p>
-
 								</div>
-
 							</div>
-
 						</div>
-
 					</div>
 
 					{/* ORDER SUMMARY */}
 
 					<aside className="lg:sticky lg:top-24 lg:self-start">
-
 						<div className="rounded-2xl border border-[#E8DED7] bg-white p-5 shadow-[0_10px_35px_rgba(80,40,20,0.05)] sm:p-6">
-
 							<h2 className="text-lg font-semibold text-[#2E2E2E]">
 								Order Summary
 							</h2>
 
 							<div className="mt-6 space-y-4 text-sm">
-
 								<div className="flex justify-between text-[#2E2E2E]/60">
+									<span>Subtotal</span>
 
-									<span>
-										Subtotal
-									</span>
-
-									<span>
-										₹
-										{subtotal.toFixed(
-											2,
-										)}
-									</span>
-
+									<span>₹{subtotal.toFixed(2)}</span>
 								</div>
 
 								<div className="flex justify-between text-[#2E2E2E]/60">
+									<span>Delivery</span>
 
 									<span>
-										Delivery
+										{deliveryFee > 0 ? `₹${deliveryFee.toFixed(2)}` : "Free"}
 									</span>
-
-									<span>
-										{deliveryFee >
-										0
-											? `₹${deliveryFee.toFixed(
-													2,
-												)}`
-											: "Free"}
-									</span>
-
 								</div>
 
 								<div className="border-t border-[#E8DED7] pt-4">
-
 									<div className="flex items-end justify-between">
-
 										<div>
-
 											<p className="font-semibold text-[#2E2E2E]">
 												Grand Total
 											</p>
@@ -2207,35 +1976,23 @@ function CartView() {
 											<p className="mt-1 text-[11px] text-[#2E2E2E]/40">
 												Including delivery
 											</p>
-
 										</div>
 
 										<p className="text-2xl font-bold text-[#85161B]">
-											₹
-											{grandTotal.toFixed(
-												2,
-											)}
+											₹{grandTotal.toFixed(2)}
 										</p>
-
 									</div>
-
 								</div>
-
 							</div>
 
 							<button
 								type="button"
-								onClick={
-									handleCheckout
-								}
+								onClick={handleCheckout}
 								className="group mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-[#85161B] py-3.5 text-sm font-semibold text-white transition-all hover:bg-[#721318] hover:shadow-lg active:scale-[0.99]"
 							>
 								Proceed to Checkout
-
 								<ArrowRight
-									size={
-										17
-									}
+									size={17}
 									className="transition-transform group-hover:translate-x-1"
 								/>
 							</button>
@@ -2248,17 +2005,13 @@ function CartView() {
 							</Link>
 
 							<p className="mt-5 text-center text-[11px] leading-5 text-[#2E2E2E]/40">
-								By proceeding to checkout, you agree to our terms and conditions.
+								By proceeding to checkout, you agree to our terms and
+								conditions.
 							</p>
-
 						</div>
-
 					</aside>
-
 				</div>
-
 			</section>
-
 		</main>
 	);
 }

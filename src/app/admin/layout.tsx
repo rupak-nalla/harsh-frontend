@@ -1,18 +1,26 @@
 import React from "react";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: "Admin — SiteName",
+import AdminNavBar from "@/components/AdminNavBar";
+
+export const metadata: Metadata = {
+	title: "Admin — Printing House Ujjain",
 };
 
-export default function AdminLayout({ children }: LayoutProps<"/admin">) {
-  return (
-    <div className="py-8">
-      <div className="max-w-6xl mx-auto px-6">
-        <aside className="mb-6">
-          <h2 className="text-xl font-bold">Admin</h2>
-        </aside>
-        <main>{children}</main>
-      </div>
-    </div>
-  );
+export default function AdminLayout({
+	children,
+}: {
+	children: React.ReactNode;
+}) {
+	return (
+		<div className="min-h-screen bg-[#FBF9F7]">
+			{/* Fixed Admin Sidebar */}
+			<AdminNavBar />
+
+			{/* Admin Content */}
+			<main className="min-h-screen ml-0 lg:ml-[286px]">
+				{children}
+			</main>
+		</div>
+	);
 }

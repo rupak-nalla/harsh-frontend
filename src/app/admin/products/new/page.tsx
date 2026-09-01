@@ -86,7 +86,7 @@ export default function AdminAddProductPage() {
 	/* =====================================================
 	   SUBMIT
 	===================================================== */
-
+    
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setError("");

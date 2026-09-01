@@ -3,7 +3,9 @@ import ShopPageContent from "./ShopPageContent";
 
 function ShopLoading() {
 	return (
-		<main className="min-h-screen bg-[#FBF9F7]">
+		<main
+			className="min-h-screen bg-[#FBF9F7] pt-[112px] sm:pt-[120px]"
+		>
 			<section className="border-b border-[#E8DED7] bg-white">
 				<div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8 lg:py-14">
 					<div className="max-w-2xl">

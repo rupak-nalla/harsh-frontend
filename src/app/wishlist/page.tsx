@@ -1904,7 +1904,8 @@ function EmptyWishlist() {
 				opacity: 1,
 				y: 0,
 			}}
-			className="flex min-h-[420px] flex-col items-center justify-center rounded-3xl border border-dashed border-[#DCCBC0] bg-white px-6 text-center"
+			className="pt-[112px]
+					sm:pt-[120px] flex min-h-[420px] flex-col items-center justify-center rounded-3xl border border-dashed border-[#DCCBC0] bg-white px-6 text-center"
 		>
 			<div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#F7D6BF]/40 text-[#85161B]">
 				<HeartOff size={32} strokeWidth={1.5} />

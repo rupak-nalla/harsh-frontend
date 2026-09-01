@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
 	ShoppingBag,
 	Users,
@@ -14,6 +15,8 @@ import {
 	MoreHorizontal,
 	AlertTriangle,
 	AlertCircle,
+	Store,
+	LogOut,
 } from "lucide-react";
 
 /* ============================================================================
@@ -25,12 +28,6 @@ function toNumber(value: unknown, fallback = 0): number {
 	return Number.isFinite(number) ? number : fallback;
 }
 
-/*
- * Unwraps whatever list wrapper shape the backend uses for a given
- * endpoint. Different admin endpoints have been observed (or are
- * expected) to nest their array under different keys — this checks
- * the common candidates before giving up.
- */
 function unwrapList<T>(data: unknown, keys: string[]): T[] {
 	if (Array.isArray(data)) {
 		return data as T[];
@@ -50,7 +47,7 @@ function unwrapList<T>(data: unknown, keys: string[]): T[] {
 }
 
 /* ============================================================================
-   USERS (CUSTOMERS COUNT)
+   USERS
 ============================================================================ */
 
 type RawUser = {
@@ -61,14 +58,7 @@ type RawUser = {
 };
 
 /* ============================================================================
-   PRODUCTS (PRODUCT COUNT + LOW STOCK)
-
-   NOTE:
-   The admin product listing hasn't confirmed an explicit numeric
-   stock field (customer-facing responses only had "in_stock" as
-   available/out-of-stock text, not a count). This checks a few
-   likely field names — if none are present for a product, it's
-   left out of the low-stock list rather than guessing a number.
+   PRODUCTS
 ============================================================================ */
 
 type RawAdminProduct = {
@@ -89,10 +79,18 @@ type LowStockProduct = {
 const LOW_STOCK_THRESHOLD = 10;
 
 function getStockCount(raw: RawAdminProduct): number | null {
-	const candidates = [raw.stock, raw.quantity, raw.available_quantity];
+	const candidates = [
+		raw.stock,
+		raw.quantity,
+		raw.available_quantity,
+	];
 
 	for (const candidate of candidates) {
-		if (candidate !== undefined && candidate !== null && candidate !== "") {
+		if (
+			candidate !== undefined &&
+			candidate !== null &&
+			candidate !== ""
+		) {
 			const number = toNumber(candidate, NaN);
 
 			if (Number.isFinite(number)) {
@@ -105,13 +103,7 @@ function getStockCount(raw: RawAdminProduct): number | null {
 }
 
 /* ============================================================================
-   ORDERS (REVENUE, ORDER COUNT, RECENT ORDERS)
-
-   NOTE:
-   Shape inferred from the customer-facing /api/orders response —
-   "cart" and "address" arrive as JSON-encoded strings. Admin
-   listings may additionally include a customer name field; a few
-   likely names are checked, falling back to a generic label.
+   ORDERS
 ============================================================================ */
 
 type AdminOrderStatus =
@@ -149,13 +141,30 @@ const STATUS_STYLES: Record<AdminOrderStatus, string> = {
 	Cancelled: "bg-red-50 text-red-700",
 };
 
-function normalizeOrderStatus(rawStatus?: string): AdminOrderStatus {
-	const key = (rawStatus ?? "").toLowerCase().replace(/[\s_-]+/g, "");
+function normalizeOrderStatus(
+	rawStatus?: string,
+): AdminOrderStatus {
+	const key = (rawStatus ?? "")
+		.toLowerCase()
+		.replace(/[\s_-]+/g, "");
 
 	if (key.includes("cancel")) return "Cancelled";
+
 	if (key.includes("delivered")) return "Delivered";
-	if (key.includes("shipped") || key.includes("dispatch")) return "Shipped";
-	if (key.includes("process") || key.includes("accepted")) return "Processing";
+
+	if (
+		key.includes("shipped") ||
+		key.includes("dispatch")
+	) {
+		return "Shipped";
+	}
+
+	if (
+		key.includes("process") ||
+		key.includes("accepted")
+	) {
+		return "Processing";
+	}
 
 	return "Pending";
 }
@@ -165,23 +174,40 @@ function getFirstProductName(cartJson?: string): {
 	extraCount: number;
 } {
 	if (!cartJson) {
-		return { name: "—", extraCount: 0 };
+		return {
+			name: "—",
+			extraCount: 0,
+		};
 	}
 
 	try {
-		const items: { name?: string }[] = JSON.parse(cartJson);
+		const items: { name?: string }[] =
+			JSON.parse(cartJson);
 
-		if (Array.isArray(items) && items.length > 0) {
+		if (
+			Array.isArray(items) &&
+			items.length > 0
+		) {
 			return {
-				name: items[0]?.name ?? "Untitled product",
-				extraCount: items.length - 1,
+				name:
+					items[0]?.name ??
+					"Untitled product",
+				extraCount:
+					items.length - 1,
 			};
 		}
 	} catch (error) {
-		console.error("Failed to parse order cart JSON:", error, cartJson);
+		console.error(
+			"Failed to parse order cart JSON:",
+			error,
+			cartJson,
+		);
 	}
 
-	return { name: "—", extraCount: 0 };
+	return {
+		name: "—",
+		extraCount: 0,
+	};
 }
 
 /* ============================================================================
@@ -189,13 +215,81 @@ function getFirstProductName(cartJson?: string): {
 ============================================================================ */
 
 export default function AdminPage() {
+	const router = useRouter();
+
+
+	/* =====================================================
+	   LOGOUT
+	===================================================== */
+
+	const [loggingOut, setLoggingOut] =
+		useState(false);
+
+	const handleLogout = async () => {
+		if (loggingOut) return;
+
+		setLoggingOut(true);
+
+		try {
+			const response = await fetch(
+				"/api/admin/logout?command_type=admin",
+				{
+					method: "POST",
+					credentials: "include",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					cache: "no-store",
+				},
+			);
+
+			if (!response.ok) {
+				const data = await response
+					.json()
+					.catch(() => ({}));
+
+				throw new Error(
+					(data as { message?: string })
+						?.message ||
+						"Unable to logout.",
+				);
+			}
+
+			/*
+			 * Change this route if your admin login page
+			 * uses a different URL.
+			 */
+			
+			router.replace("/login");
+			// router.refresh();
+		} catch (error) {
+			console.error(
+				"Admin logout failed:",
+				error,
+			);
+
+			alert(
+				error instanceof Error
+					? error.message
+					: "Unable to logout. Please try again.",
+			);
+
+			setLoggingOut(false);
+		}
+	};
+
 	/* =====================================================
 	   USERS
 	===================================================== */
 
-	const [usersLoading, setUsersLoading] = useState(true);
-	const [usersError, setUsersError] = useState("");
-	const [customersCount, setCustomersCount] = useState(0);
+	const [usersLoading, setUsersLoading] =
+		useState(true);
+
+	const [usersError, setUsersError] =
+		useState("");
+
+	const [customersCount, setCustomersCount] =
+		useState(0);
 
 	useEffect(() => {
 		const fetchUsers = async () => {
@@ -203,30 +297,58 @@ export default function AdminPage() {
 			setUsersError("");
 
 			try {
-				const response = await fetch("/api/admin/users", {
-					method: "GET",
-					credentials: "include",
-					cache: "no-store",
-				});
+				const response = await fetch(
+					"/api/admin/users",
+					{
+						method: "GET",
+						credentials: "include",
+						cache: "no-store",
+					},
+				);
 
-				const data = await response.json().catch(() => ({}));
+				const data = await response
+					.json()
+					.catch(() => ({}));
 
-				console.log("ADMIN USERS RESPONSE:", data);
+				console.log(
+					"ADMIN USERS RESPONSE:",
+					data,
+				);
 
 				if (!response.ok) {
 					throw new Error(
-						(data as { message?: string })?.message ||
+						(
+							data as {
+								message?: string;
+							}
+						)?.message ||
 							"Unable to load users.",
 					);
 				}
 
-				const users = unwrapList<RawUser>(data, ["users", "result", "data"]);
+				const users =
+					unwrapList<RawUser>(
+						data,
+						[
+							"users",
+							"result",
+							"data",
+						],
+					);
 
-				setCustomersCount(users.length);
+				setCustomersCount(
+					users.length,
+				);
 			} catch (err) {
-				console.error("Fetch admin users failed:", err);
+				console.error(
+					"Fetch admin users failed:",
+					err,
+				);
+
 				setUsersError(
-					err instanceof Error ? err.message : "Unable to load users.",
+					err instanceof Error
+						? err.message
+						: "Unable to load users.",
 				);
 			} finally {
 				setUsersLoading(false);
@@ -240,10 +362,17 @@ export default function AdminPage() {
 	   PRODUCTS
 	===================================================== */
 
-	const [productsLoading, setProductsLoading] = useState(true);
-	const [productsError, setProductsError] = useState("");
-	const [productsCount, setProductsCount] = useState(0);
-	const [lowStock, setLowStock] = useState<LowStockProduct[]>([]);
+	const [productsLoading, setProductsLoading] =
+		useState(true);
+
+	const [productsError, setProductsError] =
+		useState("");
+
+	const [productsCount, setProductsCount] =
+		useState(0);
+
+	const [lowStock, setLowStock] =
+		useState<LowStockProduct[]>([]);
 
 	useEffect(() => {
 		const fetchProducts = async () => {
@@ -251,57 +380,106 @@ export default function AdminPage() {
 			setProductsError("");
 
 			try {
-				const response = await fetch("/api/admin/products", {
-					method: "GET",
-					credentials: "include",
-					cache: "no-store",
-				});
+				const response = await fetch(
+					"/api/admin/products",
+					{
+						method: "GET",
+						credentials: "include",
+						cache: "no-store",
+					},
+				);
 
-				const data = await response.json().catch(() => ({}));
+				const data = await response
+					.json()
+					.catch(() => ({}));
 
-				console.log("ADMIN PRODUCTS RESPONSE:", data);
+				console.log(
+					"ADMIN PRODUCTS RESPONSE:",
+					data,
+				);
 
 				if (!response.ok) {
 					throw new Error(
-						(data as { message?: string })?.message ||
+						(
+							data as {
+								message?: string;
+							}
+						)?.message ||
 							"Unable to load products.",
 					);
 				}
 
-				const rawProducts = unwrapList<RawAdminProduct>(data, [
-					"products",
-					"result",
-					"data",
-				]);
+				const rawProducts =
+					unwrapList<RawAdminProduct>(
+						data,
+						[
+							"products",
+							"result",
+							"data",
+						],
+					);
 
-				setProductsCount(rawProducts.length);
+				setProductsCount(
+					rawProducts.length,
+				);
 
 				const low = rawProducts
-					.map((raw): LowStockProduct | null => {
-						const stock = getStockCount(raw);
+					.map(
+						(
+							raw,
+						): LowStockProduct | null => {
+							const stock =
+								getStockCount(
+									raw,
+								);
 
-						if (stock === null) {
-							return null;
-						}
+							if (
+								stock ===
+								null
+							) {
+								return null;
+							}
 
-						return {
-							id: String(raw.id ?? raw.name ?? ""),
-							name: raw.name ?? "Untitled product",
-							stock,
-						};
-					})
-					.filter(
-						(item): item is LowStockProduct =>
-							item !== null && item.stock <= LOW_STOCK_THRESHOLD,
+							return {
+								id: String(
+									raw.id ??
+										raw.name ??
+										"",
+								),
+								name:
+									raw.name ??
+									"Untitled product",
+								stock,
+							};
+						},
 					)
-					.sort((a, b) => a.stock - b.stock)
+					.filter(
+						(
+							item,
+						): item is LowStockProduct =>
+							item !==
+								null &&
+							item.stock <=
+								LOW_STOCK_THRESHOLD,
+					)
+					.sort(
+						(a, b) =>
+							a.stock -
+							b.stock,
+					)
 					.slice(0, 5);
 
 				setLowStock(low);
 			} catch (err) {
-				console.error("Fetch admin products failed:", err);
+				console.error(
+					"Fetch admin products failed:",
+					err,
+				);
+
 				setProductsError(
-					err instanceof Error ? err.message : "Unable to load products.",
+					err instanceof Error
+						? err.message
+						: "Unable to load products.",
 				);
 			} finally {
 				setProductsLoading(false);
@@ -315,11 +493,20 @@ export default function AdminPage() {
 	   ORDERS
 	===================================================== */
 
-	const [ordersLoading, setOrdersLoading] = useState(true);
-	const [ordersError, setOrdersError] = useState("");
-	const [totalOrders, setTotalOrders] = useState(0);
-	const [totalRevenue, setTotalRevenue] = useState(0);
-	const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+	const [ordersLoading, setOrdersLoading] =
+		useState(true);
+
+	const [ordersError, setOrdersError] =
+		useState("");
+
+	const [totalOrders, setTotalOrders] =
+		useState(0);
+
+	const [totalRevenue, setTotalRevenue] =
+		useState(0);
+
+	const [recentOrders, setRecentOrders] =
+		useState<RecentOrder[]>([]);
 
 	useEffect(() => {
 		const fetchOrders = async () => {
@@ -327,63 +514,151 @@ export default function AdminPage() {
 			setOrdersError("");
 
 			try {
-				const response = await fetch("/api/admin/orders", {
-					method: "GET",
-					credentials: "include",
-					cache: "no-store",
-				});
+				const response = await fetch(
+					"/api/admin/orders",
+					{
+						method: "GET",
+						credentials: "include",
+						cache: "no-store",
+					},
+				);
 
-				const data = await response.json().catch(() => ({}));
+				const data = await response
+					.json()
+					.catch(() => ({}));
 
-				console.log("ADMIN ORDERS RESPONSE:", data);
+				console.log(
+					"ADMIN ORDERS RESPONSE:",
+					data,
+				);
 
 				if (!response.ok) {
 					throw new Error(
-						(data as { message?: string })?.message ||
+						(
+							data as {
+								message?: string;
+							}
+						)?.message ||
 							"Unable to load orders.",
 					);
 				}
 
-				const rawOrders = unwrapList<RawAdminOrder>(data, [
-					"orders",
-					"wishlist",
-					"result",
-					"data",
-				]);
+				const rawOrders =
+					unwrapList<RawAdminOrder>(
+						data,
+						[
+							"orders",
+							"wishlist",
+							"result",
+							"data",
+						],
+					);
 
-				setTotalOrders(rawOrders.length);
+				setTotalOrders(
+					rawOrders.length,
+				);
 
 				setTotalRevenue(
 					rawOrders.reduce(
-						(sum, order) => sum + toNumber(order.grand_total, 0),
+						(sum, order) =>
+							sum +
+							toNumber(
+								order.grand_total,
+								0,
+							),
 						0,
 					),
 				);
 
-				const sorted = [...rawOrders].sort((a, b) => {
-					const dateA = new Date(a.created_at ?? "").getTime();
-					const dateB = new Date(b.created_at ?? "").getTime();
-					return (Number.isFinite(dateB) ? dateB : 0) - (Number.isFinite(dateA) ? dateA : 0);
+				const sorted = [
+					...rawOrders,
+				].sort((a, b) => {
+					const dateA =
+						new Date(
+							a.created_at ??
+								"",
+						).getTime();
+
+					const dateB =
+						new Date(
+							b.created_at ??
+								"",
+						).getTime();
+
+					return (
+						(Number.isFinite(
+							dateB,
+						)
+							? dateB
+							: 0) -
+						(Number.isFinite(
+							dateA,
+						)
+							? dateA
+							: 0)
+					);
 				});
 
-				const recent = sorted.slice(0, 5).map((raw): RecentOrder => {
-					const { name, extraCount } = getFirstProductName(raw.cart);
+				const recent = sorted
+					.slice(0, 5)
+					.map(
+						(
+							raw,
+						): RecentOrder => {
+							const {
+								name,
+								extraCount,
+							} =
+								getFirstProductName(
+									raw.cart,
+								);
 
-					return {
-						id: String(raw.order_id ?? raw.id ?? "—"),
-						customer:
-							raw.customer_name ?? raw.name ?? raw.user_name ?? "Customer",
-						product: extraCount > 0 ? `${name} +${extraCount} more` : name,
-						amount: toNumber(raw.grand_total, 0),
-						status: normalizeOrderStatus(raw.order_status),
-					};
-				});
+							return {
+								id: String(
+									raw.order_id ??
+										raw.id ??
+										"—",
+								),
 
-				setRecentOrders(recent);
+								customer:
+									raw.customer_name ??
+									raw.name ??
+									raw.user_name ??
+									"Customer",
+
+								product:
+									extraCount >
+									0
+										? `${name} +${extraCount} more`
+										: name,
+
+								amount:
+									toNumber(
+										raw.grand_total,
+										0,
+									),
+
+								status:
+									normalizeOrderStatus(
+										raw.order_status,
+									),
+							};
+						},
+					);
+
+				setRecentOrders(
+					recent,
+				);
 			} catch (err) {
-				console.error("Fetch admin orders failed:", err);
+				console.error(
+					"Fetch admin orders failed:",
+					err,
+				);
+
 				setOrdersError(
-					err instanceof Error ? err.message : "Unable to load orders.",
+					err instanceof Error
+						? err.message
+						: "Unable to load orders.",
 				);
 			} finally {
 				setOrdersLoading(false);
@@ -394,37 +669,50 @@ export default function AdminPage() {
 	}, []);
 
 	/* =====================================================
-	   STATS (derived from the three fetches above)
+	   STATS
 	===================================================== */
 
 	const stats = useMemo(
 		() => [
 			{
 				title: "Total Revenue",
-				value: `₹${totalRevenue.toLocaleString("en-IN")}`,
+				value: `₹${totalRevenue.toLocaleString(
+					"en-IN",
+				)}`,
 				icon: IndianRupee,
-				loading: ordersLoading,
+				loading:
+					ordersLoading,
 				error: ordersError,
 			},
 			{
 				title: "Total Orders",
-				value: String(totalOrders),
+				value: String(
+					totalOrders,
+				),
 				icon: ShoppingBag,
-				loading: ordersLoading,
+				loading:
+					ordersLoading,
 				error: ordersError,
 			},
 			{
 				title: "Customers",
-				value: customersCount.toLocaleString("en-IN"),
+				value:
+					customersCount.toLocaleString(
+						"en-IN",
+					),
 				icon: Users,
-				loading: usersLoading,
+				loading:
+					usersLoading,
 				error: usersError,
 			},
 			{
 				title: "Products",
-				value: String(productsCount),
+				value: String(
+					productsCount,
+				),
 				icon: Package,
-				loading: productsLoading,
+				loading:
+					productsLoading,
 				error: productsError,
 			},
 		],
@@ -442,25 +730,282 @@ export default function AdminPage() {
 		],
 	);
 
+	/* =====================================================
+	   RENDER
+	===================================================== */
+
 	return (
 		<main className="min-h-screen bg-[#FBF9F7]">
-			<div className="mx-auto max-w-7xl px-5 py-8 sm:px-6 lg:px-8 lg:py-10">
+			{/* =====================================================
+			    TOP NAVBAR
+			===================================================== */}
 
+			<header
+				className="
+					sticky
+					top-0
+					z-30
+					h-[76px]
+					border-b
+					border-[#E8DED7]
+					bg-[#FBF9F7]/95
+					backdrop-blur-md
+				"
+			>
+				<div
+					className="
+						flex
+						h-full
+						items-center
+						justify-between
+						px-5
+						sm:px-6
+						lg:px-8
+					"
+				>
+					{/* BRAND */}
+
+					<Link href="/admin" className="group flex items-center gap-3">
+						<div
+							className="
+								flex
+								h-10
+								w-10
+								items-center
+								justify-center
+								rounded-xl
+								text-white
+								shadow-sm
+								transition
+								group-hover:scale-[1.02]
+							"
+						>
+							<img
+								src="https://printinghouseujjain.in/assets/logo.png"
+								alt="Printing House"
+								className="
+											h-10
+											w-10
+											shrink-0
+											object-contain
+										"
+							/>
+						</div>
+
+						<div className="hidden sm:block">
+							<p
+								className="
+									text-[10px]
+									font-bold
+									uppercase
+									tracking-[0.22em]
+									text-[#85161B]
+								"
+							>
+								Printing House
+							</p>
+
+							<p
+								className="
+									mt-0.5
+									text-sm
+									font-semibold
+									text-[#2E2E2E]
+								"
+							>
+								Admin Dashboard
+							</p>
+						</div>
+					</Link>
+
+					{/* RIGHT NAV */}
+
+					<div className="flex items-center gap-2 sm:gap-3">
+						{/* STOREFRONT */}
+
+						<Link
+							href="/"
+							className="
+								hidden
+								items-center
+								gap-2
+								rounded-xl
+								border
+								border-[#E8DED7]
+								bg-white
+								px-4
+								py-2.5
+								text-sm
+								font-medium
+								text-[#2E2E2E]
+								transition
+								hover:border-[#85161B]/30
+								hover:text-[#85161B]
+								sm:flex
+							"
+						>
+							<Store size={16} strokeWidth={1.8} />
+
+							<span>Storefront</span>
+						</Link>
+
+						{/* ADMIN PROFILE */}
+
+						<div
+							className="
+								flex
+								items-center
+								gap-2.5
+								rounded-xl
+								border
+								border-[#E8DED7]
+								bg-white
+								px-2.5
+								py-2
+							"
+						>
+							<div
+								className="
+									flex
+									h-8
+									w-8
+									items-center
+									justify-center
+									rounded-full
+									bg-[#85161B]
+									text-xs
+									font-semibold
+									text-white
+								"
+							>
+								A
+							</div>
+
+							<div className="hidden text-left md:block">
+								<p className="text-xs font-semibold text-[#2E2E2E]">Admin</p>
+
+								<p className="text-[10px] text-[#2E2E2E]/45">Administrator</p>
+							</div>
+						</div>
+
+						{/* LOGOUT */}
+
+						<button
+							type="button"
+							onClick={handleLogout}
+							disabled={loggingOut}
+							className="
+								inline-flex
+								items-center
+								gap-2
+								rounded-xl
+								border
+								border-[#85161B]/20
+								bg-white
+								px-3.5
+								py-2.5
+								text-sm
+								font-medium
+								text-[#85161B]
+								transition
+								hover:border-[#85161B]
+								hover:bg-[#85161B]
+								hover:text-white
+								disabled:cursor-not-allowed
+								disabled:opacity-60
+								sm:px-4
+							"
+						>
+							{loggingOut ? (
+								<span
+									className="
+										h-4
+										w-4
+										animate-spin
+										rounded-full
+										border-2
+										border-[#85161B]/25
+										border-t-[#85161B]
+										group-hover:border-white/30
+										group-hover:border-t-white
+									"
+								/>
+							) : (
+								<LogOut size={16} strokeWidth={1.9} />
+							)}
+
+							<span className="hidden sm:inline">
+								{loggingOut ? "Logging out..." : "Logout"}
+							</span>
+						</button>
+					</div>
+				</div>
+			</header>
+
+			{/* =====================================================
+			    DASHBOARD CONTENT
+			===================================================== */}
+
+			<div
+				className="
+					mx-auto
+					max-w-7xl
+					px-5
+					py-8
+					sm:px-6
+					lg:px-8
+					lg:py-10
+				"
+			>
 				{/* =====================================================
 				    HEADER
 				===================================================== */}
 
-				<div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+				<div
+					className="
+						mb-8
+						flex
+						flex-col
+						gap-5
+						sm:flex-row
+						sm:items-end
+						sm:justify-between
+					"
+				>
 					<div>
-						<p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#85161B]">
-							Printing House Admin
+						<p
+							className="
+								mb-2
+								text-xs
+								font-semibold
+								uppercase
+								tracking-[0.2em]
+								text-[#85161B]
+							"
+						>
+							Store Overview
 						</p>
 
-						<h1 className="text-3xl font-bold tracking-tight text-[#2E2E2E] sm:text-4xl">
+						<h1
+							className="
+								text-3xl
+								font-bold
+								tracking-tight
+								text-[#2E2E2E]
+								sm:text-4xl
+							"
+						>
 							Good morning, Admin.
 						</h1>
 
-						<p className="mt-2 text-sm text-[#2E2E2E]/55 sm:text-base">
+						<p
+							className="
+								mt-2
+								text-sm
+								text-[#2E2E2E]/55
+								sm:text-base
+							"
+						>
 							Here's what's happening with your store today.
 						</p>
 					</div>
@@ -494,7 +1039,15 @@ export default function AdminPage() {
 				    STATS
 				===================================================== */}
 
-				<div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+				<div
+					className="
+						grid
+						grid-cols-1
+						gap-4
+						sm:grid-cols-2
+						xl:grid-cols-4
+					"
+				>
 					{stats.map((stat) => {
 						const Icon = stat.icon;
 
@@ -514,22 +1067,49 @@ export default function AdminPage() {
 									hover:shadow-[0_8px_25px_rgba(80,40,20,0.07)]
 								"
 							>
-								<div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#F7D6BF]/45 text-[#85161B]">
+								<div
+									className="
+										flex
+										h-11
+										w-11
+										items-center
+										justify-center
+										rounded-xl
+										bg-[#F7D6BF]/45
+										text-[#85161B]
+									"
+								>
 									<Icon size={20} />
 								</div>
 
-								<p className="mt-5 text-sm text-[#2E2E2E]/50">
-									{stat.title}
-								</p>
+								<p className="mt-5 text-sm text-[#2E2E2E]/50">{stat.title}</p>
 
 								{stat.loading ? (
-									<span className="mt-2 inline-block h-7 w-20 animate-pulse rounded bg-[#F0EAE5]" />
+									<span
+										className="
+											mt-2
+											inline-block
+											h-7
+											w-20
+											animate-pulse
+											rounded
+											bg-[#F0EAE5]
+										"
+									/>
 								) : stat.error ? (
 									<p className="mt-1 text-xs font-medium text-red-500">
 										Unable to load
 									</p>
 								) : (
-									<p className="mt-1 text-2xl font-bold tracking-tight text-[#2E2E2E]">
+									<p
+										className="
+											mt-1
+											text-2xl
+											font-bold
+											tracking-tight
+											text-[#2E2E2E]
+										"
+									>
 										{stat.value}
 									</p>
 								)}
@@ -550,9 +1130,35 @@ export default function AdminPage() {
 					<div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
 						<Link
 							href="/admin/products/new"
-							className="group flex items-center gap-3 rounded-2xl border border-[#E8DED7] bg-white p-4 text-left transition-all hover:border-[#85161B]/30 hover:shadow-md"
+							className="
+								group
+								flex
+								items-center
+								gap-3
+								rounded-2xl
+								border
+								border-[#E8DED7]
+								bg-white
+								p-4
+								text-left
+								transition-all
+								hover:border-[#85161B]/30
+								hover:shadow-md
+							"
 						>
-							<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F7D6BF]/40 text-[#85161B]">
+							<div
+								className="
+									flex
+									h-10
+									w-10
+									shrink-0
+									items-center
+									justify-center
+									rounded-xl
+									bg-[#F7D6BF]/40
+									text-[#85161B]
+								"
+							>
 								<Plus size={18} />
 							</div>
 
@@ -560,6 +1166,7 @@ export default function AdminPage() {
 								<p className="text-sm font-semibold text-[#2E2E2E]">
 									Add Product
 								</p>
+
 								<p className="mt-0.5 hidden text-xs text-[#2E2E2E]/45 sm:block">
 									Create new listing
 								</p>
@@ -568,9 +1175,35 @@ export default function AdminPage() {
 
 						<Link
 							href="/admin/orders"
-							className="group flex items-center gap-3 rounded-2xl border border-[#E8DED7] bg-white p-4 text-left transition-all hover:border-[#85161B]/30 hover:shadow-md"
+							className="
+								group
+								flex
+								items-center
+								gap-3
+								rounded-2xl
+								border
+								border-[#E8DED7]
+								bg-white
+								p-4
+								text-left
+								transition-all
+								hover:border-[#85161B]/30
+								hover:shadow-md
+							"
 						>
-							<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F7D6BF]/40 text-[#85161B]">
+							<div
+								className="
+									flex
+									h-10
+									w-10
+									shrink-0
+									items-center
+									justify-center
+									rounded-xl
+									bg-[#F7D6BF]/40
+									text-[#85161B]
+								"
+							>
 								<ClipboardList size={18} />
 							</div>
 
@@ -578,6 +1211,7 @@ export default function AdminPage() {
 								<p className="text-sm font-semibold text-[#2E2E2E]">
 									View Orders
 								</p>
+
 								<p className="mt-0.5 hidden text-xs text-[#2E2E2E]/45 sm:block">
 									Manage orders
 								</p>
@@ -586,9 +1220,35 @@ export default function AdminPage() {
 
 						<Link
 							href="/admin/inventory"
-							className="group flex items-center gap-3 rounded-2xl border border-[#E8DED7] bg-white p-4 text-left transition-all hover:border-[#85161B]/30 hover:shadow-md"
+							className="
+								group
+								flex
+								items-center
+								gap-3
+								rounded-2xl
+								border
+								border-[#E8DED7]
+								bg-white
+								p-4
+								text-left
+								transition-all
+								hover:border-[#85161B]/30
+								hover:shadow-md
+							"
 						>
-							<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F7D6BF]/40 text-[#85161B]">
+							<div
+								className="
+									flex
+									h-10
+									w-10
+									shrink-0
+									items-center
+									justify-center
+									rounded-xl
+									bg-[#F7D6BF]/40
+									text-[#85161B]
+								"
+							>
 								<Boxes size={18} />
 							</div>
 
@@ -596,6 +1256,7 @@ export default function AdminPage() {
 								<p className="text-sm font-semibold text-[#2E2E2E]">
 									Inventory
 								</p>
+
 								<p className="mt-0.5 hidden text-xs text-[#2E2E2E]/45 sm:block">
 									Check stock
 								</p>
@@ -604,9 +1265,35 @@ export default function AdminPage() {
 
 						<Link
 							href="/admin/customers"
-							className="group flex items-center gap-3 rounded-2xl border border-[#E8DED7] bg-white p-4 text-left transition-all hover:border-[#85161B]/30 hover:shadow-md"
+							className="
+								group
+								flex
+								items-center
+								gap-3
+								rounded-2xl
+								border
+								border-[#E8DED7]
+								bg-white
+								p-4
+								text-left
+								transition-all
+								hover:border-[#85161B]/30
+								hover:shadow-md
+							"
 						>
-							<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F7D6BF]/40 text-[#85161B]">
+							<div
+								className="
+									flex
+									h-10
+									w-10
+									shrink-0
+									items-center
+									justify-center
+									rounded-xl
+									bg-[#F7D6BF]/40
+									text-[#85161B]
+								"
+							>
 								<UserPlus size={18} />
 							</div>
 
@@ -614,6 +1301,7 @@ export default function AdminPage() {
 								<p className="text-sm font-semibold text-[#2E2E2E]">
 									Customers
 								</p>
+
 								<p className="mt-0.5 hidden text-xs text-[#2E2E2E]/45 sm:block">
 									View customers
 								</p>
@@ -626,16 +1314,31 @@ export default function AdminPage() {
 				    ORDERS + INVENTORY
 				===================================================== */}
 
-				<div className="mt-8 grid grid-cols-1 gap-6 xl:grid-cols-[1fr_340px]">
-
-					{/* Recent Orders */}
+				<div
+					className="
+						mt-8
+						grid
+						grid-cols-1
+						gap-6
+						xl:grid-cols-[1fr_340px]
+					"
+				>
+					{/* RECENT ORDERS */}
 
 					<div className="overflow-hidden rounded-2xl border border-[#E8DED7] bg-white">
-						<div className="flex items-center justify-between border-b border-[#E8DED7] px-5 py-5">
+						<div
+							className="
+								flex
+								items-center
+								justify-between
+								border-b
+								border-[#E8DED7]
+								px-5
+								py-5
+							"
+						>
 							<div>
-								<h2 className="font-semibold text-[#2E2E2E]">
-									Recent Orders
-								</h2>
+								<h2 className="font-semibold text-[#2E2E2E]">Recent Orders</h2>
 
 								<p className="mt-1 text-xs text-[#2E2E2E]/45">
 									Latest customer orders
@@ -653,11 +1356,13 @@ export default function AdminPage() {
 						{ordersLoading ? (
 							<div className="flex items-center justify-center gap-3 px-5 py-14">
 								<span className="h-5 w-5 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
+
 								<p className="text-sm text-[#2E2E2E]/50">Loading orders...</p>
 							</div>
 						) : ordersError ? (
 							<div className="flex flex-col items-center gap-2 px-5 py-14 text-center">
 								<AlertCircle size={22} className="text-red-500" />
+
 								<p className="text-sm text-[#2E2E2E]/55">{ordersError}</p>
 							</div>
 						) : recentOrders.length === 0 ? (
@@ -666,7 +1371,7 @@ export default function AdminPage() {
 							</div>
 						) : (
 							<>
-								{/* Desktop table */}
+								{/* DESKTOP TABLE */}
 
 								<div className="hidden overflow-x-auto md:block">
 									<table className="w-full">
@@ -700,10 +1405,18 @@ export default function AdminPage() {
 											{recentOrders.map((order) => (
 												<tr
 													key={order.id}
-													className="border-b border-[#E8DED7]/70 last:border-0 hover:bg-[#FBF9F7]"
+													className="
+															border-b
+															border-[#E8DED7]/70
+															last:border-0
+															hover:bg-[#FBF9F7]
+														"
 												>
 													<td className="px-5 py-4 text-sm font-semibold text-[#85161B]">
-														<Link href={`/admin/orders/${order.id}`} className="hover:underline">
+														<Link
+															href={`/admin/orders/${order.id}`}
+															className="hover:underline"
+														>
 															#{order.id}
 														</Link>
 													</td>
@@ -743,7 +1456,7 @@ export default function AdminPage() {
 									</table>
 								</div>
 
-								{/* Mobile orders */}
+								{/* MOBILE ORDERS */}
 
 								<div className="divide-y divide-[#E8DED7] md:hidden">
 									{recentOrders.map((order) => (
@@ -784,21 +1497,28 @@ export default function AdminPage() {
 						)}
 					</div>
 
-					{/* =================================================
-					    LOW STOCK
-					================================================= */}
+					{/* LOW STOCK */}
 
 					<div className="rounded-2xl border border-[#E8DED7] bg-white">
 						<div className="border-b border-[#E8DED7] px-5 py-5">
 							<div className="flex items-center gap-2">
-								<div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+								<div
+									className="
+										flex
+										h-8
+										w-8
+										items-center
+										justify-center
+										rounded-lg
+										bg-amber-50
+										text-amber-600
+									"
+								>
 									<AlertTriangle size={16} />
 								</div>
 
 								<div>
-									<h2 className="font-semibold text-[#2E2E2E]">
-										Low Stock
-									</h2>
+									<h2 className="font-semibold text-[#2E2E2E]">Low Stock</h2>
 
 									<p className="text-xs text-[#2E2E2E]/45">
 										Products needing attention
@@ -810,11 +1530,13 @@ export default function AdminPage() {
 						{productsLoading ? (
 							<div className="flex items-center justify-center gap-3 px-5 py-10">
 								<span className="h-5 w-5 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
+
 								<p className="text-sm text-[#2E2E2E]/50">Loading...</p>
 							</div>
 						) : productsError ? (
 							<div className="flex flex-col items-center gap-2 px-5 py-10 text-center">
 								<AlertCircle size={20} className="text-red-500" />
+
 								<p className="text-sm text-[#2E2E2E]/55">{productsError}</p>
 							</div>
 						) : lowStock.length === 0 ? (
@@ -826,7 +1548,14 @@ export default function AdminPage() {
 								{lowStock.map((product) => (
 									<div
 										key={product.id}
-										className="flex items-center justify-between gap-4 px-5 py-4"
+										className="
+												flex
+												items-center
+												justify-between
+												gap-4
+												px-5
+												py-4
+											"
 									>
 										<div className="min-w-0">
 											<p className="truncate text-sm font-medium text-[#2E2E2E]">
@@ -849,7 +1578,21 @@ export default function AdminPage() {
 						<div className="p-5">
 							<Link
 								href="/admin/inventory"
-								className="block w-full rounded-xl border border-[#85161B]/20 py-2.5 text-center text-sm font-semibold text-[#85161B] transition hover:bg-[#85161B] hover:text-white"
+								className="
+									block
+									w-full
+									rounded-xl
+									border
+									border-[#85161B]/20
+									py-2.5
+									text-center
+									text-sm
+									font-semibold
+									text-[#85161B]
+									transition
+									hover:bg-[#85161B]
+									hover:text-white
+								"
 							>
 								Manage Inventory
 							</Link>
@@ -866,7 +1609,6 @@ export default function AdminPage() {
 						Printing House Admin Dashboard • Store overview
 					</p>
 				</div>
-
 			</div>
 		</main>
 	);

@@ -2,10 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-import AnnouncementStrip from "@/components/AnnouncementStrip";
-import SiteHeader from "@/components/SiteHeader";
-import SiteFooter from "@/components/SiteFooter";
-import SupportBubble from "@/components/SupportBubble";
+import StoreLayout from "@/components/StoreLayout";
 
 const geistSans = Geist({
 	variable: "--font-geist-sans",
@@ -60,16 +57,11 @@ export const metadata: Metadata = {
 
 	openGraph: {
 		type: "website",
-
 		url: "https://printinghouseujjain.vercel.app",
-
 		title: "Printing House Ujjain | You think...We Create...",
-
 		description:
 			"Discover personalized gifts, custom products and professional printing services from Printing House Ujjain.",
-
 		siteName: "Printing House Ujjain",
-
 		locale: "en_IN",
 
 		images: [
@@ -84,12 +76,9 @@ export const metadata: Metadata = {
 
 	twitter: {
 		card: "summary_large_image",
-
 		title: "Printing House Ujjain | You think...We Create...",
-
 		description:
 			"Personalized gifts, custom products and professional printing services from Printing House Ujjain.",
-
 		images: ["/og-image.jpg"],
 	},
 
@@ -109,45 +98,20 @@ export default function RootLayout({
 			className={`${geistSans.variable} ${geistMono.variable} antialiased`}
 		>
 			<body className="min-h-screen bg-[#FFF9F4]">
-				{/* =================================================
-				    FIXED HEADER
-				================================================= */}
+				{/*
+					IMPORTANT:
+					Do NOT put padding/margin here.
 
-				<SiteHeader />
+					StoreLayout handles the customer-site
+					header/announcement spacing.
 
-				{/* =================================================
-				    FIXED ANNOUNCEMENT STRIP
-				================================================= */}
+					/admin has its own AdminLayout and therefore
+					does not inherit store spacing.
+				*/}
 
-				<AnnouncementStrip />
+				{children}
 
-				{/* =================================================
-				    PAGE CONTENT
-
-				    Mobile:
-				    Navbar       = 64px
-				    Strip        = 40px
-				    Total        = 104px
-
-				    Desktop:
-				    Navbar       = 72px
-				    Strip        = 40px
-				    Total        = 112px
-				================================================= */}
-
-				<main className="pt-[104px] sm:pt-[112px]">{children}</main>
-
-				{/* =================================================
-				    SUPPORT
-				================================================= */}
-
-				<SupportBubble />
-
-				{/* =================================================
-				    FOOTER
-				================================================= */}
-
-				<SiteFooter />
+				<StoreLayout />
 			</body>
 		</html>
 	);
