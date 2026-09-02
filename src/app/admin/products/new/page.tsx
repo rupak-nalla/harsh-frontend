@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
 	Package,
@@ -46,7 +46,7 @@ type FormData = {
    PAGE
 ============================================================================ */
 
-export default function ProductsNewPage() {
+function ProductsNewPageContent() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const productId = searchParams.get("id");
@@ -938,5 +938,19 @@ export default function ProductsNewPage() {
 				</form>
 			</div>
 		</div>
+	);
+}
+
+export default function ProductsNewPage() {
+	return (
+		<Suspense
+			fallback={
+				<div className="flex min-h-screen items-center justify-center bg-[#FBF9F7]">
+					<p className="text-[#2E2E2E]/60">Loading...</p>
+				</div>
+			}
+		>
+			<ProductsNewPageContent />
+		</Suspense>
 	);
 }
