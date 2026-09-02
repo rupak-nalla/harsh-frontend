@@ -12,6 +12,8 @@ import {
 	Menu,
 	X,
 	Store,
+	Tag,
+	Zap,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -30,7 +32,16 @@ const NAV_ITEMS = [
 		href: "/admin/products",
 		icon: Package,
 	},
-	
+	{
+		label: "Categories",
+		href: "/admin/categories",
+		icon: Tag,
+	},
+	{
+		label: "Occasions",
+		href: "/admin/occasions",
+		icon: Zap,
+	},
 	{
 		label: "Customers",
 		href: "/admin/customers",

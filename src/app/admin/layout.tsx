@@ -18,9 +18,7 @@ export default function AdminLayout({
 			<AdminNavBar />
 
 			{/* Admin Content */}
-			<main className="min-h-screen ml-0 lg:ml-[286px]">
-				{children}
-			</main>
+			<main className="min-h-screen ml-0 lg:ml-[286px]">{children}</main>
 		</div>
 	);
 }

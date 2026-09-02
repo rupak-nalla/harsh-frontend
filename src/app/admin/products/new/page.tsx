@@ -1,463 +1,942 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, Upload, Plus, Trash2, CheckCircle2 } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+	Package,
+	ChevronLeft,
+	Upload,
+	Plus,
+	X as CloseIcon,
+	AlertCircle,
+} from "lucide-react";
 
 /* ============================================================================
    TYPES
 ============================================================================ */
 
-type CustomizeField = {
-	id: string;
-	label: string;
-	type: "text" | "photo";
-	maxLength: string;
-	required: boolean;
+type Category = {
+	id: number;
+	name: string;
+};
+
+type Occasion = {
+	id: number;
+	name: string;
+};
+
+type FormData = {
+	mode: "new" | "edit";
+	id?: string;
+	name: string;
+	description: string;
+	primary_photo?: File;
+	other_photos: File[];
+	market_price: string;
+	selling_price: string;
+	reseller_price: string;
+	category_ids: number[];
+	occasion_ids: number[];
+	customize_reqs: string[];
+	keywords: string;
+	delivery: string;
 };
 
 /* ============================================================================
    PAGE
 ============================================================================ */
 
-export default function AdminAddProductPage() {
+export default function ProductsNewPage() {
 	const router = useRouter();
+	const searchParams = useSearchParams();
+	const productId = searchParams.get("id");
 
-	const [name, setName] = useState("");
-	const [category, setCategory] = useState("");
-	const [description, setDescription] = useState("");
-	const [sellingPrice, setSellingPrice] = useState("");
-	const [marketPrice, setMarketPrice] = useState("");
-	const [stock, setStock] = useState("");
-	const [deliveryFee, setDeliveryFee] = useState("");
-	const [inStock, setInStock] = useState(true);
+	const [formData, setFormData] = useState<FormData>({
+		mode: productId ? "edit" : "new",
+		id: productId || undefined,
+		name: "",
+		description: "",
+		primary_photo: undefined,
+		other_photos: [],
+		market_price: "",
+		selling_price: "",
+		reseller_price: "",
+		category_ids: [],
+		occasion_ids: [],
+		customize_reqs: [],
+		keywords: "",
+		delivery: "",
+	});
 
-	const [images, setImages] = useState<File[]>([]);
+	const [categories, setCategories] = useState<Category[]>([]);
+	const [occasions, setOccasions] = useState<Occasion[]>([]);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
+	const [saving, setSaving] = useState(false);
+	const [customizeReqInput, setCustomizeReqInput] = useState("");
 
-	const [customFields, setCustomFields] = useState<CustomizeField[]>([]);
+	/* ========================================================================
+       LOAD DATA
+    ======================================================================== */
 
-	const [submitting, setSubmitting] = useState(false);
-	const [submitted, setSubmitted] = useState(false);
-	const [error, setError] = useState("");
+	useEffect(() => {
+		const loadData = async () => {
+			setLoading(true);
+			setError(null);
 
-	/* =====================================================
-	   IMAGES
-	===================================================== */
+			try {
+				const [catRes, occRes] = await Promise.all([
+					fetch("/api/admin/categories"),
+					fetch("/api/admin/occasions"),
+				]);
 
-	const handleImageChange = (fileList: FileList | null) => {
-		if (!fileList) return;
-		setImages((previous) => [...previous, ...Array.from(fileList)]);
-	};
+				if (!catRes.ok || !occRes.ok) {
+					throw new Error("Failed to load categories or occasions");
+				}
 
-	const removeImage = (index: number) => {
-		setImages((previous) => previous.filter((_, i) => i !== index));
-	};
+				const catData = await catRes.json();
+				const occData = await occRes.json();
 
-	/* =====================================================
-	   CUSTOMIZE FIELDS
-	===================================================== */
+				setCategories(
+					Array.isArray(catData)
+						? catData
+						: catData.categories || []
+				);
+				setOccasions(
+					Array.isArray(occData)
+						? occData
+						: occData.occasions || []
+				);
+			} catch (err) {
+				const message =
+					err instanceof Error
+						? err.message
+						: "Failed to load data";
+				setError(message);
+				console.error("Error loading data:", err);
+			} finally {
+				setLoading(false);
+			}
+		};
 
-	const addCustomField = () => {
-		setCustomFields((previous) => [
-			...previous,
-			{
-				id: `field-${Date.now()}`,
-				label: "",
-				type: "text",
-				maxLength: "50",
-				required: true,
-			},
-		]);
-	};
+		loadData();
+	}, []);
 
-	const updateCustomField = (id: string, patch: Partial<CustomizeField>) => {
-		setCustomFields((previous) =>
-			previous.map((field) =>
-				field.id === id ? { ...field, ...patch } : field,
-			),
-		);
-	};
+	/* ========================================================================
+       HANDLE FORM SUBMISSION
+    ======================================================================== */
 
-	const removeCustomField = (id: string) => {
-		setCustomFields((previous) => previous.filter((field) => field.id !== id));
-	};
-
-	/* =====================================================
-	   SUBMIT
-	===================================================== */
-    
-	const handleSubmit = async (e: React.FormEvent) => {
+	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
-		setError("");
 
-		if (!name.trim() || !sellingPrice.trim()) {
-			setError("Product name and selling price are required.");
+		if (!formData.name.trim()) {
+			setError("Product name is required");
 			return;
 		}
 
-		setSubmitting(true);
+		if (!formData.description.trim()) {
+			setError("Product description is required");
+			return;
+		}
+
+		if (!formData.primary_photo && formData.mode === "new") {
+			setError("Primary photo is required");
+			return;
+		}
+
+		setSaving(true);
+		setError(null);
 
 		try {
-			// Wire this up to your real create-product endpoint.
-			await new Promise((resolve) => setTimeout(resolve, 700));
+			const body = new FormData();
+			body.append("mode", formData.mode);
+			body.append("command_type", "admin");
 
-			setSubmitted(true);
+			if (formData.mode === "edit" && formData.id) {
+				body.append("id", formData.id);
+			}
 
-			setTimeout(() => {
-				router.push("/admin");
-			}, 1200);
+			body.append("name", formData.name);
+			body.append("description", formData.description);
+			body.append("market_price", formData.market_price);
+			body.append("selling_price", formData.selling_price);
+			body.append("reseller_price", formData.reseller_price);
+			body.append("keywords", formData.keywords);
+			body.append("delivery", formData.delivery);
+
+			if (formData.primary_photo) {
+				body.append("primary_photo", formData.primary_photo);
+			}
+
+			for (const photo of formData.other_photos) {
+				body.append("other_photos[]", photo);
+			}
+
+			for (const catId of formData.category_ids) {
+				body.append("category_ids[]", catId.toString());
+			}
+
+			for (const occId of formData.occasion_ids) {
+				body.append("occasion_ids[]", occId.toString());
+			}
+
+			for (const req of formData.customize_reqs) {
+				body.append("customize_reqs[]", req);
+			}
+
+			const response = await fetch("/api/admin/products", {
+				method: "POST",
+				body,
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				throw new Error(data.message || "Failed to save product");
+			}
+
+			router.push("/admin/products");
 		} catch (err) {
-			setError("Unable to save this product. Please try again.");
+			const message =
+				err instanceof Error
+					? err.message
+					: "Failed to save product";
+			setError(message);
+			console.error("Error saving product:", err);
 		} finally {
-			setSubmitting(false);
+			setSaving(false);
 		}
 	};
 
+	/* ========================================================================
+       RENDER
+    ======================================================================== */
+
+	if (loading) {
+		return (
+			<div className="flex items-center justify-center min-h-screen bg-[#FBF9F7]">
+				<div className="text-center">
+					<div className="animate-spin mb-4">
+						<Package
+							className="text-[#85161B]"
+							size={32}
+						/>
+					</div>
+					<p className="text-[#2E2E2E]/60">Loading...</p>
+				</div>
+			</div>
+		);
+	}
+
 	return (
-		<main className="min-h-screen bg-[#FBF9F7]">
-			<style>{`
-				@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap');
-				.font-display { font-family: 'Fraunces', Georgia, serif; }
-			`}</style>
+		<div className="min-h-screen bg-[#FBF9F7] p-4 lg:p-8">
+			<div className="mx-auto max-w-4xl">
+				{/* HEADER */}
 
-			<div className="mx-auto max-w-3xl px-5 py-10 sm:px-6 lg:px-8">
-				<Link
-					href="/admin"
-					className="inline-flex items-center gap-2 text-sm font-medium text-[#2E2E2E]/55 transition-colors hover:text-[#85161B]"
-				>
-					<ArrowLeft size={16} />
-					Back to dashboard
-				</Link>
+				<div className="mb-8 flex items-center gap-4">
+					<button
+						type="button"
+						onClick={() => router.back()}
+						className="
+							inline-flex
+							h-10
+							w-10
+							items-center
+							justify-center
+							rounded-lg
+							border
+							border-[#E8DED7]
+							text-[#2E2E2E]
+							transition-all
+							hover:bg-[#FBF9F7]
+						"
+					>
+						<ChevronLeft size={20} />
+					</button>
 
-				<div className="mt-6">
-					<p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#85161B]">
-						Products
-					</p>
-					<h1 className="font-display mt-1 text-3xl font-bold text-[#2E2E2E] sm:text-4xl">
-						Add Product
-					</h1>
-					<p className="mt-2 text-sm text-[#2E2E2E]/55">
-						Create a new listing for your store.
-					</p>
+					<div>
+						<p className="text-sm text-[#2E2E2E]/60">
+							{formData.mode === "edit"
+								? "Edit"
+								: "Create New"}
+						</p>
+
+						<h1 className="text-3xl font-bold text-[#2E2E2E]">
+							Product
+						</h1>
+					</div>
 				</div>
 
-				<form onSubmit={handleSubmit} className="mt-8 space-y-6">
+				{/* ERROR MESSAGE */}
+
+				{error && (
+					<div
+						className="
+							mb-6
+							flex
+							items-start
+							gap-3
+							rounded-lg
+							border
+							border-red-200
+							bg-red-50
+							px-4
+							py-3
+							text-sm
+							text-red-700
+						"
+					>
+						<AlertCircle
+							size={18}
+							className="mt-0.5 flex-shrink-0"
+						/>
+
+						<div>
+							<p className="font-medium">Error</p>
+							<p className="mt-1">{error}</p>
+						</div>
+					</div>
+				)}
+
+				{/* FORM */}
+
+				<form onSubmit={handleSubmit} className="space-y-6">
 					{/* BASIC INFO */}
 
-					<section className="rounded-2xl border border-[#E9DED7] bg-white p-6">
-						<h2 className="font-semibold text-[#2E2E2E]">Basic information</h2>
+					<div className="rounded-lg border border-[#E8DED7] bg-white p-6">
+						<h2 className="mb-4 text-lg font-bold text-[#2E2E2E]">
+							Basic Information
+						</h2>
 
-						<div className="mt-4 space-y-4">
-							<Field label="Product name" required>
-								<input
-									type="text"
-									value={name}
-									onChange={(e) => setName(e.target.value)}
-									placeholder="e.g. Personalized Engraved Full Kada"
-									className={inputClass}
-								/>
-							</Field>
+						<div className="space-y-4">
+							{/* NAME */}
 
-							<Field label="Category">
-								<input
-									type="text"
-									value={category}
-									onChange={(e) => setCategory(e.target.value)}
-									placeholder="e.g. Jewelry"
-									className={inputClass}
-								/>
-							</Field>
-
-							<Field label="Description">
-								<textarea
-									value={description}
-									onChange={(e) => setDescription(e.target.value)}
-									rows={4}
-									placeholder="Describe the product, materials, and sizing..."
-									className={`${inputClass} resize-none`}
-								/>
-							</Field>
-						</div>
-					</section>
-
-					{/* PRICING & STOCK */}
-
-					<section className="rounded-2xl border border-[#E9DED7] bg-white p-6">
-						<h2 className="font-semibold text-[#2E2E2E]">Pricing & stock</h2>
-
-						<div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-							<Field label="Selling price (₹)" required>
-								<input
-									type="number"
-									value={sellingPrice}
-									onChange={(e) => setSellingPrice(e.target.value)}
-									placeholder="249"
-									className={inputClass}
-								/>
-							</Field>
-
-							<Field label="Market price (₹)">
-								<input
-									type="number"
-									value={marketPrice}
-									onChange={(e) => setMarketPrice(e.target.value)}
-									placeholder="300"
-									className={inputClass}
-								/>
-							</Field>
-
-							<Field label="Stock quantity">
-								<input
-									type="number"
-									value={stock}
-									onChange={(e) => setStock(e.target.value)}
-									placeholder="50"
-									className={inputClass}
-								/>
-							</Field>
-
-							<Field label="Delivery fee (₹)">
-								<input
-									type="number"
-									value={deliveryFee}
-									onChange={(e) => setDeliveryFee(e.target.value)}
-									placeholder="60"
-									className={inputClass}
-								/>
-							</Field>
-						</div>
-
-						<label className="mt-4 flex cursor-pointer items-center gap-2.5">
-							<input
-								type="checkbox"
-								checked={inStock}
-								onChange={(e) => setInStock(e.target.checked)}
-								className="h-4 w-4 accent-[#85161B]"
-							/>
-							<span className="text-sm text-[#2E2E2E]">
-								This product is in stock
-							</span>
-						</label>
-					</section>
-
-					{/* IMAGES */}
-
-					<section className="rounded-2xl border border-[#E9DED7] bg-white p-6">
-						<h2 className="font-semibold text-[#2E2E2E]">Product images</h2>
-
-						<label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#DED6D0] bg-[#FBF9F7] px-4 py-8 text-center transition hover:border-[#85161B]/50 hover:bg-[#85161B]/[0.02]">
-							<Upload size={20} className="text-[#85161B]" />
-							<span className="mt-2 text-sm font-medium text-[#202020]">
-								Upload images
-							</span>
-							<span className="mt-1 text-[10px] text-black/40">
-								PNG, JPG, WEBP • First image becomes the primary photo
-							</span>
-							<input
-								type="file"
-								accept="image/*"
-								multiple
-								className="hidden"
-								onChange={(e) => handleImageChange(e.target.files)}
-							/>
-						</label>
-
-						{images.length > 0 && (
-							<div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4">
-								{images.map((file, index) => (
-									<div
-										key={`${file.name}-${index}`}
-										className="group relative aspect-square overflow-hidden rounded-xl border border-[#E8DED7] bg-[#F7F3F0]"
-									>
-										<img
-											src={URL.createObjectURL(file)}
-											alt={file.name}
-											className="h-full w-full object-cover"
-										/>
-										{index === 0 && (
-											<span className="absolute left-1.5 top-1.5 rounded-full bg-white/95 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#85161B]">
-												Primary
-											</span>
-										)}
-										<button
-											type="button"
-											onClick={() => removeImage(index)}
-											aria-label="Remove image"
-											className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-white/95 text-[#2E2E2E]/60 opacity-0 transition hover:text-red-600 group-hover:opacity-100"
-										>
-											<Trash2 size={12} />
-										</button>
-									</div>
-								))}
-							</div>
-						)}
-					</section>
-
-					{/* CUSTOMIZATION FIELDS */}
-
-					<section className="rounded-2xl border border-[#E9DED7] bg-white p-6">
-						<div className="flex items-center justify-between">
 							<div>
-								<h2 className="font-semibold text-[#2E2E2E]">Customization</h2>
-								<p className="mt-1 text-xs text-[#2E2E2E]/45">
-									Fields buyers fill in to personalize this product.
-								</p>
+								<label className="mb-2 block text-sm font-medium text-[#2E2E2E]">
+									Product Name *
+								</label>
+
+								<input
+									type="text"
+									value={formData.name}
+									onChange={(e) =>
+										setFormData({
+											...formData,
+											name: e.target.value,
+										})
+									}
+									placeholder="e.g., Premium Coffee Mug"
+									className="
+										w-full
+										rounded-lg
+										border
+										border-[#E8DED7]
+										px-3
+										py-2
+										text-sm
+										focus:border-[#85161B]
+										focus:outline-none
+										focus:ring-1
+										focus:ring-[#85161B]
+									"
+								/>
 							</div>
 
-							<button
-								type="button"
-								onClick={addCustomField}
-								className="inline-flex items-center gap-1.5 rounded-lg border border-[#DED6D0] px-3 py-2 text-xs font-semibold text-[#2E2E2E]/70 transition hover:border-[#85161B]/30 hover:text-[#85161B]"
-							>
-								<Plus size={14} />
-								Add field
-							</button>
+							{/* DESCRIPTION */}
+
+							<div>
+								<label className="mb-2 block text-sm font-medium text-[#2E2E2E]">
+									Description *
+								</label>
+
+								<textarea
+									value={formData.description}
+									onChange={(e) =>
+										setFormData({
+											...formData,
+											description: e.target.value,
+										})
+									}
+									placeholder="Describe your product..."
+									rows={4}
+									className="
+										w-full
+										rounded-lg
+										border
+										border-[#E8DED7]
+										px-3
+										py-2
+										text-sm
+										focus:border-[#85161B]
+										focus:outline-none
+										focus:ring-1
+										focus:ring-[#85161B]
+									"
+								/>
+							</div>
 						</div>
+					</div>
 
-						{customFields.length > 0 && (
-							<div className="mt-4 space-y-4">
-								{customFields.map((field) => (
-									<div
-										key={field.id}
-										className="rounded-xl border border-[#E8DED7] bg-[#FBF9F7] p-4"
-									>
-										<div className="flex items-start gap-3">
-											<div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-[1fr_120px_90px]">
-												<input
-													type="text"
-													value={field.label}
-													onChange={(e) =>
-														updateCustomField(field.id, {
-															label: e.target.value,
-														})
-													}
-													placeholder="Field label, e.g. Name to print"
-													className={`${inputClass} bg-white`}
-												/>
+					{/* PRICING */}
 
-												<select
-													value={field.type}
-													onChange={(e) =>
-														updateCustomField(field.id, {
-															type: e.target.value as "text" | "photo",
-														})
-													}
-													className={`${inputClass} bg-white`}
+					<div className="rounded-lg border border-[#E8DED7] bg-white p-6">
+						<h2 className="mb-4 text-lg font-bold text-[#2E2E2E]">
+							Pricing
+						</h2>
+
+						<div className="grid gap-4 sm:grid-cols-3">
+							<div>
+								<label className="mb-2 block text-sm font-medium text-[#2E2E2E]">
+									Market Price
+								</label>
+
+								<input
+									type="number"
+									value={formData.market_price}
+									onChange={(e) =>
+										setFormData({
+											...formData,
+											market_price: e.target.value,
+										})
+									}
+									placeholder="0"
+									className="
+										w-full
+										rounded-lg
+										border
+										border-[#E8DED7]
+										px-3
+										py-2
+										text-sm
+										focus:border-[#85161B]
+										focus:outline-none
+										focus:ring-1
+										focus:ring-[#85161B]
+									"
+								/>
+							</div>
+
+							<div>
+								<label className="mb-2 block text-sm font-medium text-[#2E2E2E]">
+									Selling Price
+								</label>
+
+								<input
+									type="number"
+									value={formData.selling_price}
+									onChange={(e) =>
+										setFormData({
+											...formData,
+											selling_price: e.target.value,
+										})
+									}
+									placeholder="0"
+									className="
+										w-full
+										rounded-lg
+										border
+										border-[#E8DED7]
+										px-3
+										py-2
+										text-sm
+										focus:border-[#85161B]
+										focus:outline-none
+										focus:ring-1
+										focus:ring-[#85161B]
+									"
+								/>
+							</div>
+
+							<div>
+								<label className="mb-2 block text-sm font-medium text-[#2E2E2E]">
+									Reseller Price
+								</label>
+
+								<input
+									type="number"
+									value={formData.reseller_price}
+									onChange={(e) =>
+										setFormData({
+											...formData,
+											reseller_price: e.target.value,
+										})
+									}
+									placeholder="0"
+									className="
+										w-full
+										rounded-lg
+										border
+										border-[#E8DED7]
+										px-3
+										py-2
+										text-sm
+										focus:border-[#85161B]
+										focus:outline-none
+										focus:ring-1
+										focus:ring-[#85161B]
+									"
+								/>
+							</div>
+						</div>
+					</div>
+
+					{/* PHOTOS */}
+
+					<div className="rounded-lg border border-[#E8DED7] bg-white p-6">
+						<h2 className="mb-4 text-lg font-bold text-[#2E2E2E]">
+							Photos
+						</h2>
+
+						<div className="space-y-4">
+							{/* PRIMARY PHOTO */}
+
+							<div>
+								<label className="mb-2 block text-sm font-medium text-[#2E2E2E]">
+									Primary Photo {formData.mode === "new" && "*"}
+								</label>
+
+								<div className="flex items-center gap-4">
+									<label className="flex-1 cursor-pointer">
+										<input
+											type="file"
+											accept="image/*"
+											onChange={(e) =>
+												setFormData({
+													...formData,
+													primary_photo:
+														e.target
+															.files?.[0],
+												})
+											}
+											className="hidden"
+										/>
+
+										<div className="flex items-center justify-center rounded-lg border-2 border-dashed border-[#E8DED7] px-4 py-6 text-center hover:border-[#85161B]">
+											<Upload
+												size={20}
+												className="mr-2 text-[#2E2E2E]/60"
+											/>
+
+											<span className="text-sm text-[#2E2E2E]/60">
+												{formData.primary_photo
+													? formData
+														.primary_photo
+														.name
+													: "Click to upload or drag"}
+											</span>
+										</div>
+									</label>
+								</div>
+							</div>
+
+							{/* OTHER PHOTOS */}
+
+							<div>
+								<label className="mb-2 block text-sm font-medium text-[#2E2E2E]">
+									Other Photos
+								</label>
+
+								<label className="block cursor-pointer">
+									<input
+										type="file"
+										accept="image/*"
+										multiple
+										onChange={(e) =>
+											setFormData({
+												...formData,
+												other_photos: Array.from(
+													e.target.files || []
+												),
+											})
+										}
+										className="hidden"
+									/>
+
+									<div className="flex items-center justify-center rounded-lg border-2 border-dashed border-[#E8DED7] px-4 py-6 text-center hover:border-[#85161B]">
+										<Upload
+											size={20}
+											className="mr-2 text-[#2E2E2E]/60"
+										/>
+
+										<span className="text-sm text-[#2E2E2E]/60">
+											{formData.other_photos.length >
+											0
+												? `${formData.other_photos.length} file(s) selected`
+												: "Click to upload or drag"}
+										</span>
+									</div>
+								</label>
+
+								{formData.other_photos.length > 0 && (
+									<div className="mt-2 space-y-1">
+										{formData.other_photos.map(
+											(file, idx) => (
+												<div
+													key={idx}
+													className="flex items-center justify-between rounded bg-[#FBF9F7] px-3 py-2 text-sm"
 												>
-													<option value="text">Text</option>
-													<option value="photo">Photo</option>
-												</select>
+													<span>
+														{file.name}
+													</span>
 
-												{field.type === "text" ? (
-													<input
-														type="number"
-														value={field.maxLength}
-														onChange={(e) =>
-															updateCustomField(field.id, {
-																maxLength: e.target.value,
+													<button
+														type="button"
+														onClick={() =>
+															setFormData({
+																...formData,
+																other_photos:
+																	formData.other_photos.filter(
+																		(
+																			_,
+																			i
+																		) =>
+																			i !==
+																			idx
+																	),
 															})
 														}
-														placeholder="Max chars"
-														className={`${inputClass} bg-white`}
-													/>
-												) : (
-													<div />
-												)}
-											</div>
+														className="text-red-500 hover:text-red-600"
+													>
+														<CloseIcon size={16} />
+													</button>
+												</div>
+											)
+										)}
+									</div>
+								)}
+							</div>
+						</div>
+					</div>
 
-											<button
-												type="button"
-												onClick={() => removeCustomField(field.id)}
-												aria-label="Remove field"
-												className="mt-1 shrink-0 text-[#2E2E2E]/35 transition hover:text-red-600"
-											>
-												<Trash2 size={16} />
-											</button>
-										</div>
+					{/* CATEGORIES & OCCASIONS */}
 
-										<label className="mt-3 flex items-center gap-2">
+					<div className="rounded-lg border border-[#E8DED7] bg-white p-6">
+						<h2 className="mb-4 text-lg font-bold text-[#2E2E2E]">
+							Categories & Occasions
+						</h2>
+
+						<div className="grid gap-4 sm:grid-cols-2">
+							{/* CATEGORIES */}
+
+							<div>
+								<label className="mb-3 block text-sm font-medium text-[#2E2E2E]">
+									Categories
+								</label>
+
+								<div className="space-y-2 max-h-48 overflow-y-auto">
+									{categories.map((cat) => (
+										<label
+											key={cat.id}
+											className="flex items-center gap-2 cursor-pointer"
+										>
 											<input
 												type="checkbox"
-												checked={field.required}
-												onChange={(e) =>
-													updateCustomField(field.id, {
-														required: e.target.checked,
-													})
-												}
-												className="h-3.5 w-3.5 accent-[#85161B]"
+												checked={formData.category_ids.includes(
+													cat.id
+												)}
+												onChange={(e) => {
+													if (e.target
+														.checked) {
+														setFormData({
+															...formData,
+															category_ids: [
+																...formData.category_ids,
+																cat.id,
+															],
+														});
+													} else {
+														setFormData({
+															...formData,
+															category_ids:
+																formData.category_ids.filter(
+																	(id) =>
+																		id !==
+																		cat.id
+																),
+														});
+													}
+												}}
+												className="rounded border-[#E8DED7]"
 											/>
-											<span className="text-xs text-[#2E2E2E]/60">
-												Required
+
+											<span className="text-sm text-[#2E2E2E]">
+												{cat.name}
 											</span>
 										</label>
-									</div>
-								))}
+									))}
+								</div>
 							</div>
-						)}
-					</section>
 
-					{error && <p className="text-sm font-medium text-red-600">{error}</p>}
+							{/* OCCASIONS */}
 
-					{/* SUBMIT */}
+							<div>
+								<label className="mb-3 block text-sm font-medium text-[#2E2E2E]">
+									Occasions
+								</label>
 
-					<div className="flex items-center gap-3">
+								<div className="space-y-2 max-h-48 overflow-y-auto">
+									{occasions.map((occ) => (
+										<label
+											key={occ.id}
+											className="flex items-center gap-2 cursor-pointer"
+										>
+											<input
+												type="checkbox"
+												checked={formData.occasion_ids.includes(
+													occ.id
+												)}
+												onChange={(e) => {
+													if (e.target
+														.checked) {
+														setFormData({
+															...formData,
+															occasion_ids: [
+																...formData.occasion_ids,
+																occ.id,
+															],
+														});
+													} else {
+														setFormData({
+															...formData,
+															occasion_ids:
+																formData.occasion_ids.filter(
+																	(id) =>
+																		id !==
+																		occ.id
+																),
+														});
+													}
+												}}
+												className="rounded border-[#E8DED7]"
+											/>
+
+											<span className="text-sm text-[#2E2E2E]">
+												{occ.name}
+											</span>
+										</label>
+									))}
+								</div>
+							</div>
+						</div>
+					</div>
+
+					{/* CUSTOMIZATION & KEYWORDS */}
+
+					<div className="rounded-lg border border-[#E8DED7] bg-white p-6">
+						<h2 className="mb-4 text-lg font-bold text-[#2E2E2E]">
+							Customization & Keywords
+						</h2>
+
+						<div className="space-y-4">
+							{/* CUSTOMIZE REQUIREMENTS */}
+
+							<div>
+								<label className="mb-2 block text-sm font-medium text-[#2E2E2E]">
+									Customization Requirements
+								</label>
+
+								<div className="flex gap-2">
+									<input
+										type="text"
+										value={customizeReqInput}
+										onChange={(e) =>
+											setCustomizeReqInput(
+												e.target.value
+											)
+										}
+										placeholder="e.g., frontext:text:15:name"
+										className="
+											flex-1
+											rounded-lg
+											border
+											border-[#E8DED7]
+											px-3
+											py-2
+											text-sm
+											focus:border-[#85161B]
+											focus:outline-none
+											focus:ring-1
+											focus:ring-[#85161B]
+										"
+									/>
+
+									<button
+										type="button"
+										onClick={() => {
+											if (
+												customizeReqInput.trim()
+											) {
+												setFormData({
+													...formData,
+													customize_reqs: [
+														...formData.customize_reqs,
+														customizeReqInput.trim(),
+													],
+												});
+												setCustomizeReqInput(
+													""
+												);
+											}
+										}}
+										className="rounded-lg bg-[#85161B] px-4 py-2 font-medium text-white hover:bg-[#A01E23]"
+									>
+										<Plus size={18} />
+									</button>
+								</div>
+
+								{formData.customize_reqs.length > 0 && (
+									<div className="mt-2 space-y-1">
+										{formData.customize_reqs.map(
+											(req, idx) => (
+												<div
+													key={idx}
+													className="flex items-center justify-between rounded bg-[#FBF9F7] px-3 py-2 text-sm"
+												>
+													<span>{req}</span>
+
+													<button
+														type="button"
+														onClick={() =>
+															setFormData({
+																...formData,
+																customize_reqs:
+																	formData.customize_reqs.filter(
+																		(
+																			_,
+																			i
+																		) =>
+																			i !==
+																			idx
+																	),
+															})
+														}
+														className="text-red-500 hover:text-red-600"
+													>
+														<CloseIcon size={16} />
+													</button>
+												</div>
+											)
+										)}
+									</div>
+								)}
+							</div>
+
+							{/* KEYWORDS */}
+
+							<div>
+								<label className="mb-2 block text-sm font-medium text-[#2E2E2E]">
+									Keywords
+								</label>
+
+								<input
+									type="text"
+									value={formData.keywords}
+									onChange={(e) =>
+										setFormData({
+											...formData,
+											keywords: e.target.value,
+										})
+									}
+									placeholder="e.g., best for anniversary, purse, wallet"
+									className="
+										w-full
+										rounded-lg
+										border
+										border-[#E8DED7]
+										px-3
+										py-2
+										text-sm
+										focus:border-[#85161B]
+										focus:outline-none
+										focus:ring-1
+										focus:ring-[#85161B]
+									"
+								/>
+							</div>
+
+							{/* DELIVERY */}
+
+							<div>
+								<label className="mb-2 block text-sm font-medium text-[#2E2E2E]">
+									Delivery Time (days)
+								</label>
+
+								<input
+									type="number"
+									value={formData.delivery}
+									onChange={(e) =>
+										setFormData({
+											...formData,
+											delivery: e.target.value,
+										})
+									}
+									placeholder="0"
+									className="
+										w-full
+										rounded-lg
+										border
+										border-[#E8DED7]
+										px-3
+										py-2
+										text-sm
+										focus:border-[#85161B]
+										focus:outline-none
+										focus:ring-1
+										focus:ring-[#85161B]
+									"
+								/>
+							</div>
+						</div>
+					</div>
+
+					{/* SUBMIT BUTTON */}
+
+					<div className="flex gap-3">
 						<button
 							type="submit"
-							disabled={submitting}
-							className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#85161B] py-3.5 text-sm font-semibold text-white transition-all hover:bg-[#721318] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
+							disabled={saving}
+							className="
+								rounded-lg
+								bg-[#85161B]
+								px-6
+								py-3
+								font-medium
+								text-white
+								transition-all
+								duration-200
+								hover:bg-[#A01E23]
+								active:scale-95
+								disabled:opacity-50
+							"
 						>
-							{submitting ? (
-								<>
-									<span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-									Saving...
-								</>
-							) : submitted ? (
-								<>
-									<CheckCircle2 size={17} />
-									Product added
-								</>
-							) : (
-								"Save product"
-							)}
+							{saving
+								? "Saving..."
+								: formData.mode === "edit"
+									? "Update Product"
+									: "Create Product"}
 						</button>
 
-						<Link
-							href="/admin"
-							className="rounded-xl border border-[#DED6D0] px-6 py-3.5 text-sm font-semibold text-[#2E2E2E]/70 transition hover:border-[#85161B]/30 hover:text-[#85161B]"
+						<button
+							type="button"
+							onClick={() => router.back()}
+							className="
+								rounded-lg
+								border
+								border-[#E8DED7]
+								px-6
+								py-3
+								font-medium
+								text-[#2E2E2E]
+								transition-all
+								duration-200
+								hover:bg-[#FBF9F7]
+							"
 						>
 							Cancel
-						</Link>
+						</button>
 					</div>
 				</form>
 			</div>
-		</main>
-	);
-}
-
-/* ============================================================================
-   HELPERS
-============================================================================ */
-
-const inputClass =
-	"w-full rounded-xl border border-[#DED6D0] bg-white px-4 py-2.5 text-sm text-[#202020] outline-none transition placeholder:text-black/30 focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10";
-
-function Field({
-	label,
-	required,
-	children,
-}: {
-	label: string;
-	required?: boolean;
-	children: React.ReactNode;
-}) {
-	return (
-		<div>
-			<label className="mb-1.5 block text-xs font-semibold text-[#2E2E2E]">
-				{label}
-				{required && <span className="ml-1 text-[#85161B]">*</span>}
-			</label>
-			{children}
 		</div>
 	);
 }
