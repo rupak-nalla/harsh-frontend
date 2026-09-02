@@ -171,7 +171,7 @@ export default function OccasionsPage() {
 		try {
 			const body = new FormData();
 			body.append("mode", "delete");
-			body.append("Id", id.toString());
+			body.append("id", id.toString());
 			body.append("command_type", "admin");
 
 			const response = await fetch("/api/admin/occasions", {

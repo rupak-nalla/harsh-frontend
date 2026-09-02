@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
 		let data: unknown;
 
 		try {
+			console.log("BACKEND LOGIN RESPONSE TEXT:", text);
 			data = JSON.parse(text);
 		} catch {
 			data = {
