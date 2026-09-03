@@ -537,12 +537,12 @@ export default function ProductPage() {
     const heroImage = product.images[activeImage];
 
     return (
-        <main className="min-h-screen bg-[#FBF9F7]">
-            {/* ==========================================================================
+			<main className="min-h-screen bg-[#FBF9F7] pt-[112px] sm:pt-[120px]">
+				{/* ==========================================================================
                 FONT
             ========================================================================== */}
 
-            <style>{`
+				<style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap');
 
                 .font-display {
@@ -551,62 +551,54 @@ export default function ProductPage() {
                 }
             `}</style>
 
-            {/* ==========================================================================
+				{/* ==========================================================================
                 PRODUCT CONTENT
             ========================================================================== */}
 
-            <section className="mx-auto max-w-7xl px-5 py-7 sm:px-6 lg:px-8 lg:py-10">
+				<section className="mx-auto max-w-7xl px-5 py-7 sm:px-6 lg:px-8 lg:py-10">
+					{/* INLINE BACK BUTTON */}
 
-                {/* INLINE BACK BUTTON */}
+					<button
+						type="button"
+						onClick={() => router.back()}
+						className="mb-7 inline-flex items-center gap-2 rounded-lg px-1 py-1 text-sm font-medium text-[#2E2E2E]/55 transition-colors hover:text-[#85161B]"
+					>
+						<ArrowLeft size={16} />
+						Back
+					</button>
 
-                <button
-                    type="button"
-                    onClick={() => router.back()}
-                    className="mb-7 inline-flex items-center gap-2 rounded-lg px-1 py-1 text-sm font-medium text-[#2E2E2E]/55 transition-colors hover:text-[#85161B]"
-                >
-                    <ArrowLeft size={16} />
-                    Back
-                </button>
-
-                <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-14">
-
-                    {/* ==========================================================================
+					<div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-14">
+						{/* ==========================================================================
                         GALLERY
                     ========================================================================== */}
 
-                    <div>
+						<div>
+							{/* MAIN IMAGE */}
 
-                        {/* MAIN IMAGE */}
+							<div className="group relative aspect-square overflow-hidden rounded-3xl border border-[#E8DED7] bg-white">
+								{heroImage ? (
+									<img
+										src={heroImage}
+										alt={product.name}
+										className="h-full w-full object-cover"
+										onError={(event) => {
+											event.currentTarget.style.display = "none";
+										}}
+									/>
+								) : (
+									<div className="flex h-full w-full items-center justify-center">
+										<ShoppingBag size={40} className="text-[#85161B]/25" />
+									</div>
+								)}
 
-                        <div className="group relative aspect-square overflow-hidden rounded-3xl border border-[#E8DED7] bg-white">
+								{/* LEFT ARROW */}
 
-                            {heroImage ? (
-                                <img
-                                    src={heroImage}
-                                    alt={product.name}
-                                    className="h-full w-full object-cover"
-                                    onError={(event) => {
-                                        event.currentTarget.style.display =
-                                            "none";
-                                    }}
-                                />
-                            ) : (
-                                <div className="flex h-full w-full items-center justify-center">
-                                    <ShoppingBag
-                                        size={40}
-                                        className="text-[#85161B]/25"
-                                    />
-                                </div>
-                            )}
-
-                            {/* LEFT ARROW */}
-
-                            {product.images.length > 1 && (
-                                <button
-                                    type="button"
-                                    aria-label="Previous image"
-                                    onClick={showPreviousImage}
-                                    className="
+								{product.images.length > 1 && (
+									<button
+										type="button"
+										aria-label="Previous image"
+										onClick={showPreviousImage}
+										className="
                                         absolute
                                         left-3
                                         top-1/2
@@ -627,19 +619,19 @@ export default function ProductPage() {
                                         hover:bg-white
                                         hover:text-[#85161B]
                                     "
-                                >
-                                    <ArrowLeft size={18} />
-                                </button>
-                            )}
+									>
+										<ArrowLeft size={18} />
+									</button>
+								)}
 
-                            {/* RIGHT ARROW */}
+								{/* RIGHT ARROW */}
 
-                            {product.images.length > 1 && (
-                                <button
-                                    type="button"
-                                    aria-label="Next image"
-                                    onClick={showNextImage}
-                                    className="
+								{product.images.length > 1 && (
+									<button
+										type="button"
+										aria-label="Next image"
+										onClick={showNextImage}
+										className="
                                         absolute
                                         right-3
                                         top-1/2
@@ -660,33 +652,31 @@ export default function ProductPage() {
                                         hover:bg-white
                                         hover:text-[#85161B]
                                     "
-                                >
-                                    <ArrowRight size={18} />
-                                </button>
-                            )}
+									>
+										<ArrowRight size={18} />
+									</button>
+								)}
 
-                            {/* IMAGE COUNTER */}
+								{/* IMAGE COUNTER */}
 
-                            {product.images.length > 1 && (
-                                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
-                                    {activeImage + 1} / {product.images.length}
-                                </div>
-                            )}
-                        </div>
+								{product.images.length > 1 && (
+									<div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
+										{activeImage + 1} / {product.images.length}
+									</div>
+								)}
+							</div>
 
-                        {/* THUMBNAILS */}
+							{/* THUMBNAILS */}
 
-                        {product.images.length > 1 && (
-                            <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
-                                {product.images.map((img, index) => (
-                                    <button
-                                        key={img + index}
-                                        type="button"
-                                        aria-label={`View image ${index + 1}`}
-                                        onClick={() =>
-                                            setActiveImage(index)
-                                        }
-                                        className={`
+							{product.images.length > 1 && (
+								<div className="mt-4 flex gap-3 overflow-x-auto pb-1">
+									{product.images.map((img, index) => (
+										<button
+											key={img + index}
+											type="button"
+											aria-label={`View image ${index + 1}`}
+											onClick={() => setActiveImage(index)}
+											className={`
                                             h-20
                                             w-20
                                             shrink-0
@@ -696,153 +686,135 @@ export default function ProductPage() {
                                             bg-white
                                             transition-all
                                             ${
-                                                activeImage === index
-                                                    ? "border-[#85161B] opacity-100 shadow-sm"
-                                                    : "border-[#E8DED7] opacity-65 hover:opacity-100"
-                                            }
+																							activeImage === index
+																								? "border-[#85161B] opacity-100 shadow-sm"
+																								: "border-[#E8DED7] opacity-65 hover:opacity-100"
+																						}
                                         `}
-                                    >
-                                        <img
-                                            src={img}
-                                            alt={`${product.name} ${
-                                                index + 1
-                                            }`}
-                                            className="h-full w-full object-cover"
-                                        />
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+										>
+											<img
+												src={img}
+												alt={`${product.name} ${index + 1}`}
+												className="h-full w-full object-cover"
+											/>
+										</button>
+									))}
+								</div>
+							)}
+						</div>
 
-                    {/* ==========================================================================
+						{/* ==========================================================================
                         DETAILS
                     ========================================================================== */}
 
-                    <div>
+						<div>
+							{/* STOCK STATUS */}
 
-                        {/* STOCK STATUS */}
+							<div className="flex flex-wrap items-center gap-2">
+								{product.inStock ? (
+									<span className="inline-flex items-center gap-1.5 rounded-full bg-[#EDF8F0] px-3 py-1 text-[11px] font-semibold text-[#31824A]">
+										<CheckCircle2 size={12} />
+										In Stock
+									</span>
+								) : (
+									<span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-[11px] font-semibold text-red-600">
+										<PackageX size={12} />
+										Out of Stock
+									</span>
+								)}
 
-                        <div className="flex flex-wrap items-center gap-2">
-                            {product.inStock ? (
-                                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#EDF8F0] px-3 py-1 text-[11px] font-semibold text-[#31824A]">
-                                    <CheckCircle2 size={12} />
-                                    In Stock
-                                </span>
-                            ) : (
-                                <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-[11px] font-semibold text-red-600">
-                                    <PackageX size={12} />
-                                    Out of Stock
-                                </span>
-                            )}
+								{product.sold > 0 && (
+									<span className="text-[11px] text-[#2E2E2E]/40">
+										{product.sold}+ sold
+									</span>
+								)}
+							</div>
 
-                            {product.sold > 0 && (
-                                <span className="text-[11px] text-[#2E2E2E]/40">
-                                    {product.sold}+ sold
-                                </span>
-                            )}
-                        </div>
+							{/* PRODUCT NAME */}
 
-                        {/* PRODUCT NAME */}
+							<h1 className="font-display mt-3 text-3xl font-semibold leading-tight text-[#2E2E2E] sm:text-4xl">
+								{product.name}
+							</h1>
 
-                        <h1 className="font-display mt-3 text-3xl font-semibold leading-tight text-[#2E2E2E] sm:text-4xl">
-                            {product.name}
-                        </h1>
+							{/* DESCRIPTION */}
 
-                        {/* DESCRIPTION */}
+							{product.description && (
+								<p className="mt-4 whitespace-pre-line text-[15px] leading-7 text-[#2E2E2E]/60">
+									{product.description}
+								</p>
+							)}
 
-                        {product.description && (
-                            <p className="mt-4 whitespace-pre-line text-[15px] leading-7 text-[#2E2E2E]/60">
-                                {product.description}
-                            </p>
-                        )}
+							{/* PRICE */}
 
-                        {/* PRICE */}
+							<div className="mt-6 flex flex-wrap items-end gap-3">
+								<span className="text-3xl font-bold text-[#85161B]">
+									₹{product.sellingPrice.toFixed(2)}
+								</span>
 
-                        <div className="mt-6 flex flex-wrap items-end gap-3">
-                            <span className="text-3xl font-bold text-[#85161B]">
-                                ₹{product.sellingPrice.toFixed(2)}
-                            </span>
+								{product.marketPrice > product.sellingPrice && (
+									<>
+										<span className="text-base text-[#2E2E2E]/35 line-through">
+											₹{product.marketPrice.toFixed(2)}
+										</span>
 
-                            {product.marketPrice >
-                                product.sellingPrice && (
-                                <>
-                                    <span className="text-base text-[#2E2E2E]/35 line-through">
-                                        ₹
-                                        {product.marketPrice.toFixed(
-                                            2,
-                                        )}
-                                    </span>
+										<span className="rounded-full bg-[#F7D6BF]/50 px-2.5 py-1 text-[11px] font-semibold text-[#85161B]">
+											{discountPercent}% off
+										</span>
+									</>
+								)}
+							</div>
 
-                                    <span className="rounded-full bg-[#F7D6BF]/50 px-2.5 py-1 text-[11px] font-semibold text-[#85161B]">
-                                        {discountPercent}% off
-                                    </span>
-                                </>
-                            )}
-                        </div>
+							{/* DELIVERY */}
 
-                        {/* DELIVERY */}
+							{product.delivery > 0 && (
+								<p className="mt-2 flex items-center gap-1.5 text-xs text-[#2E2E2E]/45">
+									<Truck size={13} />
+									Delivery ₹{product.delivery.toFixed(2)}
+								</p>
+							)}
 
-                        {product.delivery > 0 && (
-                            <p className="mt-2 flex items-center gap-1.5 text-xs text-[#2E2E2E]/45">
-                                <Truck size={13} />
-                                Delivery ₹
-                                {product.delivery.toFixed(2)}
-                            </p>
-                        )}
-
-                        {/* ==========================================================================
+							{/* ==========================================================================
                             PERSONALIZATION TICKET
                         ========================================================================== */}
 
-                        {product.customizationFields.length > 0 && (
-                            <div className="relative mt-8 rounded-2xl border-2 border-dashed border-[#D9BBAE] bg-[#FFFBF8] p-6">
+							{product.customizationFields.length > 0 && (
+								<div className="relative mt-8 rounded-2xl border-2 border-dashed border-[#D9BBAE] bg-[#FFFBF8] p-6">
+									{/* Punch hole */}
 
-                                {/* Punch hole */}
+									<div className="absolute -top-3 left-1/2 h-6 w-6 -translate-x-1/2 rounded-full border-2 border-dashed border-[#D9BBAE] bg-[#FBF9F7]" />
 
-                                <div className="absolute -top-3 left-1/2 h-6 w-6 -translate-x-1/2 rounded-full border-2 border-dashed border-[#D9BBAE] bg-[#FBF9F7]" />
+									{/* TITLE */}
 
-                                {/* TITLE */}
+									<p className="font-display text-sm font-semibold uppercase tracking-[0.20em] text-[#85161B] sm:text-[15px]">
+										Personalization Ticket
+									</p>
 
-                                <p className="font-display text-sm font-semibold uppercase tracking-[0.20em] text-[#85161B] sm:text-[15px]">
-                                    Personalization Ticket
-                                </p>
+									{/* SUBTITLE */}
 
-                                {/* SUBTITLE */}
+									<p className="mt-2 text-[13px] leading-6 text-[#2E2E2E]/55">
+										Tell us how to make this one yours.
+									</p>
 
-                                <p className="mt-2 text-[13px] leading-6 text-[#2E2E2E]/55">
-                                    Tell us how to make this one yours.
-                                </p>
+									<div className="mt-6 space-y-6">
+										{product.customizationFields.map((field) =>
+											field.type === "photo" ? (
+												<div key={field.key}>
+													{/* PHOTO LABEL */}
 
-                                <div className="mt-6 space-y-6">
+													<label className="mb-2.5 flex items-center gap-1.5 text-sm font-semibold text-[#2E2E2E]">
+														<Camera size={15} className="text-[#85161B]" />
 
-                                    {product.customizationFields.map(
-                                        (field) =>
-                                            field.type === "photo" ? (
-                                                <div
-                                                    key={field.key}
-                                                >
-                                                    {/* PHOTO LABEL */}
+														{field.label}
 
-                                                    <label className="mb-2.5 flex items-center gap-1.5 text-sm font-semibold text-[#2E2E2E]">
-                                                        <Camera
-                                                            size={15}
-                                                            className="text-[#85161B]"
-                                                        />
+														{field.required && (
+															<span className="text-[#85161B]">*</span>
+														)}
+													</label>
 
-                                                        {field.label}
+													{/* PHOTO UPLOAD */}
 
-                                                        {field.required && (
-                                                            <span className="text-[#85161B]">
-                                                                *
-                                                            </span>
-                                                        )}
-                                                    </label>
-
-                                                    {/* PHOTO UPLOAD */}
-
-                                                    <label
-                                                        className="
+													<label
+														className="
                                                             flex
                                                             cursor-pointer
                                                             items-center
@@ -861,100 +833,60 @@ export default function ProductPage() {
                                                             hover:border-[#85161B]/40
                                                             hover:text-[#85161B]
                                                         "
-                                                    >
-                                                        <Upload size={15} />
+													>
+														<Upload size={15} />
 
-                                                        <span className="max-w-[80%] truncate">
-                                                            {customFiles[
-                                                                field.key
-                                                            ]
-                                                                ? customFiles[
-                                                                      field
-                                                                          .key
-                                                                  ]?.name
-                                                                : "Choose a photo"}
-                                                        </span>
+														<span className="max-w-[80%] truncate">
+															{customFiles[field.key]
+																? customFiles[field.key]?.name
+																: "Choose a photo"}
+														</span>
 
-                                                        <input
-                                                            type="file"
-                                                            accept="image/*"
-                                                            className="hidden"
-                                                            onChange={(
-                                                                event,
-                                                            ) =>
-                                                                handlePhotoFieldChange(
-                                                                    field,
-                                                                    event
-                                                                        .target
-                                                                        .files?.[0] ??
-                                                                        null,
-                                                                )
-                                                            }
-                                                        />
-                                                    </label>
-                                                </div>
-                                            ) : (
-                                                <div
-                                                    key={field.key}
-                                                >
-                                                    {/* TEXT LABEL + COUNTER */}
+														<input
+															type="file"
+															accept="image/*"
+															className="hidden"
+															onChange={(event) =>
+																handlePhotoFieldChange(
+																	field,
+																	event.target.files?.[0] ?? null,
+																)
+															}
+														/>
+													</label>
+												</div>
+											) : (
+												<div key={field.key}>
+													{/* TEXT LABEL + COUNTER */}
 
-                                                    <div className="mb-2.5 flex items-center justify-between gap-3">
-                                                        <label className="text-sm font-semibold leading-5 text-[#2E2E2E]">
-                                                            {
-                                                                field.label
-                                                            }
+													<div className="mb-2.5 flex items-center justify-between gap-3">
+														<label className="text-sm font-semibold leading-5 text-[#2E2E2E]">
+															{field.label}
 
-                                                            {field.required && (
-                                                                <span className="ml-1 text-[#85161B]">
-                                                                    *
-                                                                </span>
-                                                            )}
-                                                        </label>
+															{field.required && (
+																<span className="ml-1 text-[#85161B]">*</span>
+															)}
+														</label>
 
-                                                        {field.maxLength && (
-                                                            <span className="shrink-0 text-[11px] font-medium text-[#2E2E2E]/40">
-                                                                {
-                                                                    (
-                                                                        customValues[
-                                                                            field
-                                                                                .key
-                                                                        ] ??
-                                                                        ""
-                                                                    ).length
-                                                                }
-                                                                /
-                                                                {
-                                                                    field.maxLength
-                                                                }
-                                                            </span>
-                                                        )}
-                                                    </div>
+														{field.maxLength && (
+															<span className="shrink-0 text-[11px] font-medium text-[#2E2E2E]/40">
+																{(customValues[field.key] ?? "").length}/
+																{field.maxLength}
+															</span>
+														)}
+													</div>
 
-                                                    {/* TEXT INPUT */}
+													{/* TEXT INPUT */}
 
-                                                    <input
-                                                        type="text"
-                                                        value={
-                                                            customValues[
-                                                                field.key
-                                                            ] ?? ""
-                                                        }
-                                                        maxLength={
-                                                            field.maxLength
-                                                        }
-                                                        onChange={(
-                                                            event,
-                                                        ) =>
-                                                            handleTextFieldChange(
-                                                                field,
-                                                                event
-                                                                    .target
-                                                                    .value,
-                                                            )
-                                                        }
-                                                        placeholder={`Enter ${field.label.toLowerCase()}`}
-                                                        className="
+													<input
+														type="text"
+														value={customValues[field.key] ?? ""}
+														maxLength={field.maxLength}
+														onChange={(event) =>
+															handleTextFieldChange(field, event.target.value)
+														}
+														placeholder={`Enter ${field.label.toLowerCase()}`}
+														className="
                                                             w-full
                                                             rounded-xl
                                                             border
@@ -971,45 +903,32 @@ export default function ProductPage() {
                                                             focus:ring-2
                                                             focus:ring-[#85161B]/10
                                                         "
-                                                    />
-                                                </div>
-                                            ),
-                                    )}
-                                </div>
+													/>
+												</div>
+											),
+										)}
+									</div>
 
-                                {/* LIVE PREVIEW */}
+									{/* LIVE PREVIEW */}
 
-                                {customValues[
-                                    product.customizationFields[0]?.key
-                                ] && (
-                                    <p className="font-display mt-6 border-t border-dashed border-[#D9BBAE] pt-4 text-sm italic text-[#2E2E2E]/60">
-                                        "For{" "}
-                                        {
-                                            customValues[
-                                                product
-                                                    .customizationFields[0]
-                                                    .key
-                                            ]
-                                        }
-                                        "
-                                    </p>
-                                )}
-                            </div>
-                        )}
+									{customValues[product.customizationFields[0]?.key] && (
+										<p className="font-display mt-6 border-t border-dashed border-[#D9BBAE] pt-4 text-sm italic text-[#2E2E2E]/60">
+											"For {customValues[product.customizationFields[0].key]}"
+										</p>
+									)}
+								</div>
+							)}
 
-                        {/* ==========================================================================
+							{/* ==========================================================================
                             ADD TO CART
                         ========================================================================== */}
 
-                        <div className="mt-8">
-                            <button
-                                type="button"
-                                disabled={
-                                    !product.inStock ||
-                                    addingToCart
-                                }
-                                onClick={handleAddToCart}
-                                className="
+							<div className="mt-8">
+								<button
+									type="button"
+									disabled={!product.inStock || addingToCart}
+									onClick={handleAddToCart}
+									className="
                                     group
                                     flex
                                     w-full
@@ -1029,75 +948,68 @@ export default function ProductPage() {
                                     disabled:cursor-not-allowed
                                     disabled:opacity-50
                                 "
-                            >
-                                {addingToCart ? (
-                                    <>
-                                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                                        Adding...
-                                    </>
-                                ) : addedToCart ? (
-                                    <>
-                                        <CheckCircle2 size={17} />
-                                        Added to Cart
-                                    </>
-                                ) : (
-                                    <>
-                                        <ShoppingBag size={17} />
-                                        Add to Cart
+								>
+									{addingToCart ? (
+										<>
+											<span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+											Adding...
+										</>
+									) : addedToCart ? (
+										<>
+											<CheckCircle2 size={17} />
+											Added to Cart
+										</>
+									) : (
+										<>
+											<ShoppingBag size={17} />
+											Add to Cart
+											<ArrowRight
+												size={15}
+												className="transition-transform group-hover:translate-x-1"
+											/>
+										</>
+									)}
+								</button>
+							</div>
 
-                                        <ArrowRight
-                                            size={15}
-                                            className="transition-transform group-hover:translate-x-1"
-                                        />
-                                    </>
-                                )}
-                            </button>
-                        </div>
+							{/* ADD ERROR */}
 
-                        {/* ADD ERROR */}
+							{addError && (
+								<p className="mt-3 text-xs font-medium text-red-600">
+									{addError}
+								</p>
+							)}
 
-                        {addError && (
-                            <p className="mt-3 text-xs font-medium text-red-600">
-                                {addError}
-                            </p>
-                        )}
-
-                        {/* ==========================================================================
+							{/* ==========================================================================
                             TRUST + PRIVACY
                         ========================================================================== */}
 
-                        <div className="mt-7 space-y-3">
+							<div className="mt-7 space-y-3">
+								{/* SECURE CHECKOUT */}
 
-                            {/* SECURE CHECKOUT */}
+								<div className="flex items-center gap-2.5 text-[13px] font-medium text-[#2E2E2E]/55">
+									<ShieldCheck size={16} className="shrink-0 text-[#85161B]" />
 
-                            <div className="flex items-center gap-2.5 text-[13px] font-medium text-[#2E2E2E]/55">
-                                <ShieldCheck
-                                    size={16}
-                                    className="shrink-0 text-[#85161B]"
-                                />
+									<span>Secure checkout · Made to order</span>
+								</div>
 
-                                <span>
-                                    Secure checkout · Made to order
-                                </span>
-                            </div>
+								{/* PRIVACY */}
 
-                            {/* PRIVACY */}
+								<p className="flex items-start gap-2.5 text-[13px] leading-6 text-[#2E2E2E]/50">
+									<ShieldCheck
+										size={15}
+										className="mt-0.5 shrink-0 text-[#85161B]"
+									/>
 
-                            <p className="flex items-start gap-2.5 text-[13px] leading-6 text-[#2E2E2E]/50">
-                                <ShieldCheck
-                                    size={15}
-                                    className="mt-0.5 shrink-0 text-[#85161B]"
-                                />
-
-                                <span>
-                                    Your photos are used only for your
-                                    order and deleted after processing.
-                                </span>
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-        </main>
-    );
+									<span>
+										Your photos are used only for your order and deleted after
+										processing.
+									</span>
+								</p>
+							</div>
+						</div>
+					</div>
+				</section>
+			</main>
+		);
 }
