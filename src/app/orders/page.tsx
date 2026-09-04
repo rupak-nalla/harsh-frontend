@@ -29,7 +29,6 @@ type OrderStatus =
 	| "Order accepted"
 	| "Packed"
 	| "Shipped"
-	| "Out for delivery"
 	| "Delivered"
 	| "Cancelled";
 
@@ -148,7 +147,6 @@ const STATUS_FILTERS = [
 	"All orders",
 	"Processing",
 	"Shipped",
-	"Out for delivery",
 	"Delivered",
 ];
 
@@ -172,10 +170,6 @@ function normalizeStatus(rawStatus: string | undefined): {
 
 	if (key.includes("delivered")) {
 		return { status: "Delivered", statusType: "delivered" };
-	}
-
-	if (key.includes("outfordelivery")) {
-		return { status: "Out for delivery", statusType: "shipping" };
 	}
 
 	if (key.includes("shipped") || key.includes("dispatch")) {
@@ -395,10 +389,6 @@ export default function OrdersPage() {
 
 		if (activeFilter === "Shipped") {
 			return orders.filter((order) => order.status === "Shipped");
-		}
-
-		if (activeFilter === "Out for delivery") {
-			return orders.filter((order) => order.status === "Out for delivery");
 		}
 
 		if (activeFilter === "Delivered") {
@@ -912,9 +902,6 @@ function StatusBadge({
 
 			case "Shipped":
 				return <Truck size={14} />;
-
-			case "Out for delivery":
-				return <MapPin size={14} />;
 
 			case "Delivered":
 				return <CheckCircle2 size={14} />;

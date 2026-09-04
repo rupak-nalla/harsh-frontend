@@ -38,7 +38,6 @@ type OrderStatus =
 	| "Order accepted"
 	| "Packed"
 	| "Shipped"
-	| "Out for delivery"
 	| "Delivered"
 	| "Cancelled";
 
@@ -207,13 +206,6 @@ function normalizeStatus(rawStatus?: string): {
 		return {
 			status: "Delivered",
 			statusType: "delivered",
-		};
-	}
-
-	if (key.includes("outfordelivery")) {
-		return {
-			status: "Out for delivery",
-			statusType: "shipping",
 		};
 	}
 
@@ -1348,10 +1340,6 @@ function StatusTimeline({ order }: { order: Order }) {
 			icon: <Truck size={16} />,
 		},
 		{
-			label: "Out for delivery",
-			icon: <MapPin size={16} />,
-		},
-		{
 			label: "Delivered",
 			icon: <CheckCircle2 size={16} />,
 		},
@@ -1474,9 +1462,6 @@ function StatusBadge({
 
 			case "Shipped":
 				return <Truck size={14} />;
-
-			case "Out for delivery":
-				return <MapPin size={14} />;
 
 			case "Delivered":
 				return <CheckCircle2 size={14} />;
