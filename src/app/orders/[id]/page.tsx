@@ -532,17 +532,8 @@ function normalizeOrder(raw: RawOrder): Order {
 ───────────────────────────────────────── */
 
 export default function OrderDetailsPage() {
-	 console.log("ORDER DETAILS COMPONENT MOUNTED");
-
-    const params = useParams();
-
-    console.log("ORDER PARAMS:", params);
-
-    const orderId = params?.Id
-        ? decodeURIComponent(String(params.Id))
-        : "";
-
-    console.log("ORDER ID:", orderId);
+	const params = useParams<{ id: string }>();
+	const orderId = params?.id ? decodeURIComponent(params.id) : "";
 
 	const [order, setOrder] = useState<Order | null>(null);
 
@@ -1203,7 +1194,7 @@ function ReviewSection({
 							accept="image/*"
 							multiple
 							onChange={(event) => onChange({ photos: Array.from(event.target.files ?? []).slice(0, 5) })}
-							className="max-w-full text-xs text-[#2E2E2E]/60"
+							className="max-w-full text-xs text-[#2E2E2E]/60 border rounded-2xl border-[#E9DED7] px-3 py-2 file:mr-4 file:rounded-full file:border-0 file:bg-[#F8F3F0] file:px-3 file:py-1 file:text-xs file:font-semibold file:text-[#85161B] hover:file:bg-[#F5F1ED]"
 						/>
 						<button type="button" disabled={state.submitting || !state.description.trim()} onClick={onSubmit} className="rounded-lg bg-[#85161B] px-4 py-2.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
 							{state.submitting ? "Submitting..." : "Submit review"}
