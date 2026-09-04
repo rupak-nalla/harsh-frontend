@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -6,16 +5,20 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 
 import {
-    ArrowLeft,
-    ArrowRight,
-    ShoppingBag,
-    Truck,
-    ShieldCheck,
-    AlertCircle,
-    Camera,
-    Upload,
-    CheckCircle2,
-    PackageX,
+	ArrowLeft,
+	ArrowRight,
+	ShoppingBag,
+	Truck,
+	ShieldCheck,
+	AlertCircle,
+	AlertTriangle,
+	Upload,
+	Trash2,
+	CheckCircle2,
+	PackageX,
+	ChevronDown,
+	Star,
+	MessageSquare,
 } from "lucide-react";
 
 /* ============================================================================
@@ -23,33 +26,44 @@ import {
 ============================================================================ */
 
 const PRODUCT_IMAGE_BASE_URL =
-    "https://printinghouseujjain.in/assets/products/";
+	"https://printinghouseujjain.in/assets/products/";
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 /* ============================================================================
    TYPES
 ============================================================================ */
 
-type CustomizationFieldType = "text" | "photo";
-
-type CustomizationField = {
-    key: string;
-    type: CustomizationFieldType;
-    label: string;
-    maxLength?: number;
-    required: boolean;
+type CustomizeRequirement = {
+	key: string;
+	type: "text" | "photo" | "photos";
+	max: number;
+	placeholder: string;
+	optional: boolean;
 };
 
 type Product = {
-    id: string;
-    name: string;
-    description: string;
-    sellingPrice: number;
-    marketPrice: number;
-    delivery: number;
-    inStock: boolean;
-    sold: number;
-    images: string[];
-    customizationFields: CustomizationField[];
+	id: string;
+	name: string;
+	description: string;
+	sellingPrice: number;
+	marketPrice: number;
+	delivery: number;
+	inStock: boolean;
+	sold: number;
+	images: string[];
+
+	/*
+	 * Kept raw (same shape ProductCard receives) so it can be run
+	 * through the exact same parseCustomizeRequirements() used on
+	 * the shop grid — text / photo / photos, both new and old
+	 * backend formats.
+	 */
+	customizeReqs?: string | string[] | null;
+
+	options?: string[];
+
+	noCustomization?: boolean;
 };
 
 /* ============================================================================
@@ -57,113 +71,293 @@ type Product = {
 ============================================================================ */
 
 type RawProduct = {
-    id?: string | number;
-    name?: string;
-    description?: string;
-    primary_photo_path?: string;
-    other_photos_paths?: string;
-    market_price?: string | number;
-    selling_price?: string | number;
-    reseller_price?: string | number;
-    in_stock?: string;
-    sold?: string | number;
-    customize_reqs?: string;
-    delivery?: string | number;
+	id?: string | number;
+	name?: string;
+	description?: string;
+	primary_photo_path?: string;
+	other_photos_paths?: string;
+	market_price?: string | number;
+	selling_price?: string | number;
+	reseller_price?: string | number;
+	in_stock?: string;
+	sold?: string | number;
+	customize_reqs?: string | string[] | null;
+	options?: string[];
+	no_customization?: string | boolean;
+	delivery?: string | number;
 };
 
 type ProductResponse = {
-    status?: number;
-    message?: string;
-    result?: RawProduct;
-    product?: RawProduct;
-    data?: RawProduct;
+	status?: number;
+	message?: string;
+	result?: RawProduct;
+	product?: RawProduct;
+	data?: RawProduct;
 } & RawProduct;
+
+/* ============================================================================
+   REVIEWS
+
+   NOTE:
+   The exact response shape for /api/reviews isn't confirmed, so
+   this checks a few likely field names for each review (name,
+   rating, comment, date) and falls back gracefully if a field is
+   missing rather than breaking the whole section.
+============================================================================ */
+
+type RawReview = {
+	id?: string | number;
+	tracker?: string;
+	name?: string;
+	customer_name?: string;
+	user_name?: string;
+	rating?: string | number;
+	stars?: string | number;
+	star_count?: string | number;
+	comment?: string;
+	review?: string;
+	review_text?: string;
+	description?: string;
+	message?: string;
+	photos_path?: string;
+	created_at?: string;
+	date?: string;
+};
+
+type RawReviewsResponse = {
+	status?: number;
+	message?: string;
+	reviews?: RawReview[];
+	result?: RawReview[];
+	data?: RawReview[];
+};
+
+type Review = {
+	id: string;
+	name: string;
+	rating: number;
+	comment: string;
+	date: string;
+	photos: string[];
+};
+
+function parseReviewPhotos(value?: string): string[] {
+	if (!value) {
+		return [];
+	}
+
+	try {
+		const parsed = JSON.parse(value);
+		return Array.isArray(parsed)
+			? parsed.filter((photo): photo is string => typeof photo === "string")
+			: [];
+	} catch {
+		return [];
+	}
+}
+
+function normalizeReview(raw: RawReview, index: number): Review {
+	const rating = toNumber(raw.star_count ?? raw.rating ?? raw.stars, 0);
+
+	let date = raw.created_at ?? raw.date ?? "";
+
+	if (date) {
+		const parsed = new Date(date.replace(" ", "T"));
+
+		if (!Number.isNaN(parsed.getTime())) {
+			date = parsed.toLocaleDateString("en-IN", {
+				year: "numeric",
+				month: "short",
+				day: "numeric",
+			});
+		}
+	}
+
+	return {
+		id: String(raw.id ?? `review-${index}`),
+		name: raw.name ?? raw.customer_name ?? raw.user_name ?? "Customer",
+		rating: Math.min(5, Math.max(0, rating)),
+		comment:
+			raw.description ??
+			raw.comment ??
+			raw.review ??
+			raw.review_text ??
+			raw.message ??
+			"",
+		date,
+		photos: parseReviewPhotos(raw.photos_path),
+	};
+}
 
 /* ============================================================================
    HELPERS
 ============================================================================ */
 
 function toNumber(value: unknown, fallback = 0): number {
-    const number = Number(value);
-    return Number.isFinite(number) ? number : fallback;
+	const number = Number(value);
+	return Number.isFinite(number) ? number : fallback;
 }
 
 function getProductImage(photoPath?: string): string | undefined {
-    if (!photoPath) {
-        return undefined;
-    }
+	if (!photoPath) {
+		return undefined;
+	}
 
-    if (
-        photoPath.startsWith("http://") ||
-        photoPath.startsWith("https://")
-    ) {
-        return photoPath;
-    }
+	if (photoPath.startsWith("http://") || photoPath.startsWith("https://")) {
+		return photoPath;
+	}
 
-    return `${PRODUCT_IMAGE_BASE_URL}${photoPath.replace(/^\/+/, "")}`;
+	return `${PRODUCT_IMAGE_BASE_URL}${photoPath.replace(/^\/+/, "")}`;
 }
 
 function parseJsonArray(value?: string): string[] {
-    if (!value) {
-        return [];
-    }
+	if (!value) {
+		return [];
+	}
 
-    try {
-        const parsed = JSON.parse(value);
+	try {
+		const parsed = JSON.parse(value);
 
-        if (Array.isArray(parsed)) {
-            return parsed.filter(
-                (item): item is string => typeof item === "string",
-            );
-        }
-    } catch (err) {
-        console.error("Failed to parse JSON array:", err, value);
-    }
+		if (Array.isArray(parsed)) {
+			return parsed.filter((item): item is string => typeof item === "string");
+		}
+	} catch (err) {
+		console.error("Failed to parse JSON array:", err, value);
+	}
 
-    return [];
+	return [];
 }
 
 /* ============================================================================
-   CUSTOMIZATION PARSER
+   PARSE CUSTOMIZATION REQUIREMENTS
+
+   Ported as-is from ProductCard so the product page and the shop
+   grid card always agree on the same customize_reqs formats:
+
+   1. text:10:Enter your custom name
+   2. photo:Upload Photo
+   3. photos:5:Upload Photos
+
+   Also supports the older format:
+
+   4. key:text:10:Enter your custom name
+   5. key:photo:1:Upload Photo
+   6. key:photos:5:Upload Photos
 ============================================================================ */
 
-function parseCustomizationField(
-    raw: string,
-): CustomizationField | null {
-    const parts = raw.split(":");
+function parseCustomizeRequirements(
+	value?: string | string[] | null,
+): CustomizeRequirement[] {
+	if (!value) {
+		return [];
+	}
 
-    if (parts.length < 2) {
-        return null;
-    }
+	let parsed: unknown;
 
-    const key = parts[0];
-    const type = parts[1] as CustomizationFieldType;
+	if (Array.isArray(value)) {
+		parsed = value;
+	} else {
+		try {
+			parsed = JSON.parse(value);
+		} catch (error) {
+			console.error("Failed to parse customize_reqs:", value, error);
+			return [];
+		}
+	}
 
-    let maxLength: number | undefined;
-    let label: string;
+	if (!Array.isArray(parsed)) {
+		return [];
+	}
 
-    if (type === "text") {
-        const maybeLength = Number(parts[2]);
+	return parsed
+		.map((requirement): CustomizeRequirement | null => {
+			if (typeof requirement !== "string") {
+				return null;
+			}
 
-        if (Number.isFinite(maybeLength) && parts.length > 3) {
-            maxLength = maybeLength;
-            label = parts.slice(3).join(":");
-        } else {
-            label = parts.slice(2).join(":");
-        }
-    } else {
-        label = parts.slice(2).join(":");
-    }
+			const parts = requirement.split(":").map((part) => part.trim());
 
-    label = label.trim() || key;
+			if (parts.length < 2) {
+				return null;
+			}
 
-    return {
-        key,
-        type: type === "photo" ? "photo" : "text",
-        label,
-        maxLength,
-        required: !label.toLowerCase().includes("optional"),
-    };
+			let key = "";
+			let type: "text" | "photo" | "photos";
+			let max = 1;
+			let placeholder = "";
+
+			if (
+				parts[0] === "text" ||
+				parts[0] === "photo" ||
+				parts[0] === "photos"
+			) {
+				type = parts[0];
+
+				if (type === "photo") {
+					key = "photo";
+					max = 1;
+					placeholder = parts.slice(1).join(":").trim();
+				} else {
+					const possibleMax = Number(parts[1]);
+
+					if (Number.isFinite(possibleMax) && possibleMax >= 1) {
+						max = possibleMax;
+						placeholder = parts.slice(2).join(":").trim();
+					} else {
+						max = type === "text" ? 100 : 1;
+						placeholder = parts.slice(1).join(":").trim();
+					}
+
+					key =
+						type === "text"
+							? `text_${placeholder
+									.toLowerCase()
+									.replace(/[^a-z0-9]+/g, "_")
+									.slice(0, 30)}`
+							: `photos_${placeholder
+									.toLowerCase()
+									.replace(/[^a-z0-9]+/g, "_")
+									.slice(0, 30)}`;
+				}
+			} else if (
+				parts.length >= 3 &&
+				(parts[1] === "text" || parts[1] === "photo" || parts[1] === "photos")
+			) {
+				key = parts[0];
+				type = parts[1];
+
+				const possibleMax = Number(parts[2]);
+
+				if (Number.isFinite(possibleMax) && possibleMax >= 1) {
+					max = possibleMax;
+					placeholder = parts.slice(3).join(":").trim();
+				} else {
+					max = type === "photo" ? 1 : 100;
+					placeholder = parts.slice(2).join(":").trim();
+				}
+			} else {
+				return null;
+			}
+
+			if (!placeholder) {
+				return null;
+			}
+
+			const optional = /\(\s*optional\s*\)/i.test(placeholder);
+
+			const cleanPlaceholder = placeholder
+				.replace(/\s*\(\s*optional\s*\)/i, "")
+				.trim();
+
+			return {
+				key,
+				type,
+				max,
+				placeholder: cleanPlaceholder,
+				optional,
+			};
+		})
+		.filter((item): item is CustomizeRequirement => item !== null);
 }
 
 /* ============================================================================
@@ -171,37 +365,35 @@ function parseCustomizationField(
 ============================================================================ */
 
 function normalizeProduct(raw: RawProduct): Product {
-    const id = String(raw.id ?? "");
+	const id = String(raw.id ?? "");
 
-    const primaryImage = getProductImage(raw.primary_photo_path);
+	const primaryImage = getProductImage(raw.primary_photo_path);
 
-    const otherImages = parseJsonArray(raw.other_photos_paths)
-        .map((path) => getProductImage(path))
-        .filter((path): path is string => Boolean(path));
+	const otherImages = parseJsonArray(raw.other_photos_paths)
+		.map((path) => getProductImage(path))
+		.filter((path): path is string => Boolean(path));
 
-    const images = [primaryImage, ...otherImages].filter(
-        (img): img is string => Boolean(img),
-    );
+	const images = [primaryImage, ...otherImages].filter((img): img is string =>
+		Boolean(img),
+	);
 
-    const customizationFields = parseJsonArray(raw.customize_reqs)
-        .map(parseCustomizationField)
-        .filter(
-            (field): field is CustomizationField => field !== null,
-        );
-
-    return {
-        id,
-        name: raw.name ?? "Untitled product",
-        description: raw.description ?? "",
-        sellingPrice: toNumber(raw.selling_price, 0),
-        marketPrice: toNumber(raw.market_price, 0),
-        delivery: toNumber(raw.delivery, 0),
-        inStock:
-            (raw.in_stock ?? "available").toLowerCase() === "available",
-        sold: toNumber(raw.sold, 0),
-        images,
-        customizationFields,
-    };
+	return {
+		id,
+		name: raw.name ?? "Untitled product",
+		description: raw.description ?? "",
+		sellingPrice: toNumber(raw.selling_price, 0),
+		marketPrice: toNumber(raw.market_price, 0),
+		delivery: toNumber(raw.delivery, 0),
+		inStock: (raw.in_stock ?? "available").toLowerCase() === "available",
+		sold: toNumber(raw.sold, 0),
+		images,
+		customizeReqs: raw.customize_reqs ?? null,
+		options: Array.isArray(raw.options) ? raw.options : undefined,
+		noCustomization:
+			raw.no_customization === true ||
+			String(raw.no_customization ?? "").toLowerCase() === "true" ||
+			String(raw.no_customization ?? "").toLowerCase() === "yes",
+	};
 }
 
 /* ============================================================================
@@ -209,807 +401,1276 @@ function normalizeProduct(raw: RawProduct): Product {
 ============================================================================ */
 
 export default function ProductPage() {
-    const params = useParams<{ id: string }>();
-    const router = useRouter();
+	const params = useParams<{ id: string }>();
+	const router = useRouter();
 
-    const productId = params?.id;
+	const productId = params?.id;
 
-    const [product, setProduct] = useState<Product | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+	const [product, setProduct] = useState<Product | null>(null);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState("");
 
-    const [activeImage, setActiveImage] = useState(0);
+	const [activeImage, setActiveImage] = useState(0);
 
-    const [customValues, setCustomValues] = useState<
-        Record<string, string>
-    >({});
+	/* =====================================================
+	   CUSTOMIZATION (mirrors ProductCard)
+	===================================================== */
 
-    const [customFiles, setCustomFiles] = useState<
-        Record<string, File | null>
-    >({});
+	const [customizationValues, setCustomizationValues] = useState<
+		Record<string, string>
+	>({});
 
-    const [addingToCart, setAddingToCart] = useState(false);
-    const [addError, setAddError] = useState("");
-    const [addedToCart, setAddedToCart] = useState(false);
+	const [customizationFiles, setCustomizationFiles] = useState<
+		Record<string, File[]>
+	>({});
 
-    /* ==========================================================================
-       FETCH PRODUCT
-    ========================================================================== */
+	const [customizationValidationError, setCustomizationValidationError] =
+		useState("");
 
-    const fetchProduct = async () => {
-        if (!productId) {
-            return;
-        }
+	const [rawOrder, setRawOrder] = useState(false);
 
-        setLoading(true);
-        setError("");
+	const [selectedOption, setSelectedOption] = useState("");
 
-        try {
-            const formData = new FormData();
-            formData.append("product_id", String(productId));
+	const [addingToCart, setAddingToCart] = useState(false);
+	const [addError, setAddError] = useState("");
+	const [addedToCart, setAddedToCart] = useState(false);
 
-            const response = await fetch(`/api/product/${productId}`, {
-                method: "POST",
-                credentials: "include",
-                cache: "no-store",
-                body: formData,
-            });
+	/* =====================================================
+	   REVIEWS
+	===================================================== */
 
-            const data: ProductResponse = await response
-                .json()
-                .catch(() => ({}));
+	const [reviews, setReviews] = useState<Review[]>([]);
+	const [reviewsLoading, setReviewsLoading] = useState(true);
+	const [reviewsError, setReviewsError] = useState("");
 
-            console.log("PRODUCT RESPONSE:", data);
+	const customizeRequirements = useMemo(
+		() => parseCustomizeRequirements(product?.customizeReqs),
+		[product?.customizeReqs],
+	);
 
-            if (!response.ok) {
-                throw new Error(
-                    data?.message || "Unable to load this product.",
-                );
-            }
+	const hasOptions =
+		!!product &&
+		!product.noCustomization &&
+		Array.isArray(product.options) &&
+		product.options.length > 0;
 
-            const rawProduct =
-                data.result ??
-                data.product ??
-                data.data ??
-                data;
+	const hasCustomization =
+		!!product &&
+		!product.noCustomization &&
+		(customizeRequirements.length > 0 || hasOptions);
 
-            const normalized = normalizeProduct(rawProduct);
+	/* ==========================================================================
+	   FETCH PRODUCT
+	========================================================================== */
 
-            console.log("NORMALIZED PRODUCT:", normalized);
+	const fetchProduct = async () => {
+		if (!productId) {
+			return;
+		}
 
-            setProduct(normalized);
-            setActiveImage(0);
-            setCustomValues({});
-            setCustomFiles({});
-        } catch (err) {
-            console.error("Fetch product failed:", err);
+		setLoading(true);
+		setError("");
 
-            setError(
-                err instanceof Error
-                    ? err.message
-                    : "Unable to load this product.",
-            );
-        } finally {
-            setLoading(false);
-        }
-    };
+		try {
+			const formData = new FormData();
+			formData.append("product_id", String(productId));
 
-    useEffect(() => {
-        fetchProduct();
+			const response = await fetch(`/api/product/${productId}`, {
+				method: "POST",
+				credentials: "include",
+				cache: "no-store",
+				body: formData,
+			});
 
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [productId]);
+			const data: ProductResponse = await response.json().catch(() => ({}));
 
-    /* ==========================================================================
-       PRICE
-    ========================================================================== */
+			console.log("PRODUCT RESPONSE:", data);
 
-    const discountPercent = useMemo(() => {
-        if (!product || product.marketPrice <= product.sellingPrice) {
-            return 0;
-        }
-
-        return Math.round(
-            ((product.marketPrice - product.sellingPrice) /
-                product.marketPrice) *
-                100,
-        );
-    }, [product]);
-
-    /* ==========================================================================
-       IMAGE NAVIGATION
-    ========================================================================== */
-
-    const showPreviousImage = () => {
-        if (!product || product.images.length <= 1) {
-            return;
-        }
-
-        setActiveImage((current) =>
-            current === 0
-                ? product.images.length - 1
-                : current - 1,
-        );
-    };
-
-    const showNextImage = () => {
-        if (!product || product.images.length <= 1) {
-            return;
-        }
-
-        setActiveImage((current) =>
-            current === product.images.length - 1
-                ? 0
-                : current + 1,
-        );
-    };
-
-    /* ==========================================================================
-       CUSTOMIZATION
-    ========================================================================== */
-
-    const handleTextFieldChange = (
-        field: CustomizationField,
-        value: string,
-    ) => {
-        setCustomValues((previous) => ({
-            ...previous,
-            [field.key]: field.maxLength
-                ? value.slice(0, field.maxLength)
-                : value,
-        }));
-    };
-
-    const handlePhotoFieldChange = (
-        field: CustomizationField,
-        file: File | null,
-    ) => {
-        setCustomFiles((previous) => ({
-            ...previous,
-            [field.key]: file,
-        }));
-    };
-
-    /* ==========================================================================
-       REQUIRED FIELD VALIDATION
-    ========================================================================== */
-
-    const missingRequiredField = useMemo(() => {
-        if (!product) {
-            return null;
-        }
-
-        return product.customizationFields.find((field) => {
-            if (!field.required) {
-                return false;
-            }
-
-            if (field.type === "photo") {
-                return !customFiles[field.key];
-            }
-
-            return !(customValues[field.key] ?? "").trim();
-        });
-    }, [product, customValues, customFiles]);
-
-    /* ==========================================================================
-       ADD TO CART
-    ========================================================================== */
-
-    const handleAddToCart = async () => {
-			if (!product || !product.inStock || addingToCart) {
-				return;
+			if (!response.ok) {
+				throw new Error(data?.message || "Unable to load this product.");
 			}
 
-			if (missingRequiredField) {
-				setAddError(`Please fill in "${missingRequiredField.label}" first.`);
-				return;
+			const rawProduct = data.result ?? data.product ?? data.data ?? data;
+
+			const normalized = normalizeProduct(rawProduct);
+
+			console.log("NORMALIZED PRODUCT:", normalized);
+
+			setProduct(normalized);
+			setActiveImage(0);
+			resetCustomization();
+		} catch (err) {
+			console.error("Fetch product failed:", err);
+
+			setError(
+				err instanceof Error ? err.message : "Unable to load this product.",
+			);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		fetchProduct();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [productId]);
+
+	/* ==========================================================================
+	   FETCH REVIEWS
+	========================================================================== */
+
+	const fetchReviews = async () => {
+		if (!productId) {
+			return;
+		}
+
+		setReviewsLoading(true);
+		setReviewsError("");
+
+		try {
+			const formData = new FormData();
+			formData.append("product_id", String(productId));
+
+			const response = await fetch("/api/reviews", {
+				method: "POST",
+				credentials: "include",
+				cache: "no-store",
+				body: formData,
+			});
+
+			const data: RawReviewsResponse = await response.json().catch(() => ({}));
+
+			console.log("REVIEWS RESPONSE:", data);
+
+			if (!response.ok) {
+				throw new Error(data?.message || "Unable to load reviews.");
 			}
 
-			setAddingToCart(true);
-			setAddError("");
-			setAddedToCart(false);
+			const rawReviews = data.reviews ?? data.result ?? data.data ?? [];
 
-			try {
-				const formData = new FormData();
+			const normalized = rawReviews.map((raw, index) =>
+				normalizeReview(raw, index),
+			);
 
-				// Only product ID
-				formData.append("product_id", product.id);
+			console.log("NORMALIZED REVIEWS:", normalized);
 
-				// Send only what the user entered/uploaded
-				for (const field of product.customizationFields) {
-					if (field.type === "photo") {
-						const file = customFiles[field.key];
+			setReviews(normalized);
+		} catch (err) {
+			console.error("Fetch reviews failed:", err);
 
-						if (file) {
-							formData.append(field.key, file);
-						}
+			setReviewsError(
+				err instanceof Error ? err.message : "Unable to load reviews.",
+			);
+		} finally {
+			setReviewsLoading(false);
+		}
+	};
 
-						continue;
-					}
+	useEffect(() => {
+		fetchReviews();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [productId]);
 
-					const value = (customValues[field.key] ?? "").trim();
+	/* ==========================================================================
+	   PRICE
+	========================================================================== */
 
-					// Only send text if the user actually entered something
-					if (value) {
-						formData.append(field.key, value);
-					}
+	const discountPercent = useMemo(() => {
+		if (!product || product.marketPrice <= product.sellingPrice) {
+			return 0;
+		}
+
+		return Math.round(
+			((product.marketPrice - product.sellingPrice) / product.marketPrice) *
+				100,
+		);
+	}, [product]);
+
+	const averageRating = useMemo(() => {
+		if (reviews.length === 0) {
+			return 0;
+		}
+
+		return (
+			reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
+		);
+	}, [reviews]);
+
+	/* ==========================================================================
+	   IMAGE NAVIGATION
+	========================================================================== */
+
+	const showPreviousImage = () => {
+		if (!product || product.images.length <= 1) return;
+		setActiveImage((current) =>
+			current === 0 ? product.images.length - 1 : current - 1,
+		);
+	};
+
+	const showNextImage = () => {
+		if (!product || product.images.length <= 1) return;
+		setActiveImage((current) =>
+			current === product.images.length - 1 ? 0 : current + 1,
+		);
+	};
+
+	/* =====================================================
+	   RESET CUSTOMIZATION
+	===================================================== */
+
+	const resetCustomization = () => {
+		setCustomizationValues({});
+		setCustomizationFiles({});
+		setCustomizationValidationError("");
+		setSelectedOption("");
+		setRawOrder(false);
+	};
+
+	/* =====================================================
+	   TOGGLE RAW ORDER
+	===================================================== */
+
+	const handleToggleRawOrder = () => {
+		setCustomizationValidationError("");
+		setRawOrder((previous) => !previous);
+	};
+
+	/* =====================================================
+	   TEXT CHANGE
+	===================================================== */
+
+	const handleTextChange = (key: string, value: string, max: number) => {
+		setCustomizationValues((previous) => ({
+			...previous,
+			[key]: value.slice(0, max),
+		}));
+
+		setCustomizationValidationError("");
+	};
+
+	/* =====================================================
+	   SINGLE PHOTO
+	===================================================== */
+
+	const handleSinglePhotoChange = (
+		requirement: CustomizeRequirement,
+		file: File | undefined,
+	) => {
+		if (!file) return;
+
+		setCustomizationValidationError("");
+
+		if (!file.type.startsWith("image/")) {
+			setCustomizationValidationError(
+				`${requirement.placeholder}: Please select an image file.`,
+			);
+			return;
+		}
+
+		if (file.size > MAX_FILE_SIZE) {
+			setCustomizationValidationError(
+				`${requirement.placeholder}: Image must be 10 MB or smaller.`,
+			);
+			return;
+		}
+
+		setCustomizationFiles((previous) => ({
+			...previous,
+			[requirement.key]: [file],
+		}));
+	};
+
+	/* =====================================================
+	   MULTIPLE PHOTOS
+
+	   This is the piece the product page was missing — a
+	   "photos" requirement (unlike "photo") allows the buyer
+	   to pick several images, up to requirement.max, each
+	   validated for type and size, all stored under the same
+	   field key as a File[].
+	===================================================== */
+
+	const handleMultiplePhotoChange = (
+		requirement: CustomizeRequirement,
+		fileList: FileList | null,
+	) => {
+		if (!fileList) return;
+
+		setCustomizationValidationError("");
+
+		const selectedFiles = Array.from(fileList);
+
+		if (selectedFiles.length > requirement.max) {
+			setCustomizationValidationError(
+				`${requirement.placeholder}: Please select up to ${requirement.max} photos.`,
+			);
+			return;
+		}
+
+		const invalidFile = selectedFiles.find(
+			(file) => !file.type.startsWith("image/"),
+		);
+
+		if (invalidFile) {
+			setCustomizationValidationError(
+				`${requirement.placeholder}: Only image files are allowed.`,
+			);
+			return;
+		}
+
+		const oversizedFile = selectedFiles.find(
+			(file) => file.size > MAX_FILE_SIZE,
+		);
+
+		if (oversizedFile) {
+			setCustomizationValidationError(
+				`${requirement.placeholder}: Each image must be 10 MB or smaller.`,
+			);
+			return;
+		}
+
+		setCustomizationFiles((previous) => ({
+			...previous,
+			[requirement.key]: selectedFiles,
+		}));
+	};
+
+	/* =====================================================
+	   REMOVE PHOTO
+	===================================================== */
+
+	const removePhoto = (key: string, index: number) => {
+		setCustomizationFiles((previous) => ({
+			...previous,
+			[key]: (previous[key] || []).filter(
+				(_, fileIndex) => fileIndex !== index,
+			),
+		}));
+	};
+
+	/* =====================================================
+	   VALIDATE CUSTOMIZATION
+	===================================================== */
+
+	const validateCustomization = (): boolean => {
+		if (hasOptions && !selectedOption.trim()) {
+			setCustomizationValidationError("Please select an option.");
+			return false;
+		}
+
+		for (const requirement of customizeRequirements) {
+			if (requirement.type === "text") {
+				const value = customizationValues[requirement.key]?.trim() || "";
+
+				if (!requirement.optional && !value) {
+					setCustomizationValidationError(
+						`${requirement.placeholder} is required.`,
+					);
+					return false;
 				}
 
-				const response = await fetch("/api/cart/add", {
-					method: "POST",
-					credentials: "include",
-					body: formData,
+				if (value.length > requirement.max) {
+					setCustomizationValidationError(
+						`${requirement.placeholder}: Maximum ${requirement.max} characters allowed.`,
+					);
+					return false;
+				}
+			}
+
+			if (requirement.type === "photo") {
+				const files = customizationFiles[requirement.key] || [];
+
+				if (!requirement.optional && files.length === 0) {
+					setCustomizationValidationError(
+						`${requirement.placeholder} is required.`,
+					);
+					return false;
+				}
+			}
+
+			if (requirement.type === "photos") {
+				const files = customizationFiles[requirement.key] || [];
+
+				if (!requirement.optional && files.length === 0) {
+					setCustomizationValidationError(
+						`${requirement.placeholder} is required.`,
+					);
+					return false;
+				}
+
+				if (files.length > requirement.max) {
+					setCustomizationValidationError(
+						`${requirement.placeholder}: Maximum ${requirement.max} photos allowed.`,
+					);
+					return false;
+				}
+			}
+		}
+
+		return true;
+	};
+
+	/* ==========================================================================
+	   ADD TO CART (customized / option-based)
+
+	   Text fields append directly, single photo appends under its
+	   key, multiple photos append under "key[]" — same shape
+	   ProductCard sends.
+	========================================================== */
+
+	const addToCart = async (
+		values: Record<string, string>,
+		files: Record<string, File[]>,
+		option?: string,
+	) => {
+		if (!product || !product.inStock || addingToCart) {
+			return;
+		}
+
+		setAddError("");
+		setAddingToCart(true);
+		setAddedToCart(false);
+
+		try {
+			const formData = new FormData();
+
+			formData.append("product_id", product.id);
+
+			if (!product.noCustomization && option?.trim()) {
+				formData.append("option", option.trim());
+			}
+
+			if (!product.noCustomization) {
+				Object.entries(values).forEach(([key, value]) => {
+					const trimmedValue = value.trim();
+					if (trimmedValue) {
+						formData.append(key, trimmedValue);
+					}
 				});
 
-				const data = await response.json().catch(() => ({}));
+				Object.entries(files).forEach(([key, fileList]) => {
+					if (!fileList.length) return;
 
-				console.log("ADD TO CART RESPONSE:", data);
+					if (fileList.length === 1) {
+						formData.append(key, fileList[0]);
+						return;
+					}
 
-				if (!response.ok) {
-					throw new Error(data?.message || "Unable to add this to your cart.");
-				}
-
-				setAddedToCart(true);
-			} catch (err) {
-				console.error("Add to cart failed:", err);
-
-				setAddError(
-					err instanceof Error
-						? err.message
-						: "Unable to add this to your cart.",
-				);
-			} finally {
-				setAddingToCart(false);
+					fileList.forEach((file) => {
+						formData.append(`${key}[]`, file);
+					});
+				});
 			}
-		};
 
-    /* ==========================================================================
-       LOADING
-    ========================================================================== */
+			const response = await fetch("/api/cart/add", {
+				method: "POST",
+				credentials: "include",
+				body: formData,
+			});
 
-    if (loading) {
-        return (
-            <main className="min-h-screen bg-[#FBF9F7]">
-                <div className="mx-auto flex min-h-screen max-w-4xl items-center justify-center px-5 py-12">
-                    <div className="flex flex-col items-center gap-3">
-                        <span className="h-8 w-8 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
+			const data = await response.json().catch(() => ({}));
 
-                        <p className="text-sm text-[#2E2E2E]/50">
-                            Loading product...
-                        </p>
-                    </div>
-                </div>
-            </main>
-        );
-    }
+			console.log("ADD TO CART RESPONSE:", data);
 
-    /* ==========================================================================
-       ERROR / NOT FOUND
-    ========================================================================== */
+			if (!response.ok) {
+				throw new Error(data?.message || "Unable to add this to your cart.");
+			}
 
-    if (error || !product) {
-        return (
-					<main
-						className="min-h-screen bg-[#FBF9F7] pt-[112px]
-					sm:pt-[120px]"
-					>
-						<div className="mx-auto flex min-h-screen max-w-4xl items-center justify-center px-5 py-12">
-							<div className="w-full rounded-3xl border border-red-200 bg-white px-6 py-14 text-center shadow-[0_12px_45px_rgba(80,40,20,0.06)] sm:px-12">
-								<div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-red-50">
-									<AlertCircle
-										size={32}
-										className="text-red-500"
-										strokeWidth={1.7}
-									/>
-								</div>
+			setAddedToCart(true);
+			resetCustomization();
 
-								<h1 className="mt-6 text-2xl font-bold text-[#2E2E2E]">
-									Couldn't load this product
-								</h1>
+			setTimeout(() => setAddedToCart(false), 1800);
+		} catch (err) {
+			console.error("Add to cart failed:", err);
 
-								<p className="mx-auto mt-3 max-w-md text-sm leading-7 text-[#2E2E2E]/55">
-									{error || "This product doesn't seem to exist."}
-								</p>
+			setAddError(
+				err instanceof Error ? err.message : "Unable to add this to your cart.",
+			);
+		} finally {
+			setAddingToCart(false);
+		}
+	};
 
-								<div className="mt-7 flex items-center justify-center gap-3">
-									<button
-										type="button"
-										onClick={fetchProduct}
-										className="inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#721318]"
-									>
-										Try Again
-									</button>
+	/* ==========================================================================
+	   ADD TO CART (raw / no customization)
+	========================================================== */
 
-									<Link
-										href="/shop"
-										className="inline-flex items-center gap-2 rounded-xl border border-[#DED6D0] px-6 py-3.5 text-sm font-semibold text-[#2E2E2E]/70 transition hover:border-[#85161B]/30 hover:text-[#85161B]"
-									>
-										Back to Shop
-									</Link>
-								</div>
-							</div>
-						</div>
-					</main>
-				);
-    }
+	const addRawToCart = async () => {
+		if (!product || !product.inStock || addingToCart) {
+			return;
+		}
 
-    const heroImage = product.images[activeImage];
+		setAddError("");
+		setAddingToCart(true);
+		setAddedToCart(false);
 
-    return (
+		try {
+			const formData = new FormData();
+			formData.append("product_id", product.id);
+			formData.append("customize", "raw");
+
+			const response = await fetch("/api/cart/add", {
+				method: "POST",
+				credentials: "include",
+				body: formData,
+			});
+
+			const data = await response.json().catch(() => ({}));
+
+			console.log("ADD TO CART (RAW) RESPONSE:", data);
+
+			if (!response.ok) {
+				throw new Error(data?.message || "Unable to add this to your cart.");
+			}
+
+			setAddedToCart(true);
+			resetCustomization();
+
+			setTimeout(() => setAddedToCart(false), 1800);
+		} catch (err) {
+			console.error("Add to cart failed:", err);
+
+			setAddError(
+				err instanceof Error ? err.message : "Unable to add this to your cart.",
+			);
+		} finally {
+			setAddingToCart(false);
+		}
+	};
+
+	/* =====================================================
+	   HANDLE ADD TO CART
+	===================================================== */
+
+	const handleAddToCart = async () => {
+		if (!product || !product.inStock || addingToCart) {
+			return;
+		}
+
+		setAddError("");
+		setCustomizationValidationError("");
+
+		if (product.noCustomization) {
+			await addToCart({}, {});
+			return;
+		}
+
+		if (!hasCustomization) {
+			await addToCart({}, {});
+			return;
+		}
+
+		if (rawOrder) {
+			await addRawToCart();
+			return;
+		}
+
+		const valid = validateCustomization();
+		if (!valid) return;
+
+		await addToCart(customizationValues, customizationFiles, selectedOption);
+	};
+
+	/* ==========================================================================
+	   LOADING
+	========================================================================== */
+
+	if (loading) {
+		return (
+			<main className="min-h-screen bg-[#FBF9F7]">
+				<div className="mx-auto flex min-h-screen max-w-4xl items-center justify-center px-5 py-12">
+					<div className="flex flex-col items-center gap-3">
+						<span className="h-8 w-8 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
+						<p className="text-sm text-[#2E2E2E]/50">Loading product...</p>
+					</div>
+				</div>
+			</main>
+		);
+	}
+
+	/* ==========================================================================
+	   ERROR / NOT FOUND
+	========================================================================== */
+
+	if (error || !product) {
+		return (
 			<main className="min-h-screen bg-[#FBF9F7] pt-[112px] sm:pt-[120px]">
-				{/* ==========================================================================
-                FONT
-            ========================================================================== */}
+				<div className="mx-auto flex min-h-screen max-w-4xl items-center justify-center px-5 py-12">
+					<div className="w-full rounded-3xl border border-red-200 bg-white px-6 py-14 text-center shadow-[0_12px_45px_rgba(80,40,20,0.06)] sm:px-12">
+						<div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-red-50">
+							<AlertCircle
+								size={32}
+								className="text-red-500"
+								strokeWidth={1.7}
+							/>
+						</div>
 
-				<style>{`
-                @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap');
+						<h1 className="mt-6 text-2xl font-bold text-[#2E2E2E]">
+							Couldn't load this product
+						</h1>
 
-                .font-display {
-                    font-family: 'Fraunces', Georgia, serif;
-                    font-optical-sizing: auto;
-                }
-            `}</style>
+						<p className="mx-auto mt-3 max-w-md text-sm leading-7 text-[#2E2E2E]/55">
+							{error || "This product doesn't seem to exist."}
+						</p>
 
-				{/* ==========================================================================
-                PRODUCT CONTENT
-            ========================================================================== */}
+						<div className="mt-7 flex items-center justify-center gap-3">
+							<button
+								type="button"
+								onClick={fetchProduct}
+								className="inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#721318]"
+							>
+								Try Again
+							</button>
 
-				<section className="mx-auto max-w-7xl px-5 py-7 sm:px-6 lg:px-8 lg:py-10">
-					{/* INLINE BACK BUTTON */}
+							<Link
+								href="/shop"
+								className="inline-flex items-center gap-2 rounded-xl border border-[#DED6D0] px-6 py-3.5 text-sm font-semibold text-[#2E2E2E]/70 transition hover:border-[#85161B]/30 hover:text-[#85161B]"
+							>
+								Back to Shop
+							</Link>
+						</div>
+					</div>
+				</div>
+			</main>
+		);
+	}
 
-					<button
-						type="button"
-						onClick={() => router.back()}
-						className="mb-7 inline-flex items-center gap-2 rounded-lg px-1 py-1 text-sm font-medium text-[#2E2E2E]/55 transition-colors hover:text-[#85161B]"
-					>
-						<ArrowLeft size={16} />
-						Back
-					</button>
+	const heroImage = product.images[activeImage];
 
-					<div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-14">
-						{/* ==========================================================================
-                        GALLERY
-                    ========================================================================== */}
+	return (
+		<main className="min-h-screen bg-[#FBF9F7] pt-[112px] sm:pt-[120px]">
+			<style>{`
+				@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap');
 
-						<div>
-							{/* MAIN IMAGE */}
+				.font-display {
+					font-family: 'Fraunces', Georgia, serif;
+					font-optical-sizing: auto;
+				}
+			`}</style>
 
-							<div className="group relative aspect-square overflow-hidden rounded-3xl border border-[#E8DED7] bg-white">
-								{heroImage ? (
-									<img
-										src={heroImage}
-										alt={product.name}
-										className="h-full w-full object-cover"
-										onError={(event) => {
-											event.currentTarget.style.display = "none";
-										}}
-									/>
-								) : (
-									<div className="flex h-full w-full items-center justify-center">
-										<ShoppingBag size={40} className="text-[#85161B]/25" />
-									</div>
-								)}
+			<section className="mx-auto max-w-7xl px-5 py-7 sm:px-6 lg:px-8 lg:py-10">
+				<button
+					type="button"
+					onClick={() => router.back()}
+					className="mb-7 inline-flex items-center gap-2 rounded-lg px-1 py-1 text-sm font-medium text-[#2E2E2E]/55 transition-colors hover:text-[#85161B]"
+				>
+					<ArrowLeft size={16} />
+					Back
+				</button>
 
-								{/* LEFT ARROW */}
+				<div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-14">
+					{/* =====================================================
+					    GALLERY
+					===================================================== */}
 
-								{product.images.length > 1 && (
-									<button
-										type="button"
-										aria-label="Previous image"
-										onClick={showPreviousImage}
-										className="
-                                        absolute
-                                        left-3
-                                        top-1/2
-                                        flex
-                                        h-10
-                                        w-10
-                                        -translate-y-1/2
-                                        items-center
-                                        justify-center
-                                        rounded-full
-                                        border
-                                        border-white/70
-                                        bg-white/90
-                                        text-[#2E2E2E]
-                                        shadow-md
-                                        backdrop-blur-sm
-                                        transition
-                                        hover:bg-white
-                                        hover:text-[#85161B]
-                                    "
-									>
-										<ArrowLeft size={18} />
-									</button>
-								)}
-
-								{/* RIGHT ARROW */}
-
-								{product.images.length > 1 && (
-									<button
-										type="button"
-										aria-label="Next image"
-										onClick={showNextImage}
-										className="
-                                        absolute
-                                        right-3
-                                        top-1/2
-                                        flex
-                                        h-10
-                                        w-10
-                                        -translate-y-1/2
-                                        items-center
-                                        justify-center
-                                        rounded-full
-                                        border
-                                        border-white/70
-                                        bg-white/90
-                                        text-[#2E2E2E]
-                                        shadow-md
-                                        backdrop-blur-sm
-                                        transition
-                                        hover:bg-white
-                                        hover:text-[#85161B]
-                                    "
-									>
-										<ArrowRight size={18} />
-									</button>
-								)}
-
-								{/* IMAGE COUNTER */}
-
-								{product.images.length > 1 && (
-									<div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
-										{activeImage + 1} / {product.images.length}
-									</div>
-								)}
-							</div>
-
-							{/* THUMBNAILS */}
+					<div>
+						<div className="group relative aspect-square overflow-hidden rounded-3xl border border-[#E8DED7] bg-white">
+							{heroImage ? (
+								<img
+									src={heroImage}
+									alt={product.name}
+									className="h-full w-full object-cover"
+									onError={(event) => {
+										event.currentTarget.style.display = "none";
+									}}
+								/>
+							) : (
+								<div className="flex h-full w-full items-center justify-center">
+									<ShoppingBag size={40} className="text-[#85161B]/25" />
+								</div>
+							)}
 
 							{product.images.length > 1 && (
-								<div className="mt-4 flex gap-3 overflow-x-auto pb-1">
-									{product.images.map((img, index) => (
-										<button
-											key={img + index}
-											type="button"
-											aria-label={`View image ${index + 1}`}
-											onClick={() => setActiveImage(index)}
-											className={`
-                                            h-20
-                                            w-20
-                                            shrink-0
-                                            overflow-hidden
-                                            rounded-xl
-                                            border-2
-                                            bg-white
-                                            transition-all
-                                            ${
-																							activeImage === index
-																								? "border-[#85161B] opacity-100 shadow-sm"
-																								: "border-[#E8DED7] opacity-65 hover:opacity-100"
-																						}
-                                        `}
-										>
-											<img
-												src={img}
-												alt={`${product.name} ${index + 1}`}
-												className="h-full w-full object-cover"
-											/>
-										</button>
-									))}
+								<button
+									type="button"
+									aria-label="Previous image"
+									onClick={showPreviousImage}
+									className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-white/90 text-[#2E2E2E] shadow-md backdrop-blur-sm transition hover:bg-white hover:text-[#85161B]"
+								>
+									<ArrowLeft size={18} />
+								</button>
+							)}
+
+							{product.images.length > 1 && (
+								<button
+									type="button"
+									aria-label="Next image"
+									onClick={showNextImage}
+									className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-white/90 text-[#2E2E2E] shadow-md backdrop-blur-sm transition hover:bg-white hover:text-[#85161B]"
+								>
+									<ArrowRight size={18} />
+								</button>
+							)}
+
+							{product.images.length > 1 && (
+								<div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
+									{activeImage + 1} / {product.images.length}
 								</div>
 							)}
 						</div>
 
-						{/* ==========================================================================
-                        DETAILS
-                    ========================================================================== */}
-
-						<div>
-							{/* STOCK STATUS */}
-
-							<div className="flex flex-wrap items-center gap-2">
-								{product.inStock ? (
-									<span className="inline-flex items-center gap-1.5 rounded-full bg-[#EDF8F0] px-3 py-1 text-[11px] font-semibold text-[#31824A]">
-										<CheckCircle2 size={12} />
-										In Stock
-									</span>
-								) : (
-									<span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-[11px] font-semibold text-red-600">
-										<PackageX size={12} />
-										Out of Stock
-									</span>
-								)}
-
-								{product.sold > 0 && (
-									<span className="text-[11px] text-[#2E2E2E]/40">
-										{product.sold}+ sold
-									</span>
-								)}
+						{product.images.length > 1 && (
+							<div className="mt-4 flex gap-3 overflow-x-auto pb-1">
+								{product.images.map((img, index) => (
+									<button
+										key={img + index}
+										type="button"
+										aria-label={`View image ${index + 1}`}
+										onClick={() => setActiveImage(index)}
+										className={`h-20 w-20 shrink-0 overflow-hidden rounded-xl border-2 bg-white transition-all ${
+											activeImage === index
+												? "border-[#85161B] opacity-100 shadow-sm"
+												: "border-[#E8DED7] opacity-65 hover:opacity-100"
+										}`}
+									>
+										<img
+											src={img}
+											alt={`${product.name} ${index + 1}`}
+											className="h-full w-full object-cover"
+										/>
+									</button>
+								))}
 							</div>
+						)}
+					</div>
 
-							{/* PRODUCT NAME */}
+					{/* =====================================================
+					    DETAILS
+					===================================================== */}
 
-							<h1 className="font-display mt-3 text-3xl font-semibold leading-tight text-[#2E2E2E] sm:text-4xl">
-								{product.name}
-							</h1>
-
-							{/* DESCRIPTION */}
-
-							{product.description && (
-								<p className="mt-4 whitespace-pre-line text-[15px] leading-7 text-[#2E2E2E]/60">
-									{product.description}
-								</p>
-							)}
-
-							{/* PRICE */}
-
-							<div className="mt-6 flex flex-wrap items-end gap-3">
-								<span className="text-3xl font-bold text-[#85161B]">
-									₹{product.sellingPrice.toFixed(2)}
+					<div>
+						<div className="flex flex-wrap items-center gap-2">
+							{product.inStock ? (
+								<span className="inline-flex items-center gap-1.5 rounded-full bg-[#EDF8F0] px-3 py-1 text-[11px] font-semibold text-[#31824A]">
+									<CheckCircle2 size={12} />
+									In Stock
 								</span>
-
-								{product.marketPrice > product.sellingPrice && (
-									<>
-										<span className="text-base text-[#2E2E2E]/35 line-through">
-											₹{product.marketPrice.toFixed(2)}
-										</span>
-
-										<span className="rounded-full bg-[#F7D6BF]/50 px-2.5 py-1 text-[11px] font-semibold text-[#85161B]">
-											{discountPercent}% off
-										</span>
-									</>
-								)}
-							</div>
-
-							{/* DELIVERY */}
-
-							{product.delivery > 0 && (
-								<p className="mt-2 flex items-center gap-1.5 text-xs text-[#2E2E2E]/45">
-									<Truck size={13} />
-									Delivery ₹{product.delivery.toFixed(2)}
-								</p>
+							) : (
+								<span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-[11px] font-semibold text-red-600">
+									<PackageX size={12} />
+									Out of Stock
+								</span>
 							)}
 
-							{/* ==========================================================================
-                            PERSONALIZATION TICKET
-                        ========================================================================== */}
+							{product.sold > 0 && (
+								<span className="text-[11px] text-[#2E2E2E]/40">
+									{product.sold}+ sold
+								</span>
+							)}
 
-							{product.customizationFields.length > 0 && (
-								<div className="relative mt-8 rounded-2xl border-2 border-dashed border-[#D9BBAE] bg-[#FFFBF8] p-6">
-									{/* Punch hole */}
+							{!reviewsLoading && reviews.length > 0 && (
+								<a
+									href="#reviews"
+									className="inline-flex items-center gap-1 text-[11px] font-medium text-[#2E2E2E]/55 transition hover:text-[#85161B]"
+								>
+									<Star size={12} className="fill-[#F5A623] text-[#F5A623]" />
+									{averageRating.toFixed(1)} ({reviews.length})
+								</a>
+							)}
+						</div>
 
-									<div className="absolute -top-3 left-1/2 h-6 w-6 -translate-x-1/2 rounded-full border-2 border-dashed border-[#D9BBAE] bg-[#FBF9F7]" />
+						<h1 className="font-display mt-3 text-3xl font-semibold leading-tight text-[#2E2E2E] sm:text-4xl">
+							{product.name}
+						</h1>
 
-									{/* TITLE */}
+						{product.description && (
+							<p className="mt-4 whitespace-pre-line text-[15px] leading-7 text-[#2E2E2E]/60">
+								{product.description}
+							</p>
+						)}
 
-									<p className="font-display text-sm font-semibold uppercase tracking-[0.20em] text-[#85161B] sm:text-[15px]">
-										Personalization Ticket
-									</p>
+						<div className="mt-6 flex flex-wrap items-end gap-3">
+							<span className="text-3xl font-bold text-[#85161B]">
+								₹{product.sellingPrice.toFixed(2)}
+							</span>
 
-									{/* SUBTITLE */}
+							{product.marketPrice > product.sellingPrice && (
+								<>
+									<span className="text-base text-[#2E2E2E]/35 line-through">
+										₹{product.marketPrice.toFixed(2)}
+									</span>
 
-									<p className="mt-2 text-[13px] leading-6 text-[#2E2E2E]/55">
-										Tell us how to make this one yours.
-									</p>
+									<span className="rounded-full bg-[#F7D6BF]/50 px-2.5 py-1 text-[11px] font-semibold text-[#85161B]">
+										{discountPercent}% off
+									</span>
+								</>
+							)}
+						</div>
 
+						{product.delivery > 0 && (
+							<p className="mt-2 flex items-center gap-1.5 text-xs text-[#2E2E2E]/45">
+								<Truck size={13} />
+								Delivery ₹{product.delivery.toFixed(2)}
+							</p>
+						)}
+
+						{/* ==========================================================================
+						    PERSONALIZATION TICKET
+						========================================================================== */}
+
+						{hasCustomization && (
+							<div className="relative mt-8 rounded-2xl border-2 border-dashed border-[#D9BBAE] bg-[#FFFBF8] p-6">
+								<div className="absolute -top-3 left-1/2 h-6 w-6 -translate-x-1/2 rounded-full border-2 border-dashed border-[#D9BBAE] bg-[#FBF9F7]" />
+
+								<p className="font-display text-sm font-semibold uppercase tracking-[0.20em] text-[#85161B] sm:text-[15px]">
+									Personalization Ticket
+								</p>
+
+								<p className="mt-2 text-[13px] leading-6 text-[#2E2E2E]/55">
+									Tell us how to make this one yours.
+								</p>
+
+								{/* RAW ORDER TOGGLE */}
+
+								<div className="mt-5 rounded-xl border border-[#DED6D0] bg-white p-4">
+									<label className="flex cursor-pointer items-start gap-3">
+										<input
+											type="checkbox"
+											checked={rawOrder}
+											onChange={handleToggleRawOrder}
+											className="mt-0.5 h-4 w-4 accent-[#85161B]"
+										/>
+
+										<div className="min-w-0">
+											<span className="text-sm font-semibold text-[#202020]">
+												No customization — send raw product
+											</span>
+											<p className="mt-1 text-xs text-black/45">
+												Skip personalization and receive the plain product
+												as-is.
+											</p>
+										</div>
+									</label>
+
+									{rawOrder && (
+										<div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+											<AlertTriangle
+												size={14}
+												strokeWidth={2}
+												className="mt-0.5 shrink-0 text-amber-600"
+											/>
+											<p className="text-[11px] leading-[1.5] text-amber-800">
+												A raw product will be delivered without any
+												customization applied — preferably suited for resellers.
+											</p>
+										</div>
+									)}
+								</div>
+
+								{!rawOrder && (
 									<div className="mt-6 space-y-6">
-										{product.customizationFields.map((field) =>
-											field.type === "photo" ? (
-												<div key={field.key}>
-													{/* PHOTO LABEL */}
+										{/* OPTION */}
 
-													<label className="mb-2.5 flex items-center gap-1.5 text-sm font-semibold text-[#2E2E2E]">
-														<Camera size={15} className="text-[#85161B]" />
+										{hasOptions && (
+											<div>
+												<label
+													htmlFor={`option-${product.id}`}
+													className="mb-2.5 flex items-center justify-between gap-3"
+												>
+													<span className="text-sm font-semibold text-[#2E2E2E]">
+														Select option
+													</span>
+													<span className="text-[10px] font-semibold text-[#85161B]">
+														Required
+													</span>
+												</label>
 
-														{field.label}
-
-														{field.required && (
-															<span className="text-[#85161B]">*</span>
-														)}
-													</label>
-
-													{/* PHOTO UPLOAD */}
-
-													<label
-														className="
-                                                            flex
-                                                            cursor-pointer
-                                                            items-center
-                                                            justify-center
-                                                            gap-2
-                                                            rounded-xl
-                                                            border
-                                                            border-[#DED6D0]
-                                                            bg-white
-                                                            px-4
-                                                            py-3
-                                                            text-sm
-                                                            font-medium
-                                                            text-[#2E2E2E]/60
-                                                            transition
-                                                            hover:border-[#85161B]/40
-                                                            hover:text-[#85161B]
-                                                        "
+												<div className="relative">
+													<select
+														id={`option-${product.id}`}
+														value={selectedOption}
+														onChange={(e) => {
+															setSelectedOption(e.target.value);
+															setCustomizationValidationError("");
+														}}
+														className="w-full appearance-none rounded-xl border border-[#DED6D0] bg-white px-4 py-3 pr-10 text-sm text-[#2E2E2E] outline-none transition focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
 													>
-														<Upload size={15} />
+														<option value="">Select an option</option>
+														{product.options?.map((option, index) => (
+															<option key={`${option}-${index}`} value={option}>
+																{option}
+															</option>
+														))}
+													</select>
 
-														<span className="max-w-[80%] truncate">
-															{customFiles[field.key]
-																? customFiles[field.key]?.name
-																: "Choose a photo"}
-														</span>
-
-														<input
-															type="file"
-															accept="image/*"
-															className="hidden"
-															onChange={(event) =>
-																handlePhotoFieldChange(
-																	field,
-																	event.target.files?.[0] ?? null,
-																)
-															}
-														/>
-													</label>
+													<ChevronDown
+														size={17}
+														className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-black/40"
+													/>
 												</div>
-											) : (
-												<div key={field.key}>
-													{/* TEXT LABEL + COUNTER */}
+											</div>
+										)}
 
+										{/* CUSTOMIZATION REQUIREMENTS */}
+
+										{customizeRequirements.map((requirement) => {
+											const textValue =
+												customizationValues[requirement.key] || "";
+
+											const files = customizationFiles[requirement.key] || [];
+
+											return (
+												<div key={requirement.key}>
 													<div className="mb-2.5 flex items-center justify-between gap-3">
 														<label className="text-sm font-semibold leading-5 text-[#2E2E2E]">
-															{field.label}
-
-															{field.required && (
+															{requirement.placeholder}
+															{!requirement.optional && (
 																<span className="ml-1 text-[#85161B]">*</span>
 															)}
 														</label>
 
-														{field.maxLength && (
+														{requirement.type === "text" && (
 															<span className="shrink-0 text-[11px] font-medium text-[#2E2E2E]/40">
-																{(customValues[field.key] ?? "").length}/
-																{field.maxLength}
+																{textValue.length}/{requirement.max}
 															</span>
 														)}
 													</div>
 
-													{/* TEXT INPUT */}
+													{/* TEXT */}
 
-													<input
-														type="text"
-														value={customValues[field.key] ?? ""}
-														maxLength={field.maxLength}
-														onChange={(event) =>
-															handleTextFieldChange(field, event.target.value)
-														}
-														placeholder={`Enter ${field.label.toLowerCase()}`}
-														className="
-                                                            w-full
-                                                            rounded-xl
-                                                            border
-                                                            border-[#DED6D0]
-                                                            bg-white
-                                                            px-3.5
-                                                            py-3
-                                                            text-sm
-                                                            text-[#2E2E2E]
-                                                            outline-none
-                                                            transition
-                                                            placeholder:text-[#2E2E2E]/30
-                                                            focus:border-[#85161B]
-                                                            focus:ring-2
-                                                            focus:ring-[#85161B]/10
-                                                        "
-													/>
+													{requirement.type === "text" && (
+														<input
+															type="text"
+															value={textValue}
+															maxLength={requirement.max}
+															onChange={(e) =>
+																handleTextChange(
+																	requirement.key,
+																	e.target.value,
+																	requirement.max,
+																)
+															}
+															placeholder={`Enter ${requirement.placeholder.toLowerCase()}`}
+															className="w-full rounded-xl border border-[#DED6D0] bg-white px-3.5 py-3 text-sm text-[#2E2E2E] outline-none transition placeholder:text-[#2E2E2E]/30 focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
+														/>
+													)}
+
+													{/* SINGLE PHOTO */}
+
+													{requirement.type === "photo" && (
+														<div>
+															<label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#DED6D0] bg-white px-4 py-3 text-sm font-medium text-[#2E2E2E]/60 transition hover:border-[#85161B]/40 hover:text-[#85161B]">
+																<Upload size={15} />
+																<span className="max-w-[80%] truncate">
+																	{files[0] ? files[0].name : "Choose a photo"}
+																</span>
+																<input
+																	type="file"
+																	accept="image/*"
+																	className="hidden"
+																	onChange={(e) =>
+																		handleSinglePhotoChange(
+																			requirement,
+																			e.target.files?.[0],
+																		)
+																	}
+																/>
+															</label>
+
+															{files.length > 0 && (
+																<div className="mt-2 flex items-center justify-between rounded-lg bg-[#F7F4F1] px-3 py-2">
+																	<span className="max-w-[80%] truncate text-xs text-black/65">
+																		{files[0].name}
+																	</span>
+																	<button
+																		type="button"
+																		onClick={() =>
+																			removePhoto(requirement.key, 0)
+																		}
+																		className="text-black/35 transition hover:text-red-600"
+																	>
+																		<Trash2 size={15} />
+																	</button>
+																</div>
+															)}
+														</div>
+													)}
+
+													{/* MULTIPLE PHOTOS — the piece that was missing */}
+
+													{requirement.type === "photos" && (
+														<div>
+															<label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#DED6D0] bg-white px-4 py-6 text-center transition hover:border-[#85161B]/50 hover:bg-[#85161B]/[0.02]">
+																<Upload size={18} className="text-[#85161B]" />
+																<span className="text-sm font-medium text-[#2E2E2E]">
+																	Select photos
+																</span>
+																<span className="text-[10px] text-black/40">
+																	Up to {requirement.max} photos • Each max 10
+																	MB
+																</span>
+																<input
+																	type="file"
+																	accept="image/*"
+																	multiple
+																	className="hidden"
+																	onChange={(e) =>
+																		handleMultiplePhotoChange(
+																			requirement,
+																			e.target.files,
+																		)
+																	}
+																/>
+															</label>
+
+															{files.length > 0 && (
+																<div className="mt-3 space-y-2">
+																	{files.map((file, index) => (
+																		<div
+																			key={`${file.name}-${file.lastModified}-${index}`}
+																			className="flex items-center justify-between rounded-lg bg-[#F7F4F1] px-3 py-2"
+																		>
+																			<span className="max-w-[80%] truncate text-xs text-black/65">
+																				{file.name}
+																			</span>
+																			<button
+																				type="button"
+																				onClick={() =>
+																					removePhoto(requirement.key, index)
+																				}
+																				className="text-black/35 transition hover:text-red-600"
+																			>
+																				<Trash2 size={15} />
+																			</button>
+																		</div>
+																	))}
+																</div>
+															)}
+														</div>
+													)}
 												</div>
-											),
+											);
+										})}
+									</div>
+								)}
+
+								{customizationValidationError && (
+									<div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-xs font-medium text-red-600">
+										{customizationValidationError}
+									</div>
+								)}
+							</div>
+						)}
+
+						{/* ==========================================================================
+						    ADD TO CART
+						========================================================================== */}
+
+						<div className="mt-8">
+							<button
+								type="button"
+								disabled={!product.inStock || addingToCart}
+								onClick={handleAddToCart}
+								className="group flex w-full items-center justify-center gap-2 rounded-xl bg-[#85161B] py-3.5 text-sm font-semibold text-white transition-all hover:bg-[#721318] hover:shadow-lg active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+							>
+								{addingToCart ? (
+									<>
+										<span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+										Adding...
+									</>
+								) : addedToCart ? (
+									<>
+										<CheckCircle2 size={17} />
+										Added to Cart
+									</>
+								) : (
+									<>
+										<ShoppingBag size={17} />
+										{hasCustomization ? "Customize & Add" : "Add to Cart"}
+										<ArrowRight
+											size={15}
+											className="transition-transform group-hover:translate-x-1"
+										/>
+									</>
+								)}
+							</button>
+						</div>
+
+						{addError && (
+							<p className="mt-3 text-xs font-medium text-red-600">
+								{addError}
+							</p>
+						)}
+
+						<div className="mt-7 space-y-3">
+							<div className="flex items-center gap-2.5 text-[13px] font-medium text-[#2E2E2E]/55">
+								<ShieldCheck size={16} className="shrink-0 text-[#85161B]" />
+								<span>Secure checkout · Made to order</span>
+							</div>
+
+							<p className="flex items-start gap-2.5 text-[13px] leading-6 text-[#2E2E2E]/50">
+								<ShieldCheck
+									size={15}
+									className="mt-0.5 shrink-0 text-[#85161B]"
+								/>
+								<span>
+									Your photos are used only for your order and deleted after
+									processing.
+								</span>
+							</p>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			{/* ==========================================================================
+			    REVIEWS
+			========================================================================== */}
+
+			<section
+				id="reviews"
+				className="mx-auto max-w-7xl px-5 pb-14 sm:px-6 lg:px-8"
+			>
+				<div className="rounded-3xl border border-[#E8DED7] bg-white p-6 sm:p-8">
+					<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+						<div>
+							<h2 className="font-display text-2xl font-semibold text-[#2E2E2E]">
+								Customer Reviews
+							</h2>
+
+							{!reviewsLoading && !reviewsError && reviews.length > 0 && (
+								<div className="mt-2 flex items-center gap-2">
+									<StarRating rating={averageRating} />
+									<span className="text-sm font-semibold text-[#2E2E2E]">
+										{averageRating.toFixed(1)}
+									</span>
+									<span className="text-sm text-[#2E2E2E]/45">
+										· {reviews.length} review
+										{reviews.length === 1 ? "" : "s"}
+									</span>
+								</div>
+							)}
+						</div>
+					</div>
+
+					{/* LOADING */}
+
+					{reviewsLoading && (
+						<div className="mt-8 flex items-center justify-center gap-3 py-10">
+							<span className="h-6 w-6 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
+							<p className="text-sm text-[#2E2E2E]/50">Loading reviews...</p>
+						</div>
+					)}
+
+					{/* ERROR */}
+
+					{!reviewsLoading && reviewsError && (
+						<div className="mt-8 flex flex-col items-center gap-3 py-10 text-center">
+							<AlertCircle size={24} className="text-red-500" />
+							<p className="text-sm text-[#2E2E2E]/55">{reviewsError}</p>
+							<button
+								type="button"
+								onClick={fetchReviews}
+								className="rounded-lg border border-[#DED6D0] px-4 py-2 text-xs font-semibold text-[#2E2E2E]/70 transition hover:border-[#85161B]/30 hover:text-[#85161B]"
+							>
+								Try Again
+							</button>
+						</div>
+					)}
+
+					{/* EMPTY */}
+
+					{!reviewsLoading && !reviewsError && reviews.length === 0 && (
+						<div className="mt-8 flex flex-col items-center gap-3 py-10 text-center">
+							<div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F7D6BF]/40">
+								<MessageSquare size={22} className="text-[#85161B]" />
+							</div>
+							<p className="text-sm text-[#2E2E2E]/55">
+								No reviews yet for this product.
+							</p>
+						</div>
+					)}
+
+					{/* LIST */}
+
+					{!reviewsLoading && !reviewsError && reviews.length > 0 && (
+						<div className="mt-6 divide-y divide-[#EEE6E1]">
+							{reviews.map((review) => (
+								<div key={review.id} className="py-5 first:pt-0 last:pb-0">
+									<div className="flex flex-wrap items-center justify-between gap-2">
+										<div className="flex items-center gap-3">
+											<div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F7D6BF]/50 text-xs font-bold text-[#85161B]">
+												{review.name
+													.split(" ")
+													.map((part) => part[0])
+													.join("")
+													.slice(0, 2)
+													.toUpperCase()}
+											</div>
+
+											<div>
+												<p className="text-sm font-semibold text-[#2E2E2E]">
+													{review.name}
+												</p>
+												<StarRating rating={review.rating} size={12} />
+											</div>
+										</div>
+
+										{review.date && (
+											<span className="text-xs text-[#2E2E2E]/40">
+												{review.date}
+											</span>
 										)}
 									</div>
 
-									{/* LIVE PREVIEW */}
-
-									{customValues[product.customizationFields[0]?.key] && (
-										<p className="font-display mt-6 border-t border-dashed border-[#D9BBAE] pt-4 text-sm italic text-[#2E2E2E]/60">
-											"For {customValues[product.customizationFields[0].key]}"
+									{review.comment && (
+										<p className="mt-3 text-sm leading-6 text-[#2E2E2E]/65">
+											{review.comment}
 										</p>
 									)}
-								</div>
-							)}
 
-							{/* ==========================================================================
-                            ADD TO CART
-                        ========================================================================== */}
-
-							<div className="mt-8">
-								<button
-									type="button"
-									disabled={!product.inStock || addingToCart}
-									onClick={handleAddToCart}
-									className="
-                                    group
-                                    flex
-                                    w-full
-                                    items-center
-                                    justify-center
-                                    gap-2
-                                    rounded-xl
-                                    bg-[#85161B]
-                                    py-3.5
-                                    text-sm
-                                    font-semibold
-                                    text-white
-                                    transition-all
-                                    hover:bg-[#721318]
-                                    hover:shadow-lg
-                                    active:scale-[0.99]
-                                    disabled:cursor-not-allowed
-                                    disabled:opacity-50
-                                "
-								>
-									{addingToCart ? (
-										<>
-											<span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-											Adding...
-										</>
-									) : addedToCart ? (
-										<>
-											<CheckCircle2 size={17} />
-											Added to Cart
-										</>
-									) : (
-										<>
-											<ShoppingBag size={17} />
-											Add to Cart
-											<ArrowRight
-												size={15}
-												className="transition-transform group-hover:translate-x-1"
-											/>
-										</>
+									{review.photos.length > 0 && (
+										<div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+											{review.photos.map((photo) => (
+												<a
+													key={photo}
+													href={`https://printinghouseujjain.in/assets/uploads/${photo}`}
+													target="_blank"
+													rel="noreferrer"
+													className="aspect-square overflow-hidden rounded-lg border border-[#E8DED7]"
+												>
+													<img
+														src={`https://printinghouseujjain.in/assets/uploads/${photo}`}
+														alt="Review photo"
+														className="h-full w-full object-cover"
+													/>
+												</a>
+											))}
+										</div>
 									)}
-								</button>
-							</div>
-
-							{/* ADD ERROR */}
-
-							{addError && (
-								<p className="mt-3 text-xs font-medium text-red-600">
-									{addError}
-								</p>
-							)}
-
-							{/* ==========================================================================
-                            TRUST + PRIVACY
-                        ========================================================================== */}
-
-							<div className="mt-7 space-y-3">
-								{/* SECURE CHECKOUT */}
-
-								<div className="flex items-center gap-2.5 text-[13px] font-medium text-[#2E2E2E]/55">
-									<ShieldCheck size={16} className="shrink-0 text-[#85161B]" />
-
-									<span>Secure checkout · Made to order</span>
 								</div>
-
-								{/* PRIVACY */}
-
-								<p className="flex items-start gap-2.5 text-[13px] leading-6 text-[#2E2E2E]/50">
-									<ShieldCheck
-										size={15}
-										className="mt-0.5 shrink-0 text-[#85161B]"
-									/>
-
-									<span>
-										Your photos are used only for your order and deleted after
-										processing.
-									</span>
-								</p>
-							</div>
+							))}
 						</div>
-					</div>
-				</section>
-			</main>
-		);
+					)}
+				</div>
+			</section>
+		</main>
+	);
+}
+
+/* ============================================================================
+   STAR RATING
+============================================================================ */
+
+function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
+	const rounded = Math.round(rating);
+
+	return (
+		<div
+			className="flex items-center gap-0.5"
+			aria-label={`${rating} out of 5 stars`}
+		>
+			{Array.from({ length: 5 }).map((_, index) => (
+				<Star
+					key={index}
+					size={size}
+					className={
+						index < rounded
+							? "fill-[#F5A623] text-[#F5A623]"
+							: "fill-transparent text-[#2E2E2E]/20"
+					}
+				/>
+			))}
+		</div>
+	);
 }

@@ -18,6 +18,7 @@ import {
 	CreditCard,
 	CalendarDays,
 	ChevronRight,
+	Star,
 } from "lucide-react";
 
 /* ─────────────────────────────────────────
@@ -95,6 +96,7 @@ type RawCartItem = {
 
 	quantity?: string | number;
 	selling_price?: string | number;
+	customization?: string;
 
 	[key: string]: unknown;
 };
@@ -134,6 +136,54 @@ type OrdersResponse = {
 	wishlist?: RawOrder[];
 	orders?: RawOrder[];
 	result?: RawOrder[];
+	order?: RawOrder;
+};
+
+type ProductReview = {
+	id: string;
+	name: string;
+	rating: number;
+	description: string;
+	date: string;
+	isOwner?: boolean;
+	photos?: string[];
+};
+
+type ReviewApiRecord = {
+	id?: string | number;
+	name?: string;
+	star_count?: string | number;
+	description?: string;
+	photos_path?: string;
+	created_at?: string;
+};
+
+function parseReviewPhotos(value?: string): string[] {
+	if (!value) {
+		return [];
+	}
+
+	try {
+		const parsed = JSON.parse(value);
+		return Array.isArray(parsed)
+			? parsed.filter((photo): photo is string => typeof photo === "string")
+			: [];
+	} catch {
+		return [];
+	}
+}
+
+type ReviewState = {
+	available: boolean;
+	reviewed: boolean;
+	message: string;
+	reviews: ProductReview[];
+	description: string;
+	rating: number;
+	photos: File[];
+	loading: boolean;
+	submitting: boolean;
+	error: string;
 };
 
 /* ─────────────────────────────────────────
@@ -298,8 +348,22 @@ function extractUploadedPhotos(value: string): string[] {
 
 function parseCustomizations(item: RawCartItem): Customization[] {
 	const customizations: Customization[] = [];
+	let values: Record<string, unknown> = {};
 
-	Object.entries(item).forEach(([key, rawValue]) => {
+	if (item.customization) {
+		try {
+			const parsed = JSON.parse(item.customization);
+			if (parsed && typeof parsed === "object") {
+				values = parsed as Record<string, unknown>;
+			}
+		} catch {
+			values = {};
+		}
+	} else {
+		values = item;
+	}
+
+	Object.entries(values).forEach(([key, rawValue]) => {
 		if (
 			[
 				"id",
@@ -307,6 +371,7 @@ function parseCustomizations(item: RawCartItem): Customization[] {
 				"primary_photo_path",
 				"quantity",
 				"selling_price",
+				"customization",
 			].includes(key)
 		) {
 			return;
@@ -484,6 +549,7 @@ export default function OrderDetailsPage() {
 	const [loading, setLoading] = useState(true);
 
 	const [error, setError] = useState("");
+	const [reviewStates, setReviewStates] = useState<Record<number, ReviewState>>({});
 
 	useEffect(() => {
 		if (!orderId) {
@@ -492,17 +558,21 @@ export default function OrderDetailsPage() {
 			return;
 		}
 
-		fetchOrder();
+		void fetchOrder();
 	}, [orderId]);
 
-	const fetchOrder = async () => {
+	async function fetchOrder() {
 		setLoading(true);
 		setError("");
 
 		try {
+			const formData = new FormData();
+			formData.append("order_id", orderId);
+
 			const response = await fetch("/api/orders", {
-				method: "GET",
+				method: "POST",
 				credentials: "include",
+				body: formData,
 				cache: "no-store",
 			});
 
@@ -513,10 +583,11 @@ export default function OrderDetailsPage() {
 			}
 
 			const rawOrders = data.wishlist ?? data.orders ?? data.result ?? [];
-
-			const rawOrder = rawOrders.find(
-				(item) => String(item.order_id ?? item.id ?? "") === orderId,
-			);
+			const rawOrder = data.order ?? (Array.isArray(rawOrders)
+				? rawOrders.find(
+						(item) => String(item.order_id ?? item.id ?? "") === orderId,
+				  )
+				: rawOrders);
 
 			if (!rawOrder) {
 				throw new Error("Order not found.");
@@ -531,6 +602,207 @@ export default function OrderDetailsPage() {
 			);
 		} finally {
 			setLoading(false);
+		}
+	}
+
+	useEffect(() => {
+		if (!order) {
+			return;
+		}
+
+		const loadReviews = async () => {
+			const nextStates: Record<number, ReviewState> = {};
+
+			await Promise.all(
+				order.items.map(async (item, cartIndex) => {
+					const base: ReviewState = {
+						available: false,
+							reviewed: false,
+						message: "",
+						reviews: [],
+						description: "",
+						rating: 5,
+						photos: [],
+						loading: true,
+						submitting: false,
+						error: "",
+					};
+
+					try {
+						const checkData = new FormData();
+						checkData.append("order_id", order.id);
+						checkData.append("cart_index", String(cartIndex));
+						const checkResponse = await fetch("/api/check_review", {
+							method: "POST",
+							credentials: "include",
+							body: checkData,
+							cache: "no-store",
+						});
+						const checkResult = (await checkResponse.json().catch(() => ({}))) as {
+							message?: string;
+							review?: ReviewApiRecord;
+						};
+						base.reviewed = Boolean(checkResult.review);
+						base.available = Boolean(checkResult.message?.trim()) && !base.reviewed;
+						base.message = checkResult.message ?? "";
+
+						if (checkResult.review) {
+							base.reviews.push({
+								id: String(checkResult.review.id ?? `review-${cartIndex}`),
+								name: checkResult.review.name ?? "You",
+								rating: Math.min(5, Math.max(1, Number(checkResult.review.star_count ?? 0))),
+								description: checkResult.review.description ?? "",
+								date: checkResult.review.created_at ?? "",
+								isOwner: true,
+								photos: parseReviewPhotos(checkResult.review.photos_path),
+							});
+						}
+
+						const reviewsData = new FormData();
+						reviewsData.append("product_id", item.id);
+						const reviewsResponse = await fetch("/api/reviews", {
+							method: "POST",
+							credentials: "include",
+							body: reviewsData,
+							cache: "no-store",
+						});
+						const reviewsResult = (await reviewsResponse.json().catch(() => ({}))) as {
+						reviews?: ReviewApiRecord[];
+							result?: ReviewApiRecord[];
+							data?: ReviewApiRecord[];
+						};
+						const rawReviews = reviewsResult.reviews ?? reviewsResult.result ?? reviewsResult.data ?? [];
+						const publicReviews = rawReviews.map((review, index) => ({
+							id: String(review.id ?? `review-${index}`),
+							name: review.name ?? "Customer",
+							rating: Math.min(5, Math.max(1, Number(review.star_count ?? 0))),
+							description: review.description ?? "",
+							date: review.created_at ?? "",
+							photos: parseReviewPhotos(String(review.photos_path ?? "")),
+							isOwner: Boolean(
+								checkResult.review &&
+								String(review.id) === String(checkResult.review.id),
+							),
+						}));
+						const ownerReview = base.reviews[0];
+						base.reviews = publicReviews;
+						if (
+							checkResult.review &&
+							ownerReview &&
+							!publicReviews.some((review) => review.isOwner)
+						) {
+							base.reviews.unshift(ownerReview);
+						}
+					} catch (reviewError) {
+						base.error = reviewError instanceof Error ? reviewError.message : "Unable to load reviews.";
+					} finally {
+						base.loading = false;
+						nextStates[cartIndex] = base;
+					}
+				}),
+			);
+
+			setReviewStates(nextStates);
+		};
+
+		void loadReviews();
+	}, [order]);
+
+	const updateReviewState = (cartIndex: number, update: Partial<ReviewState>) => {
+		setReviewStates((current) => ({
+			...current,
+			[cartIndex]: { ...current[cartIndex], ...update },
+		}));
+	};
+
+	const submitReview = async (cartIndex: number) => {
+		const review = reviewStates[cartIndex];
+		if (!review || !review.description.trim()) {
+			return;
+		}
+
+		updateReviewState(cartIndex, { submitting: true, error: "" });
+		try {
+			const formData = new FormData();
+			formData.append("order_id", orderId);
+			formData.append("cart_index", String(cartIndex));
+			formData.append("description", review.description.trim());
+			formData.append("star_count", String(review.rating));
+			review.photos.forEach((photo) => formData.append("photos", photo));
+
+			const response = await fetch("/api/make_reviews", {
+				method: "POST",
+				credentials: "include",
+				body: formData,
+			});
+			const result = (await response.json().catch(() => ({}))) as { message?: string };
+			if (!response.ok) {
+				throw new Error(result.message || "Unable to submit review.");
+			}
+			updateReviewState(cartIndex, {
+				available: false,
+				reviewed: true,
+				message: result.message || "Review submitted.",
+				reviews: [
+					...review.reviews,
+					{
+						id: `local-review-${cartIndex}`,
+						name: "You",
+						rating: review.rating,
+						description: review.description.trim(),
+						date: new Date().toLocaleDateString("en-IN"),
+						isOwner: true,
+					},
+				],
+			});
+		} catch (submitError) {
+			updateReviewState(cartIndex, {
+				error: submitError instanceof Error ? submitError.message : "Unable to submit review.",
+			});
+		} finally {
+			updateReviewState(cartIndex, { submitting: false });
+		}
+	};
+
+	const deleteReview = async (cartIndex: number) => {
+		const formData = new FormData();
+		formData.append("order_id", orderId);
+		formData.append("cart_index", String(cartIndex));
+
+		try {
+			const response = await fetch("/api/delete_review", {
+				method: "POST",
+				credentials: "include",
+				body: formData,
+				cache: "no-store",
+			});
+			const result = (await response.json().catch(() => ({}))) as {
+				message?: string;
+			};
+
+			if (!response.ok) {
+				throw new Error(result.message || "Unable to delete review.");
+			}
+
+			setReviewStates((current) => ({
+				...current,
+				[cartIndex]: {
+					...current[cartIndex],
+					reviewed: false,
+					available: true,
+					reviews: current[cartIndex].reviews.filter(
+						(review) => !review.isOwner,
+					),
+					message: result.message || "You can review this product again.",
+				},
+			}));
+		} catch (deleteError) {
+			updateReviewState(cartIndex, {
+				error:
+					deleteError instanceof Error
+						? deleteError.message
+						: "Unable to delete review.",
+			});
 		}
 	};
 
@@ -668,8 +940,17 @@ export default function OrderDetailsPage() {
 							</div>
 
 							<div className="divide-y divide-[#EEE6E1]">
-								{order.items.map((item) => (
-									<OrderProduct key={item.id} item={item} />
+								{order.items.map((item, cartIndex) => (
+									<React.Fragment key={item.id}>
+										<OrderProduct item={item} />
+										<ReviewSection
+											cartIndex={cartIndex}
+											state={reviewStates[cartIndex]}
+											onChange={(update) => updateReviewState(cartIndex, update)}
+											onSubmit={() => submitReview(cartIndex)}
+											onDelete={() => deleteReview(cartIndex)}
+										/>
+									</React.Fragment>
 								))}
 							</div>
 						</section>
@@ -819,6 +1100,128 @@ function OrderProduct({ item }: { item: OrderItem }) {
 					</div>
 				</div>
 			)}
+		</div>
+	);
+}
+
+function ReviewSection({
+	cartIndex,
+	state,
+	onChange,
+	onSubmit,
+	onDelete,
+}: {
+	cartIndex: number;
+	state?: ReviewState;
+	onChange: (update: Partial<ReviewState>) => void;
+	onSubmit: () => void;
+	onDelete: () => void;
+}) {
+	if (!state || state.loading) {
+		return null;
+	}
+
+	return (
+		<section className="border-t border-[#EEE6E1] bg-[#FFFCFA] p-5 sm:p-6">
+			<div className="flex items-center justify-between gap-3">
+				<div>
+					<h3 className="text-sm font-bold text-[#2E2E2E]">Product reviews</h3>
+					<p className="mt-1 text-xs text-[#2E2E2E]/50">
+						{state.reviews.length ? `${state.reviews.length} review${state.reviews.length === 1 ? "" : "s"}` : "No reviews yet"}
+					</p>
+				</div>
+				<Star size={18} className="fill-[#F5A623] text-[#F5A623]" />
+			</div>
+
+			{state.reviews.length > 0 && (
+				<div className="mt-4 space-y-3">
+					{state.reviews.map((review) => (
+						<div key={review.id} className="rounded-xl border border-[#E9DED7] bg-white p-4">
+							<div className="flex items-center justify-between gap-3">
+								<div>
+											<p className="text-xs font-semibold text-[#2E2E2E]">
+												{review.name}{review.isOwner ? " (Your review)" : ""}
+											</p>
+									<StarRating rating={review.rating} />
+								</div>
+									{review.isOwner && (
+										<button
+											type="button"
+											onClick={onDelete}
+											className="text-xs font-semibold text-red-600 hover:text-red-700"
+										>
+											Delete review
+										</button>
+									)}
+							</div>
+							{review.description && <p className="mt-2 text-sm text-[#2E2E2E]/65">{review.description}</p>}
+										{review.photos && review.photos.length > 0 && (
+											<div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+												{review.photos.map((photo) => (
+													<a
+														key={photo}
+														href={`${UPLOAD_IMAGE_URL}${photo}`}
+														target="_blank"
+														rel="noreferrer"
+														className="aspect-square overflow-hidden rounded-lg border border-[#E9DED7]"
+													>
+														<img
+															src={`${UPLOAD_IMAGE_URL}${photo}`}
+															alt="Review photo"
+															className="h-full w-full object-cover"
+														/>
+													</a>
+												))}
+											</div>
+										)}
+						</div>
+					))}
+				</div>
+			)}
+
+			{state.available && !state.reviewed && (
+				<div className="mt-5 rounded-xl border border-[#E9DED7] bg-white p-4">
+					<p className="text-xs font-semibold text-[#85161B]">{state.message}</p>
+					<div className="mt-3 flex items-center gap-1" aria-label="Choose rating">
+						{[1, 2, 3, 4, 5].map((rating) => (
+							<button key={rating} type="button" onClick={() => onChange({ rating })} aria-label={`${rating} stars`}>
+								<Star size={22} className={rating <= state.rating ? "fill-[#F5A623] text-[#F5A623]" : "text-[#D8C9C0]"} />
+							</button>
+						))}
+					</div>
+					<textarea
+						value={state.description}
+						onChange={(event) => onChange({ description: event.target.value })}
+						placeholder="Share your experience"
+						rows={3}
+						className="mt-3 w-full resize-none rounded-lg border border-[#E9DED7] px-3 py-2 text-sm outline-none focus:border-[#85161B]"
+					/>
+					<div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<input
+							type="file"
+							accept="image/*"
+							multiple
+							onChange={(event) => onChange({ photos: Array.from(event.target.files ?? []).slice(0, 5) })}
+							className="max-w-full text-xs text-[#2E2E2E]/60"
+						/>
+						<button type="button" disabled={state.submitting || !state.description.trim()} onClick={onSubmit} className="rounded-lg bg-[#85161B] px-4 py-2.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
+							{state.submitting ? "Submitting..." : "Submit review"}
+						</button>
+					</div>
+				</div>
+			)}
+
+			{state.error && <p className="mt-3 text-xs text-red-600">{state.error}</p>}
+		</section>
+	);
+}
+
+function StarRating({ rating }: { rating: number }) {
+	return (
+		<div className="flex items-center gap-0.5">
+			{[1, 2, 3, 4, 5].map((value) => (
+				<Star key={value} size={13} className={value <= rating ? "fill-[#F5A623] text-[#F5A623]" : "text-[#D8C9C0]"} />
+			))}
 		</div>
 	);
 }
@@ -1003,7 +1406,6 @@ function StatusTimeline({ order }: { order: Order }) {
 												${active ? "ring-4 ring-[#85161B]/10" : ""}
 											`}
 									>
-										{item.icon}
 									</div>
 
 									<p

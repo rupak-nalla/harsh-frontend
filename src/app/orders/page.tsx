@@ -776,7 +776,7 @@ function OrderCard({ order }: { order: Order }) {
 					<div className="flex flex-col gap-2 sm:flex-row">
 						{/* VIEW ORDER */}
 
-						{/* <Link
+						<Link
 							href={`/orders/${encodeURIComponent(order.id)}`}
 							className="
 								group
@@ -806,7 +806,7 @@ function OrderCard({ order }: { order: Order }) {
 									group-hover:translate-x-0.5
 								"
 							/>
-						</Link> */}
+						</Link>
 
 						{/* TRACK / DELIVERY */}
 
@@ -878,7 +878,7 @@ function OrderCard({ order }: { order: Order }) {
 							</p>
 
 							<p className="mt-0.5 text-xs text-[#2E2E2E]/55">
-								Your order is currently at the "{order.status}" stage.
+								Your order is currently at the &quot;{order.status}&quot; stage.
 							</p>
 						</div>
 					</div>
