@@ -540,9 +540,17 @@ function normalizeOrder(raw: RawOrder): Order {
 ───────────────────────────────────────── */
 
 export default function OrderDetailsPage() {
-	const params = useParams();
+	 console.log("ORDER DETAILS COMPONENT MOUNTED");
 
-	const orderId = decodeURIComponent(String(params.id ?? ""));
+    const params = useParams();
+
+    console.log("ORDER PARAMS:", params);
+
+    const orderId = params?.id
+        ? decodeURIComponent(String(params.id))
+        : "";
+
+    console.log("ORDER ID:", orderId);
 
 	const [order, setOrder] = useState<Order | null>(null);
 
