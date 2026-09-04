@@ -546,8 +546,8 @@ export default function OrderDetailsPage() {
 
     console.log("ORDER PARAMS:", params);
 
-    const orderId = params?.id
-        ? decodeURIComponent(String(params.id))
+    const orderId = params?.Id
+        ? decodeURIComponent(String(params.Id))
         : "";
 
     console.log("ORDER ID:", orderId);
