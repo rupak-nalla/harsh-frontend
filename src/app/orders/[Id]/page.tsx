@@ -558,13 +558,14 @@ export default function OrderDetailsPage() {
 			return;
 		}
 
+		console.log("Fetching order: in use Effect", orderId);
 		void fetchOrder();
 	}, [orderId]);
 
 	async function fetchOrder() {
 		setLoading(true);
 		setError("");
-
+		console.log("Fetching order from fetch Order:", orderId);
 		try {
 			const formData = new FormData();
 			formData.append("order_id", orderId);
@@ -592,7 +593,7 @@ export default function OrderDetailsPage() {
 			if (!rawOrder) {
 				throw new Error("Order not found.");
 			}
-
+			console.log("Raw order fetched:", rawOrder);
 			setOrder(normalizeOrder(rawOrder));
 		} catch (error) {
 			console.error("Failed to fetch order:", error);
