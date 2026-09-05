@@ -1590,13 +1590,19 @@ export default function ProductPage() {
 
 					{/* LIST */}
 
+					{/* LIST */}
 					{!reviewsLoading && !reviewsError && reviews.length > 0 && (
-						<div className="mt-6 divide-y divide-[#EEE6E1]">
+						<div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
 							{reviews.map((review) => (
-								<div key={review.id} className="py-5 first:pt-0 last:pb-0">
-									<div className="flex flex-wrap items-center justify-between gap-2">
-										<div className="flex items-center gap-3">
-											<div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#F7D6BF]/50 text-xs font-bold text-[#85161B]">
+								<div
+									key={review.id}
+									className="flex h-full flex-col rounded-2xl border border-[#E8DED7] bg-[#FFFCFA] p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#D9C8BE] hover:shadow-[0_10px_30px_rgba(80,40,20,0.06)]"
+								>
+									{/* HEADER */}
+									<div className="flex items-start justify-between gap-3">
+										<div className="flex min-w-0 items-center gap-3">
+											{/* Avatar */}
+											<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F7D6BF]/50 text-xs font-bold text-[#85161B]">
 												{review.name
 													.split(" ")
 													.map((part) => part[0])
@@ -1605,46 +1611,63 @@ export default function ProductPage() {
 													.toUpperCase()}
 											</div>
 
-											<div>
-												<p className="text-sm font-semibold text-[#2E2E2E]">
+											{/* Name + Rating */}
+											<div className="min-w-0">
+												<p className="truncate text-sm font-semibold text-[#2E2E2E]">
 													{review.name}
 												</p>
-												<StarRating rating={review.rating} size={12} />
+
+												<div className="mt-1">
+													<StarRating rating={review.rating} size={12} />
+												</div>
 											</div>
 										</div>
 
+										{/* DATE */}
 										{review.date && (
-											<span className="text-xs text-[#2E2E2E]/40">
+											<span className="shrink-0 text-[11px] text-[#2E2E2E]/40">
 												{review.date}
 											</span>
 										)}
 									</div>
 
+									{/* REVIEW TEXT */}
 									{review.comment && (
-										<p className="mt-3 text-sm leading-6 text-[#2E2E2E]/65">
+										<p className="mt-4 line-clamp-4 text-sm leading-6 text-[#2E2E2E]/65">
 											{review.comment}
 										</p>
 									)}
 
+									{/* REVIEW PHOTOS */}
 									{review.photos.length > 0 && (
-										<div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
-											{review.photos.map((photo) => (
+										<div className="mt-4 grid grid-cols-3 gap-2">
+											{review.photos.map((photo, index) => (
 												<a
-													key={photo}
+													key={`${photo}-${index}`}
 													href={`${REVIEW_IMAGE_URL}${photo}`}
 													target="_blank"
 													rel="noreferrer"
-													className="aspect-square overflow-hidden rounded-lg border border-[#E8DED7]"
+													className="group aspect-square overflow-hidden rounded-xl border border-[#E8DED7] bg-white"
 												>
 													<img
 														src={`${REVIEW_IMAGE_URL}${photo}`}
-														alt="Review photo"
-														className="h-full w-full object-cover"
+														alt={`Review photo ${index + 1}`}
+														className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
 													/>
 												</a>
 											))}
 										</div>
 									)}
+
+									{/* FOOTER */}
+									<div className="mt-auto pt-4">
+										<div className="border-t border-[#EEE6E1] pt-3">
+											<span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#2E2E2E]/40">
+												<CheckCircle2 size={12} className="text-[#31824A]" />
+												Verified customer
+											</span>
+										</div>
+									</div>
 								</div>
 							))}
 						</div>
