@@ -19,6 +19,8 @@ import { useRouter } from "next/navigation";
 ============================================================================ */
 
 type Customer = {
+	id?: number | string;
+	user_id?: number | string;
 	name: string;
 	email: string;
 	phone: string;
@@ -89,6 +91,7 @@ export default function AdminCustomersPage() {
 	========================================================================== */
 
 	useEffect(() => {
+		// eslint-disable-next-line react-hooks/set-state-in-effect
 		fetchUsers();
 	}, []);
 
@@ -197,7 +200,7 @@ export default function AdminCustomersPage() {
 					sticky
 					top-0
 					z-30
-					h-[76px]
+					h-19
 					border-b
 					border-[#E8DED7]
 					bg-[#FBF9F7]/95
@@ -604,7 +607,7 @@ export default function AdminCustomersPage() {
 						</div>
 					) : filteredCustomers.length > 0 ? (
 						<div className="overflow-x-auto">
-							<table className="w-full min-w-[850px] text-left text-sm">
+							<table className="w-full min-w-212.5 text-left text-sm">
 								<thead>
 									<tr
 										className="
@@ -638,6 +641,7 @@ export default function AdminCustomersPage() {
 											{/* CUSTOMER */}
 
 											<td className="px-6 py-4">
+													<Link href={`/admin/customers/${customer.id ?? customer.user_id ?? encodeURIComponent(customer.email)}`} className="block rounded-lg outline-none focus:ring-2 focus:ring-[#85161B]/20">
 												<div className="flex items-center gap-3">
 													<div
 														className="
@@ -661,6 +665,7 @@ export default function AdminCustomersPage() {
 														{customer.name}
 													</span>
 												</div>
+													</Link>
 											</td>
 
 											{/* CONTACT */}
