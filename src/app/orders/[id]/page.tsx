@@ -27,6 +27,8 @@ import {
 
 const PRODUCT_IMAGE_URL = "https://printinghouseujjain.in/assets/products/";
 
+const REVIEW_IMAGE_URL = "https://printinghouseujjain.in/assets/reviews/";
+
 const UPLOAD_IMAGE_URL = "https://printinghouseujjain.in/assets/uploads/";
 
 /* ─────────────────────────────────────────
@@ -154,16 +156,21 @@ type ReviewApiRecord = {
 	star_count?: string | number;
 	description?: string;
 	photos_path?: string;
+	photo_path?: string | string[];
 	created_at?: string;
 };
 
-function parseReviewPhotos(value?: string): string[] {
+function parseReviewPhotos(value?: unknown): string[] {
 	if (!value) {
 		return [];
 	}
 
+	if (Array.isArray(value)) {
+		return value.filter((photo): photo is string => typeof photo === "string");
+	}
+
 	try {
-		const parsed = JSON.parse(value);
+		const parsed = JSON.parse(String(value));
 		return Array.isArray(parsed)
 			? parsed.filter((photo): photo is string => typeof photo === "string")
 			: [];
@@ -646,7 +653,9 @@ export default function OrderDetailsPage() {
 								description: checkResult.review.description ?? "",
 								date: checkResult.review.created_at ?? "",
 								isOwner: true,
-								photos: parseReviewPhotos(checkResult.review.photos_path),
+								photos: parseReviewPhotos(
+									checkResult.review.photos_path ?? checkResult.review.photo_path,
+								),
 							});
 						}
 
@@ -670,7 +679,9 @@ export default function OrderDetailsPage() {
 							rating: Math.min(5, Math.max(1, Number(review.star_count ?? 0))),
 							description: review.description ?? "",
 							date: review.created_at ?? "",
-							photos: parseReviewPhotos(String(review.photos_path ?? "")),
+							photos: parseReviewPhotos(
+								review.photos_path ?? review.photo_path,
+							),
 							isOwner: Boolean(
 								checkResult.review &&
 								String(review.id) === String(checkResult.review.id),
@@ -1150,19 +1161,16 @@ function ReviewSection({
 										{review.photos && review.photos.length > 0 && (
 											<div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
 												{review.photos.map((photo) => (
-													<a
+													<div
 														key={photo}
-														href={`${UPLOAD_IMAGE_URL}${photo}`}
-														target="_blank"
-														rel="noreferrer"
 														className="aspect-square overflow-hidden rounded-lg border border-[#E9DED7]"
 													>
 														<img
-															src={`${UPLOAD_IMAGE_URL}${photo}`}
+															src={`${REVIEW_IMAGE_URL}${photo}`}
 															alt="Review photo"
 															className="h-full w-full object-cover"
 														/>
-													</a>
+													</div>
 												))}
 											</div>
 										)}

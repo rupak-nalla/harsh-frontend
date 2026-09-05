@@ -28,6 +28,8 @@ import {
 const PRODUCT_IMAGE_BASE_URL =
 	"https://printinghouseujjain.in/assets/products/";
 
+const REVIEW_IMAGE_URL = "https://printinghouseujjain.in/assets/reviews/";
+
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 /* ============================================================================
@@ -120,6 +122,7 @@ type RawReview = {
 	description?: string;
 	message?: string;
 	photos_path?: string;
+	photo_path?: string | string[];
 	created_at?: string;
 	date?: string;
 };
@@ -141,13 +144,17 @@ type Review = {
 	photos: string[];
 };
 
-function parseReviewPhotos(value?: string): string[] {
+function parseReviewPhotos(value?: unknown): string[] {
 	if (!value) {
 		return [];
 	}
 
+	if (Array.isArray(value)) {
+		return value.filter((photo): photo is string => typeof photo === "string");
+	}
+
 	try {
-		const parsed = JSON.parse(value);
+		const parsed = JSON.parse(String(value));
 		return Array.isArray(parsed)
 			? parsed.filter((photo): photo is string => typeof photo === "string")
 			: [];
@@ -185,7 +192,7 @@ function normalizeReview(raw: RawReview, index: number): Review {
 			raw.message ??
 			"",
 		date,
-		photos: parseReviewPhotos(raw.photos_path),
+		photos: parseReviewPhotos(raw.photos_path ?? raw.photo_path),
 	};
 }
 
@@ -1624,13 +1631,13 @@ export default function ProductPage() {
 											{review.photos.map((photo) => (
 												<a
 													key={photo}
-													href={`https://printinghouseujjain.in/assets/uploads/${photo}`}
+													href={`${REVIEW_IMAGE_URL}${photo}`}
 													target="_blank"
 													rel="noreferrer"
 													className="aspect-square overflow-hidden rounded-lg border border-[#E8DED7]"
 												>
 													<img
-														src={`https://printinghouseujjain.in/assets/uploads/${photo}`}
+														src={`${REVIEW_IMAGE_URL}${photo}`}
 														alt="Review photo"
 														className="h-full w-full object-cover"
 													/>
