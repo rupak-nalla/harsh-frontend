@@ -22,12 +22,7 @@ import {
    TYPES
 ============================================================================ */
 
-type OrderStatus =
-	| "Delivered"
-	| "Processing"
-	| "Shipped"
-	| "Pending"
-	| string;
+type OrderStatus = "Delivered" | "Processing" | "Shipped" | "Pending" | string;
 
 type CartProduct = {
 	id?: number | string;
@@ -85,6 +80,9 @@ type Order = {
 	status: OrderStatus;
 	date: string;
 	address: string;
+	// Raw timestamp (ms since epoch, or 0 if unparseable) used purely for
+	// sorting — we don't rely on the API returning orders in date order.
+	sortValue: number;
 };
 
 /* ============================================================================
@@ -98,6 +96,12 @@ const STATUS_FILTERS: (OrderStatus | "All")[] = [
 	"Shipped",
 	"Delivered",
 ];
+
+/* ============================================================================
+   PAGINATION
+============================================================================ */
+
+const PAGE_SIZE = 20;
 
 /* ============================================================================
    STATUS STYLES
@@ -169,19 +173,13 @@ function parseAddress(
 	try {
 		const parsed = JSON.parse(address);
 
-		if (
-			typeof parsed === "object" &&
-			parsed !== null
-		) {
+		if (typeof parsed === "object" && parsed !== null) {
 			return parsed;
 		}
 
 		return null;
 	} catch (error) {
-		console.error(
-			"Failed to parse order address:",
-			error,
-		);
+		console.error("Failed to parse order address:", error);
 
 		return null;
 	}
@@ -209,9 +207,7 @@ function formatAddress(
 		parsed.pincode,
 	].filter(
 		(value) =>
-			value !== undefined &&
-			value !== null &&
-			String(value).trim() !== "",
+			value !== undefined && value !== null && String(value).trim() !== "",
 	);
 
 	return parts.length > 0 ? parts.join(", ") : "—";
@@ -281,6 +277,25 @@ function formatDate(value: unknown): string {
 }
 
 /* ============================================================================
+   GET SORTABLE TIME
+
+   Turns the raw (unformatted) date value into a millisecond timestamp so
+   orders can be sorted explicitly in code, instead of trusting the order
+   the API happens to return them in. Unparseable/missing dates sort to
+   the bottom (treated as oldest) rather than crashing the sort.
+============================================================================ */
+
+function getSortableTime(value: unknown): number {
+	if (!value) {
+		return 0;
+	}
+
+	const time = new Date(String(value)).getTime();
+
+	return Number.isNaN(time) ? 0 : time;
+}
+
+/* ============================================================================
    FORMAT AMOUNT
 ============================================================================ */
 
@@ -297,11 +312,7 @@ function formatAmount(value: unknown): number {
 function getCustomerName(order: BackendOrder): string {
 	const userId = order.user_id;
 
-	if (
-		userId === null ||
-		userId === undefined ||
-		String(userId).trim() === ""
-	) {
+	if (userId === null || userId === undefined || String(userId).trim() === "") {
 		return "Guest";
 	}
 
@@ -318,31 +329,18 @@ function normalizeOrder(order: BackendOrder): Order {
 	const firstProduct = cartProducts[0];
 
 	const productName =
-		firstProduct?.name ||
-		(cartProducts.length > 0 ? "Order items" : "—");
+		firstProduct?.name || (cartProducts.length > 0 ? "Order items" : "—");
 
-	const calculatedItems = cartProducts.reduce(
-		(total, product) => {
-			const quantity =
-				Number(
-					product.quantity ??
-						product.qty ??
-						1,
-				) || 1;
+	const calculatedItems = cartProducts.reduce((total, product) => {
+		const quantity = Number(product.quantity ?? product.qty ?? 1) || 1;
 
-			return total + quantity;
-		},
-		0,
-	);
+		return total + quantity;
+	}, 0);
 
-	const items =
-		Number(order.products_count) ||
-		calculatedItems ||
-		1;
+	const items = Number(order.products_count) || calculatedItems || 1;
 
 	const amount =
-		formatAmount(order.grand_total) ||
-		formatAmount(order.total_price);
+		formatAmount(order.grand_total) || formatAmount(order.total_price);
 
 	const dateValue =
 		order.created_at ??
@@ -367,6 +365,8 @@ function normalizeOrder(order: BackendOrder): Order {
 		date: formatDate(dateValue),
 
 		address: formatAddress(order.address),
+
+		sortValue: getSortableTime(dateValue),
 	};
 }
 
@@ -375,10 +375,7 @@ function normalizeOrder(order: BackendOrder): Order {
 ============================================================================ */
 
 function extractOrders(data: unknown): Order[] {
-	if (
-		typeof data !== "object" ||
-		data === null
-	) {
+	if (typeof data !== "object" || data === null) {
 		return [];
 	}
 
@@ -390,14 +387,17 @@ function extractOrders(data: unknown): Order[] {
 		return [];
 	}
 
-	return response.orders
-		.filter(
-			(order): order is BackendOrder =>
-				typeof order === "object" &&
-				order !== null &&
-				!Array.isArray(order),
-		)
-		.map(normalizeOrder);
+	return (
+		response.orders
+			.filter(
+				(order): order is BackendOrder =>
+					typeof order === "object" && order !== null && !Array.isArray(order),
+			)
+			.map(normalizeOrder)
+			// Newest first — sorted explicitly here rather than relying on
+			// whatever order the API happens to return.
+			.sort((a, b) => b.sortValue - a.sortValue)
+	);
 }
 
 /* ============================================================================
@@ -409,12 +409,12 @@ export default function AdminOrdersPage() {
 
 	const [orders, setOrders] = useState<Order[]>([]);
 	const [query, setQuery] = useState("");
-	const [statusFilter, setStatusFilter] =
-		useState<OrderStatus | "All">("All");
+	const [statusFilter, setStatusFilter] = useState<OrderStatus | "All">("All");
 
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState("");
 	const [loggingOut, setLoggingOut] = useState(false);
+	const [page, setPage] = useState(1);
 
 	/* ========================================================================
 	   FETCH ORDERS
@@ -428,32 +428,24 @@ export default function AdminOrdersPage() {
 				setIsLoading(true);
 				setError("");
 
-				const response = await fetch(
-					"/api/admin/orders",
-					{
-						method: "GET",
-						credentials: "include",
-						cache: "no-store",
-					},
-				);
+				const response = await fetch("/api/admin/orders", {
+					method: "GET",
+					credentials: "include",
+					cache: "no-store",
+				});
 
 				const text = await response.text();
 
 				let data: unknown;
 
 				try {
-					data = text
-						? JSON.parse(text)
-						: {};
+					data = text ? JSON.parse(text) : {};
 				} catch {
-					throw new Error(
-						"Invalid JSON response from admin orders API.",
-					);
+					throw new Error("Invalid JSON response from admin orders API.");
 				}
 
 				if (!response.ok) {
-					let message =
-						"Unable to fetch admin orders.";
+					let message = "Unable to fetch admin orders.";
 
 					if (
 						typeof data === "object" &&
@@ -467,17 +459,13 @@ export default function AdminOrdersPage() {
 					throw new Error(message);
 				}
 
-				const fetchedOrders =
-					extractOrders(data);
+				const fetchedOrders = extractOrders(data);
 
 				if (isMounted) {
 					setOrders(fetchedOrders);
 				}
 			} catch (error) {
-				console.error(
-					"Failed to fetch admin orders:",
-					error,
-				);
+				console.error("Failed to fetch admin orders:", error);
 
 				if (isMounted) {
 					setOrders([]);
@@ -507,33 +495,52 @@ export default function AdminOrdersPage() {
 	========================================================================= */
 
 	const filteredOrders = useMemo(() => {
-		const normalizedQuery =
-			query.trim().toLowerCase();
+		const normalizedQuery = query.trim().toLowerCase();
 
 		return orders.filter((order) => {
 			const matchesStatus =
 				statusFilter === "All" ||
-				order.status.toLowerCase() ===
-					statusFilter.toLowerCase();
+				order.status.toLowerCase() === statusFilter.toLowerCase();
 
 			const matchesQuery =
 				normalizedQuery === "" ||
-				order.id
-					.toLowerCase()
-					.includes(normalizedQuery) ||
-				order.customer
-					.toLowerCase()
-					.includes(normalizedQuery) ||
-				order.product
-					.toLowerCase()
-					.includes(normalizedQuery) ||
-				order.address
-					.toLowerCase()
-					.includes(normalizedQuery);
+				order.id.toLowerCase().includes(normalizedQuery) ||
+				order.customer.toLowerCase().includes(normalizedQuery) ||
+				order.product.toLowerCase().includes(normalizedQuery) ||
+				order.address.toLowerCase().includes(normalizedQuery);
 
 			return matchesStatus && matchesQuery;
 		});
 	}, [orders, query, statusFilter]);
+
+	/* ========================================================================
+	   PAGINATE
+	========================================================================= */
+
+	const totalPages = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE));
+
+	// Keep the current page in range whenever the filtered result set
+	// shrinks (e.g. a new search term or status filter narrows things down).
+	useEffect(() => {
+		setPage((current) => Math.min(current, totalPages));
+	}, [totalPages]);
+
+	// Jump back to page 1 whenever the search term or status filter changes,
+	// so the user doesn't land on an empty page of stale results.
+	useEffect(() => {
+		setPage(1);
+	}, [query, statusFilter]);
+
+	const paginatedOrders = useMemo(() => {
+		const start = (page - 1) * PAGE_SIZE;
+
+		return filteredOrders.slice(start, start + PAGE_SIZE);
+	}, [filteredOrders, page]);
+
+	const rangeStart =
+		filteredOrders.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+
+	const rangeEnd = Math.min(page * PAGE_SIZE, filteredOrders.length);
 
 	/* ========================================================================
 	   LOGOUT
@@ -545,36 +552,26 @@ export default function AdminOrdersPage() {
 		setLoggingOut(true);
 
 		try {
-			const response = await fetch(
-				"/api/admin/logout?command_type=admin",
-				{
-					method: "POST",
-					credentials: "include",
-					headers: {
-						"Content-Type": "application/json",
-					},
-					cache: "no-store",
+			const response = await fetch("/api/admin/logout?command_type=admin", {
+				method: "POST",
+				credentials: "include",
+				headers: {
+					"Content-Type": "application/json",
 				},
-			);
+				cache: "no-store",
+			});
 
 			if (!response.ok) {
-				const data = await response
-					.json()
-					.catch(() => ({}));
+				const data = await response.json().catch(() => ({}));
 
 				throw new Error(
-					(data as { message?: string })
-						?.message ||
-						"Unable to logout.",
+					(data as { message?: string })?.message || "Unable to logout.",
 				);
 			}
 
 			router.replace("/login");
 		} catch (error) {
-			console.error(
-				"Admin logout failed:",
-				error,
-			);
+			console.error("Admin logout failed:", error);
 
 			alert(
 				error instanceof Error
@@ -682,10 +679,7 @@ export default function AdminOrdersPage() {
 								sm:flex
 							"
 						>
-							<Store
-								size={16}
-								strokeWidth={1.8}
-							/>
+							<Store size={16} strokeWidth={1.8} />
 
 							<span>Storefront</span>
 						</Link>
@@ -725,13 +719,9 @@ export default function AdminOrdersPage() {
 							</div>
 
 							<div className="hidden text-left md:block">
-								<p className="text-xs font-semibold text-[#2E2E2E]">
-									Admin
-								</p>
+								<p className="text-xs font-semibold text-[#2E2E2E]">Admin</p>
 
-								<p className="text-[10px] text-[#2E2E2E]/45">
-									Administrator
-								</p>
+								<p className="text-[10px] text-[#2E2E2E]/45">Administrator</p>
 							</div>
 						</div>
 
@@ -776,16 +766,11 @@ export default function AdminOrdersPage() {
 									"
 								/>
 							) : (
-								<LogOut
-									size={16}
-									strokeWidth={1.9}
-								/>
+								<LogOut size={16} strokeWidth={1.9} />
 							)}
 
 							<span className="hidden sm:inline">
-								{loggingOut
-									? "Logging out..."
-									: "Logout"}
+								{loggingOut ? "Logging out..." : "Logout"}
 							</span>
 						</button>
 					</div>
@@ -873,9 +858,7 @@ export default function AdminOrdersPage() {
 						<input
 							type="text"
 							value={query}
-							onChange={(e) =>
-								setQuery(e.target.value)
-							}
+							onChange={(e) => setQuery(e.target.value)}
 							placeholder="Search order, customer, product..."
 							className="
 								w-full
@@ -922,9 +905,7 @@ export default function AdminOrdersPage() {
 						<button
 							key={status}
 							type="button"
-							onClick={() =>
-								setStatusFilter(status)
-							}
+							onClick={() => setStatusFilter(status)}
 							className={`
 								shrink-0
 								whitespace-nowrap
@@ -954,19 +935,14 @@ export default function AdminOrdersPage() {
 
 				{error && (
 					<div className="mt-5 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 sm:px-5">
-						<AlertCircle
-							size={19}
-							className="mt-0.5 shrink-0 text-red-600"
-						/>
+						<AlertCircle size={19} className="mt-0.5 shrink-0 text-red-600" />
 
 						<div>
 							<p className="text-sm font-semibold text-red-700">
 								Unable to load orders
 							</p>
 
-							<p className="mt-1 text-xs text-red-600">
-								{error}
-							</p>
+							<p className="mt-1 text-xs text-red-600">{error}</p>
 						</div>
 					</div>
 				)}
@@ -993,10 +969,7 @@ export default function AdminOrdersPage() {
 							"
 						>
 							<div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F7D6BF]/40">
-								<Loader2
-									size={24}
-									className="animate-spin text-[#85161B]"
-								/>
+								<Loader2 size={24} className="animate-spin text-[#85161B]" />
 							</div>
 
 							<p className="mt-4 text-sm font-semibold text-[#2E2E2E]">
@@ -1014,12 +987,11 @@ export default function AdminOrdersPage() {
 							================================================== */}
 
 							<div className="space-y-3 lg:hidden">
-								{filteredOrders.map(
-									(order, index) => (
-										<Link
-											key={`${order.id}-${index}`}
-											href={`/admin/orders/${order.id}`}
-											className="
+								{paginatedOrders.map((order, index) => (
+									<Link
+										key={`${order.id}-${index}`}
+										href={`/admin/orders/${order.id}`}
+										className="
 												block
 												rounded-2xl
 												border
@@ -1031,23 +1003,23 @@ export default function AdminOrdersPage() {
 												active:scale-[0.995]
 												hover:border-[#85161B]/20
 											"
-										>
-											{/* TOP */}
+									>
+										{/* TOP */}
 
-											<div className="flex items-start justify-between gap-3">
-												<div className="min-w-0">
-													<p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#2E2E2E]/40">
-														Order
-													</p>
+										<div className="flex items-start justify-between gap-3">
+											<div className="min-w-0">
+												<p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#2E2E2E]/40">
+													Order
+												</p>
 
-													<p className="mt-1 truncate text-base font-bold text-[#85161B]">
-														#{order.id}
-													</p>
-												</div>
+												<p className="mt-1 truncate text-base font-bold text-[#85161B]">
+													#{order.id}
+												</p>
+											</div>
 
-												<div className="flex shrink-0 items-center gap-2">
-													<span
-														className={`
+											<div className="flex shrink-0 items-center gap-2">
+												<span
+													className={`
 															inline-flex
 															items-center
 															gap-1.5
@@ -1056,146 +1028,123 @@ export default function AdminOrdersPage() {
 															py-1.5
 															text-[11px]
 															font-semibold
-															${
-																STATUS_STYLES[
-																	order.status
-																] ||
-																"bg-gray-100 text-gray-600"
-															}
+															${STATUS_STYLES[order.status] || "bg-gray-100 text-gray-600"}
 														`}
-													>
-														<span
-															className={`
+												>
+													<span
+														className={`
 																h-1.5
 																w-1.5
 																rounded-full
-																${
-																	STATUS_DOTS[
-																		order.status
-																	] ||
-																	"bg-gray-500"
-																}
+																${STATUS_DOTS[order.status] || "bg-gray-500"}
 															`}
-														/>
-
-														{order.status}
-													</span>
-
-													<ChevronRight
-														size={17}
-														className="text-[#2E2E2E]/25"
 													/>
-												</div>
+
+													{order.status}
+												</span>
+
+												<ChevronRight size={17} className="text-[#2E2E2E]/25" />
 											</div>
+										</div>
 
-											{/* DIVIDER */}
+										{/* DIVIDER */}
 
-											<div className="my-3 border-t border-[#EEE6E1]" />
+										<div className="my-3 border-t border-[#EEE6E1]" />
 
-											{/* CUSTOMER + PRODUCT */}
+										{/* CUSTOMER + PRODUCT */}
 
-											<div className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-2">
-												<div className="min-w-0">
-													<div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/35">
-														<User size={12} />
-														Customer
-													</div>
+										<div className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-2">
+											<div className="min-w-0">
+												<div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/35">
+													<User size={12} />
+													Customer
+												</div>
 
-													<p
-														className={`
+												<p
+													className={`
 															mt-1
 															truncate
 															text-sm
 															${
-																order.customer ===
-																"Guest"
+																order.customer === "Guest"
 																	? "font-semibold text-[#8A6A5B]"
 																	: "font-medium text-[#2E2E2E]"
 															}
 														`}
-													>
-														{order.customer}
-													</p>
-												</div>
-
-												<div className="min-w-0">
-													<div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/35">
-														<Package size={12} />
-														Product
-													</div>
-
-													<p
-														className="mt-1 truncate text-sm font-medium text-[#2E2E2E]"
-														title={order.product}
-													>
-														{order.product}
-													</p>
-
-													{order.items > 1 && (
-														<p className="mt-0.5 text-[11px] text-[#2E2E2E]/40">
-															+{order.items - 1} more item
-															{order.items - 1 > 1
-																? "s"
-																: ""}
-														</p>
-													)}
-												</div>
+												>
+													{order.customer}
+												</p>
 											</div>
 
-											{/* AMOUNT + DATE */}
-
-											<div className="mt-4 flex items-center justify-between rounded-xl bg-[#FBF9F7] px-3.5 py-3">
-												<div>
-													<p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/35">
-														Amount
-													</p>
-
-													<p className="mt-0.5 text-base font-bold text-[#2E2E2E]">
-														₹
-														{order.amount.toLocaleString(
-															"en-IN",
-														)}
-													</p>
+											<div className="min-w-0">
+												<div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/35">
+													<Package size={12} />
+													Product
 												</div>
 
-												<div className="text-right">
-													<div className="flex items-center justify-end gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/35">
-														<CalendarDays size={12} />
-														Date
-													</div>
+												<p
+													className="mt-1 truncate text-sm font-medium text-[#2E2E2E]"
+													title={order.product}
+												>
+													{order.product}
+												</p>
 
-													<p className="mt-0.5 text-xs font-medium text-[#2E2E2E]/60">
-														{order.date}
+												{order.items > 1 && (
+													<p className="mt-0.5 text-[11px] text-[#2E2E2E]/40">
+														+{order.items - 1} more item
+														{order.items - 1 > 1 ? "s" : ""}
 													</p>
-												</div>
+												)}
+											</div>
+										</div>
+
+										{/* AMOUNT + DATE */}
+
+										<div className="mt-4 flex items-center justify-between rounded-xl bg-[#FBF9F7] px-3.5 py-3">
+											<div>
+												<p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/35">
+													Amount
+												</p>
+
+												<p className="mt-0.5 text-base font-bold text-[#2E2E2E]">
+													₹{order.amount.toLocaleString("en-IN")}
+												</p>
 											</div>
 
-											{/* ADDRESS */}
-
-											<div className="mt-3 flex items-start gap-2.5">
-												<div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#F7D6BF]/40">
-													<MapPin
-														size={14}
-														className="text-[#85161B]"
-													/>
+											<div className="text-right">
+												<div className="flex items-center justify-end gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/35">
+													<CalendarDays size={12} />
+													Date
 												</div>
 
-												<div className="min-w-0">
-													<p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/35">
-														Delivery Address
-													</p>
-
-													<p
-														className="mt-1 line-clamp-2 text-xs leading-5 text-[#2E2E2E]/60"
-														title={order.address}
-													>
-														{order.address}
-													</p>
-												</div>
+												<p className="mt-0.5 text-xs font-medium text-[#2E2E2E]/60">
+													{order.date}
+												</p>
 											</div>
-										</Link>
-									),
-								)}
+										</div>
+
+										{/* ADDRESS */}
+
+										<div className="mt-3 flex items-start gap-2.5">
+											<div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#F7D6BF]/40">
+												<MapPin size={14} className="text-[#85161B]" />
+											</div>
+
+											<div className="min-w-0">
+												<p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/35">
+													Delivery Address
+												</p>
+
+												<p
+													className="mt-1 line-clamp-2 text-xs leading-5 text-[#2E2E2E]/60"
+													title={order.address}
+												>
+													{order.address}
+												</p>
+											</div>
+										</div>
+									</Link>
+								))}
 							</div>
 
 							{/* ==================================================
@@ -1207,104 +1156,85 @@ export default function AdminOrdersPage() {
 									<table className="w-full min-w-[1050px] text-left text-sm">
 										<thead>
 											<tr className="border-b border-[#EEE6E1] text-xs text-[#2E2E2E]/40">
-												<th className="px-5 py-4 font-medium">
-													Order
-												</th>
+												<th className="px-5 py-4 font-medium">Order</th>
 
-												<th className="px-5 py-4 font-medium">
-													Customer
-												</th>
+												<th className="px-5 py-4 font-medium">Customer</th>
 
-												<th className="px-5 py-4 font-medium">
-													Product
-												</th>
+												<th className="px-5 py-4 font-medium">Product</th>
 
-												<th className="px-5 py-4 font-medium">
-													Amount
-												</th>
+												<th className="px-5 py-4 font-medium">Amount</th>
 
-												<th className="px-5 py-4 font-medium">
-													Status
-												</th>
+												<th className="px-5 py-4 font-medium">Status</th>
 
-												<th className="px-5 py-4 font-medium">
-													Address
-												</th>
+												<th className="px-5 py-4 font-medium">Address</th>
 
-												<th className="px-5 py-4 font-medium">
-													Date
-												</th>
+												<th className="px-5 py-4 font-medium">Date</th>
 											</tr>
 										</thead>
 
 										<tbody className="divide-y divide-[#EEE6E1]">
-											{filteredOrders.map(
-												(order, index) => (
-													<tr
-														key={`${order.id}-${index}`}
-														className="transition-colors hover:bg-[#FBF9F7]"
-													>
-														{/* ORDER */}
+											{paginatedOrders.map((order, index) => (
+												<tr
+													key={`${order.id}-${index}`}
+													className="transition-colors hover:bg-[#FBF9F7]"
+												>
+													{/* ORDER */}
 
-														<td className="px-5 py-5">
-															<Link
-																href={`/admin/orders/${order.id}`}
-																className="font-semibold text-[#85161B] hover:underline"
-															>
-																#{order.id}
-															</Link>
-														</td>
+													<td className="px-5 py-5">
+														<Link
+															href={`/admin/orders/${order.id}`}
+															className="font-semibold text-[#85161B] hover:underline"
+														>
+															#{order.id}
+														</Link>
+													</td>
 
-														{/* CUSTOMER */}
+													{/* CUSTOMER */}
 
-														<td className="max-w-[150px] px-5 py-5">
-															<span
-																className={`
+													<td className="max-w-[150px] px-5 py-5">
+														<span
+															className={`
 																	block
 																	truncate
 																	${
-																		order.customer ===
-																		"Guest"
+																		order.customer === "Guest"
 																			? "font-semibold text-[#8A6A5B]"
 																			: "text-[#2E2E2E]"
 																	}
 																`}
-															>
-																{order.customer}
+														>
+															{order.customer}
+														</span>
+													</td>
+
+													{/* PRODUCT */}
+
+													<td className="max-w-[220px] px-5 py-5">
+														<p
+															className="truncate text-[#2E2E2E]/70"
+															title={order.product}
+														>
+															{order.product}
+														</p>
+
+														{order.items > 1 && (
+															<span className="mt-0.5 block text-xs text-[#2E2E2E]/40">
+																+{order.items - 1} more
 															</span>
-														</td>
+														)}
+													</td>
 
-														{/* PRODUCT */}
+													{/* AMOUNT */}
 
-														<td className="max-w-[220px] px-5 py-5">
-															<p
-																className="truncate text-[#2E2E2E]/70"
-																title={order.product}
-															>
-																{order.product}
-															</p>
+													<td className="whitespace-nowrap px-5 py-5 font-semibold text-[#2E2E2E]">
+														₹{order.amount.toLocaleString("en-IN")}
+													</td>
 
-															{order.items > 1 && (
-																<span className="mt-0.5 block text-xs text-[#2E2E2E]/40">
-																	+{order.items - 1} more
-																</span>
-															)}
-														</td>
+													{/* STATUS */}
 
-														{/* AMOUNT */}
-
-														<td className="whitespace-nowrap px-5 py-5 font-semibold text-[#2E2E2E]">
-															₹
-															{order.amount.toLocaleString(
-																"en-IN",
-															)}
-														</td>
-
-														{/* STATUS */}
-
-														<td className="px-5 py-5">
-															<span
-																className={`
+													<td className="px-5 py-5">
+														<span
+															className={`
 																	inline-flex
 																	whitespace-nowrap
 																	rounded-full
@@ -1312,48 +1242,141 @@ export default function AdminOrdersPage() {
 																	py-1
 																	text-xs
 																	font-semibold
-																	${
-																		STATUS_STYLES[
-																			order.status
-																		] ||
-																		"bg-gray-100 text-gray-600"
-																	}
+																	${STATUS_STYLES[order.status] || "bg-gray-100 text-gray-600"}
 																`}
+														>
+															{order.status}
+														</span>
+													</td>
+
+													{/* ADDRESS */}
+
+													<td className="max-w-[300px] px-5 py-5">
+														<div className="flex min-w-0 items-start gap-2">
+															<MapPin
+																size={15}
+																className="mt-0.5 shrink-0 text-[#85161B]"
+															/>
+
+															<p
+																className="line-clamp-2 text-xs leading-5 text-[#2E2E2E]/65"
+																title={order.address}
 															>
-																{order.status}
-															</span>
-														</td>
+																{order.address}
+															</p>
+														</div>
+													</td>
 
-														{/* ADDRESS */}
+													{/* DATE */}
 
-														<td className="max-w-[300px] px-5 py-5">
-															<div className="flex min-w-0 items-start gap-2">
-																<MapPin
-																	size={15}
-																	className="mt-0.5 shrink-0 text-[#85161B]"
-																/>
-
-																<p
-																	className="line-clamp-2 text-xs leading-5 text-[#2E2E2E]/65"
-																	title={order.address}
-																>
-																	{order.address}
-																</p>
-															</div>
-														</td>
-
-														{/* DATE */}
-
-														<td className="whitespace-nowrap px-5 py-5 text-xs text-[#2E2E2E]/45">
-															{order.date}
-														</td>
-													</tr>
-												),
-											)}
+													<td className="whitespace-nowrap px-5 py-5 text-xs text-[#2E2E2E]/45">
+														{order.date}
+													</td>
+												</tr>
+											))}
 										</tbody>
 									</table>
 								</div>
 							</div>
+
+							{/* ==================================================
+							    PAGINATION
+							================================================== */}
+
+							{totalPages > 1 && (
+								<div
+									className="
+										mt-5
+										flex
+										flex-col
+										items-center
+										justify-between
+										gap-3
+										rounded-2xl
+										border
+										border-[#E9DED7]
+										bg-white
+										px-4
+										py-3.5
+										sm:flex-row
+										sm:px-5
+									"
+								>
+									<p className="text-xs text-[#2E2E2E]/50">
+										Showing{" "}
+										<span className="font-semibold text-[#2E2E2E]">
+											{rangeStart}–{rangeEnd}
+										</span>{" "}
+										of{" "}
+										<span className="font-semibold text-[#2E2E2E]">
+											{filteredOrders.length}
+										</span>{" "}
+										orders
+									</p>
+
+									<div className="flex items-center gap-2">
+										<button
+											type="button"
+											onClick={() =>
+												setPage((current) => Math.max(1, current - 1))
+											}
+											disabled={page === 1}
+											className="
+												rounded-lg
+												border
+												border-[#E8DED7]
+												bg-white
+												px-3.5
+												py-2
+												text-xs
+												font-semibold
+												text-[#2E2E2E]/70
+												transition
+												hover:border-[#85161B]/30
+												hover:text-[#85161B]
+												disabled:cursor-not-allowed
+												disabled:opacity-40
+												disabled:hover:border-[#E8DED7]
+												disabled:hover:text-[#2E2E2E]/70
+											"
+										>
+											Previous
+										</button>
+
+										<span className="px-1 text-xs font-medium text-[#2E2E2E]/55">
+											Page {page} of {totalPages}
+										</span>
+
+										<button
+											type="button"
+											onClick={() =>
+												setPage((current) => Math.min(totalPages, current + 1))
+											}
+											disabled={page === totalPages}
+											className="
+												rounded-lg
+												border
+												border-[#E8DED7]
+												bg-white
+												px-3.5
+												py-2
+												text-xs
+												font-semibold
+												text-[#2E2E2E]/70
+												transition
+												hover:border-[#85161B]/30
+												hover:text-[#85161B]
+												disabled:cursor-not-allowed
+												disabled:opacity-40
+												disabled:hover:border-[#E8DED7]
+												disabled:hover:text-[#2E2E2E]/70
+											"
+										>
+											Next
+										</button>
+									</div>
+								</div>
+							)}
 						</>
 					) : (
 						/* ======================================================
@@ -1383,16 +1406,11 @@ export default function AdminOrdersPage() {
 									bg-[#F7D6BF]/40
 								"
 							>
-								<ClipboardList
-									size={22}
-									className="text-[#85161B]"
-								/>
+								<ClipboardList size={22} className="text-[#85161B]" />
 							</div>
 
 							<p className="mt-4 text-sm font-semibold text-[#2E2E2E]">
-								{error
-									? "No orders available"
-									: "No orders match your search"}
+								{error ? "No orders available" : "No orders match your search"}
 							</p>
 
 							<p className="mt-1 text-xs text-[#2E2E2E]/45">
