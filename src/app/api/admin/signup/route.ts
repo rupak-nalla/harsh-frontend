@@ -86,6 +86,7 @@ export async function POST(request: NextRequest) {
 
 		const backendFormData = new FormData();
 
+		backendFormData.append("command_type", "admin");
 		backendFormData.append("name", name);
 		backendFormData.append("email", email);
 		backendFormData.append("phone", phone);

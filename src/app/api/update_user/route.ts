@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const API_URL = "https://printinghouseujjain.in";
-const REQUIRED_FIELDS = ["user_id", "name", "email", "phone", "reseller", "command_type"] as const;
+const REQUIRED_FIELDS = ["user_id", "name", "email", "phone", "reseller"] as const;
 
 export async function POST(request: NextRequest) {
 	try {
 		const input = await request.formData();
 		const backendFormData = new FormData();
+		backendFormData.append("command_type", "admin");
 
 		for (const field of REQUIRED_FIELDS) {
 			const value = input.get(field);

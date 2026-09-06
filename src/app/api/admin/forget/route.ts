@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
 
 		const backendFormData = new FormData();
 
+		backendFormData.append("command_type", "admin");
 		backendFormData.append("email", email);
 		backendFormData.append("new_password", newPassword);
 

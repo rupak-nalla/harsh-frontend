@@ -5,9 +5,11 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
 	AlertCircle,
+	AlertTriangle,
 	ArrowLeft,
 	CalendarDays,
 	CreditCard,
+	MessageCircle,
 	MapPin,
 	Phone,
 	Save,
@@ -18,7 +20,7 @@ import {
 
 const PRODUCT_IMAGE_URL = "https://printinghouseujjain.in/assets/products/";
 const UPLOAD_IMAGE_URL = "https://printinghouseujjain.in/assets/uploads/";
-const STATUS_OPTIONS = ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"];
+const STATUS_OPTIONS = ["pending", "accepted", "packed", "shipped", "delivered", "cancelled"] as const;
 
 type RawItem = {
 	id?: string | number;
@@ -27,6 +29,12 @@ type RawItem = {
 	quantity?: string | number;
 	selling_price?: string | number;
 	customization?: string;
+	market_price?: string | number;
+	reseller_price?: string | number;
+	description?: string;
+	customize_reqs?: string | string[];
+	keywords?: string;
+	delivery?: string | number;
 	[key: string]: unknown;
 };
 
@@ -69,7 +77,9 @@ type RawOrder = {
 type DetailOrder = {
 	id: string;
 	status: string;
+	rawStatus: string;
 	date: string;
+	createdAt?: string;
 	method: "pickup" | "delivery";
 	paymentStatus: string;
 	items: RawItem[];
@@ -78,6 +88,23 @@ type DetailOrder = {
 	total: number;
 	deliveryFee: number;
 	grandTotal: number;
+};
+
+type CurrentProduct = {
+	id?: string | number;
+	updated_at?: string;
+};
+
+type ProductCheck = {
+	loading: boolean;
+	stale: boolean;
+	current?: CurrentProduct;
+};
+
+type RefundForm = {
+	type: "full" | "partial";
+	amount: string;
+	reason: string;
 };
 
 function asNumber(value: unknown) {
@@ -97,10 +124,35 @@ function parseJson<T>(value: unknown, fallback: T): T {
 function normalizeStatus(value: unknown) {
 	const status = String(value ?? "Pending").toLowerCase().replace(/[\s_-]+/g, "");
 	if (status.includes("cancel")) return "Cancelled";
+	if (status.includes("pack")) return "Packed";
 	if (status.includes("deliver") || status.includes("complete")) return "Delivered";
 	if (status.includes("ship") || status.includes("dispatch")) return "Shipped";
 	if (status.includes("process") || status.includes("confirm") || status.includes("accept")) return "Processing";
 	return "Pending";
+}
+
+function rawStatus(value: unknown) {
+	return String(value ?? "pending").toLowerCase().replace(/[\s_-]+/g, "");
+}
+
+function productFromResponse(data: unknown): CurrentProduct | null {
+	if (!data || typeof data !== "object") return null;
+	const value = data as { result?: CurrentProduct; product?: CurrentProduct; data?: CurrentProduct };
+	return value.result ?? value.product ?? value.data ?? (data as CurrentProduct);
+}
+
+function productWasUpdatedAfterOrder(product: CurrentProduct, orderCreatedAt?: string) {
+	if (!product.updated_at || !orderCreatedAt) return false;
+	const productUpdated = new Date(product.updated_at.replace(" ", "T")).getTime();
+	const orderCreated = new Date(orderCreatedAt.replace(" ", "T")).getTime();
+	return Number.isFinite(productUpdated) && Number.isFinite(orderCreated) && productUpdated > orderCreated;
+}
+
+function whatsappUrl(phone: string | undefined, order: DetailOrder, text: string) {
+	const digits = String(phone ?? "").replace(/\D/g, "");
+	if (!digits) return "";
+	const normalizedPhone = digits.length === 10 ? `91${digits}` : digits;
+	return `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(text)}`;
 }
 
 function formatDate(value?: string) {
@@ -144,7 +196,9 @@ function normalizeOrder(raw: RawOrder): DetailOrder {
 	return {
 		id: String(raw.order_id ?? raw.id ?? ""),
 		status: normalizeStatus(raw.order_status),
+		rawStatus: rawStatus(raw.order_status),
 		date: formatDate(raw.created_at),
+		createdAt: raw.created_at,
 		method: String(raw.delivery_method ?? raw.type).toLowerCase() === "pickup" ? "pickup" : "delivery",
 		paymentStatus: String(raw.payment_status ?? "—"),
 		items,
@@ -169,18 +223,35 @@ function extractOrder(data: unknown, id: string) {
 }
 
 function statusClasses(status: string) {
-	return { Delivered: "bg-[#EDF8F0] text-[#31824A]", Shipped: "bg-[#F3EBFA] text-[#8B4FC7]", Processing: "bg-[#EEF5FF] text-[#3973B9]", Cancelled: "bg-red-50 text-red-700", Pending: "bg-[#FFF3E8] text-[#B56B27]" }[status] ?? "bg-gray-100 text-gray-700";
+	return { Delivered: "bg-[#EDF8F0] text-[#31824A]", Shipped: "bg-[#F3EBFA] text-[#8B4FC7]", Packed: "bg-[#EEF5FF] text-[#3973B9]", Processing: "bg-[#EEF5FF] text-[#3973B9]", Cancelled: "bg-red-50 text-red-700", Pending: "bg-[#FFF3E8] text-[#B56B27]" }[status] ?? "bg-gray-100 text-gray-700";
+}
+
+function statusLabel(status: string) {
+	return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 export default function AdminOrderDetailsPage() {
 	const params = useParams<{ id: string }>();
 	const orderId = params?.id ? decodeURIComponent(params.id) : "";
 	const [order, setOrder] = useState<DetailOrder | null>(null);
-	const [status, setStatus] = useState("Pending");
+	const [status, setStatus] = useState<string>("pending");
+	const [productChecks, setProductChecks] = useState<Record<string, ProductCheck>>({});
+	const [paymentSaving, setPaymentSaving] = useState(false);
+	const [notificationLink, setNotificationLink] = useState("");
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
 	const [message, setMessage] = useState("");
+
+	// Cancellation reason modal — collected client-side only, never sent to the server.
+	const [cancelModalOpen, setCancelModalOpen] = useState(false);
+	const [cancelReason, setCancelReason] = useState("");
+	const [cancelFormError, setCancelFormError] = useState("");
+
+	// Refund details modal — collected client-side only, never sent to the server.
+	const [refundModalOpen, setRefundModalOpen] = useState(false);
+	const [refundForm, setRefundForm] = useState<RefundForm>({ type: "full", amount: "", reason: "" });
+	const [refundFormError, setRefundFormError] = useState("");
 
 	useEffect(() => {
 		if (!orderId) return;
@@ -193,7 +264,21 @@ export default function AdminOrderDetailsPage() {
 				if (!raw) throw new Error("Order not found.");
 				const normalized = normalizeOrder(raw);
 				setOrder(normalized);
-				setStatus(normalized.status);
+				setStatus(normalized.rawStatus);
+
+				const productIds = [...new Set(normalized.items.map((item) => String(item.id ?? "")).filter(Boolean))];
+				setProductChecks(Object.fromEntries(productIds.map((id) => [id, { loading: true, stale: false }])));
+				await Promise.all(productIds.map(async (productId) => {
+					try {
+						const productResponse = await fetch(`/api/admin/product/${encodeURIComponent(productId)}`, { method: "POST", cache: "no-store" });
+						const productData = await productResponse.json().catch(() => ({}));
+						const current = productFromResponse(productData);
+						if (!productResponse.ok || !current) throw new Error("Unable to check product.");
+						setProductChecks((previous) => ({ ...previous, [productId]: { loading: false, stale: productWasUpdatedAfterOrder(current, normalized.createdAt), current } }));
+					} catch {
+						setProductChecks((previous) => ({ ...previous, [productId]: { loading: false, stale: false } }));
+					}
+				}));
 			} catch (loadError) {
 				setError(loadError instanceof Error ? loadError.message : "Unable to load order.");
 			} finally {
@@ -204,21 +289,104 @@ export default function AdminOrderDetailsPage() {
 
 	const itemCount = useMemo(() => order?.items.reduce((sum, item) => sum + Math.max(1, Math.floor(asNumber(item.quantity))), 0) ?? 0, [order]);
 
-	const updateStatus = async () => {
-		if (!order || saving || status === order.status) return;
+	// Performs the actual status update call. `cancellationReason`, when provided,
+	// is only used to enrich the WhatsApp notification text — it is not sent to the server.
+	const performStatusUpdate = async (cancellationReason?: string) => {
+		if (!order) return;
 		setSaving(true);
 		setMessage("");
+		setNotificationLink("");
 		try {
-			const response = await fetch(`/api/admin/orders/${encodeURIComponent(order.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ status }) });
+			const response = await fetch("/api/update_order", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ order_id: order.id, status, current_status: order.rawStatus }) });
 			const data = await response.json().catch(() => ({}));
 			if (!response.ok) throw new Error(data.message || "Unable to update order status.");
-			setOrder({ ...order, status });
-			setMessage("Order status updated.");
+			const nextOrder = { ...order, status: normalizeStatus(status), rawStatus: status };
+			setOrder(nextOrder);
+			setMessage("Order status updated. Notify the customer on WhatsApp.");
+
+			const phone = order.address?.phone || order.customer.phone;
+			const messageText =
+				status === "cancelled" && cancellationReason
+					? `Hi ${order.customer.name}, your order #${order.id} has been cancelled.\nReason: ${cancellationReason}\nIf you have any questions, please reach out to us.`
+					: `Hi ${order.customer.name}, your order #${order.id} is now ${normalizeStatus(status).toLowerCase()}. Track your order here: https://printinghouseujjain.in/track/${order.id}`;
+			setNotificationLink(whatsappUrl(phone, nextOrder, messageText));
 		} catch (updateError) {
 			setMessage(updateError instanceof Error ? updateError.message : "Unable to update order status.");
-			setStatus(order.status);
+			setStatus(order.rawStatus);
 		} finally {
 			setSaving(false);
+		}
+	};
+
+	// "Update status" button — intercepts a switch to "cancelled" to collect a reason first.
+	const handleStatusUpdateClick = () => {
+		if (!order || saving || status === order.rawStatus) return;
+		if (status === "cancelled") {
+			if (order.rawStatus !== "pending") {
+				setMessage("Cancellation is only available before the order is accepted.");
+				return;
+			}
+			setCancelReason("");
+			setCancelFormError("");
+			setCancelModalOpen(true);
+			return;
+		}
+		void performStatusUpdate();
+	};
+
+	const confirmCancellation = async () => {
+		if (!cancelReason.trim()) {
+			setCancelFormError("Please add a reason for the cancellation.");
+			return;
+		}
+		setCancelModalOpen(false);
+		await performStatusUpdate(cancelReason.trim());
+	};
+
+	// "Mark refunded" button — opens the refund details modal instead of refunding directly.
+	const openRefundModal = () => {
+		if (!order || paymentSaving || order.paymentStatus.toLowerCase() === "refunded") return;
+		setRefundForm({ type: "full", amount: order.grandTotal.toFixed(2), reason: "" });
+		setRefundFormError("");
+		setRefundModalOpen(true);
+	};
+
+	// Confirms the refund modal, calls the API, then builds the WhatsApp message
+	// using the amount/reason collected — none of which is sent to the server.
+	const confirmRefund = async () => {
+		if (!order) return;
+
+		const trimmedReason = refundForm.reason.trim();
+		if (!trimmedReason) {
+			setRefundFormError("Please add a reason for the refund.");
+			return;
+		}
+
+		const amountValue = refundForm.type === "full" ? order.grandTotal : Number(refundForm.amount);
+		if (refundForm.type === "partial" && (!Number.isFinite(amountValue) || amountValue <= 0 || amountValue > order.grandTotal)) {
+			setRefundFormError(`Enter a valid amount up to ₹${order.grandTotal.toLocaleString("en-IN")}.`);
+			return;
+		}
+
+		setRefundModalOpen(false);
+		setPaymentSaving(true);
+		setMessage("");
+		setNotificationLink("");
+		try {
+			const response = await fetch("/api/update_payment", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ order_id: order.id, status: "refunded" }) });
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) throw new Error(data.message || "Unable to refund payment.");
+			setOrder({ ...order, paymentStatus: "refunded" });
+			setMessage("Payment marked as refunded. Notify the customer on WhatsApp.");
+
+			const phone = order.address?.phone || order.customer.phone;
+			const refundLabel = refundForm.type === "full" ? "a full refund" : "a partial refund";
+			const messageText = `Hi ${order.customer.name}, we've processed ${refundLabel} of ₹${amountValue.toLocaleString("en-IN")} for order #${order.id}.\nReason: ${trimmedReason}\nPlease allow 5-7 business days for the amount to reflect in your original payment method.`;
+			setNotificationLink(whatsappUrl(phone, order, messageText));
+		} catch (refundError) {
+			setMessage(refundError instanceof Error ? refundError.message : "Unable to refund payment.");
+		} finally {
+			setPaymentSaving(false);
 		}
 	};
 
@@ -226,23 +394,190 @@ export default function AdminOrderDetailsPage() {
 	if (error || !order) return <main className="flex min-h-screen items-center justify-center bg-[#FBF9F7] px-5"><div className="rounded-2xl border border-red-200 bg-white p-8 text-center"><AlertCircle className="mx-auto text-red-600" /><p className="mt-3 text-sm text-red-700">{error || "Order not found."}</p><Link href="/admin/orders" className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-[#85161B]"><ArrowLeft size={16} />Back to orders</Link></div></main>;
 
 	return (
-		<main className="min-h-screen bg-[#FBF9F7] px-4 py-7 sm:px-6 lg:px-10 lg:py-10">
-			<div className="mx-auto max-w-7xl">
-				<Link href="/admin/orders" className="inline-flex items-center gap-2 text-sm font-medium text-[#2E2E2E]/55 hover:text-[#85161B]"><ArrowLeft size={16} />All orders</Link>
-				<div className="mt-6 flex flex-col justify-between gap-5 border-b border-[#E8DED7] pb-7 lg:flex-row lg:items-end">
-					<div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#85161B]">Order details</p><h1 className="mt-2 text-3xl font-bold text-[#2E2E2E]">Order #{order.id}</h1><div className="mt-2 flex flex-wrap gap-4 text-sm text-[#2E2E2E]/55"><span className="inline-flex items-center gap-1.5"><CalendarDays size={15} />{order.date}</span><span>{itemCount} item{itemCount === 1 ? "" : "s"}</span></div></div>
-					<div className="flex flex-wrap items-center gap-3"><span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${statusClasses(order.status)}`}>{order.status}</span><select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-xl border border-[#E8DED7] bg-white px-3 py-2.5 text-sm text-[#2E2E2E] outline-none">{STATUS_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}</select><button type="button" onClick={updateStatus} disabled={saving || status === order.status} className="inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"><Save size={15} />{saving ? "Saving..." : "Update status"}</button></div>
-				</div>
-				{message && <p className="mt-4 text-sm text-[#85161B]">{message}</p>}
+		<>
+			<main className="min-h-screen bg-[#FBF9F7] px-4 py-7 sm:px-6 lg:px-10 lg:py-10">
+				<div className="mx-auto max-w-7xl">
+					<Link href="/admin/orders" className="inline-flex items-center gap-2 text-sm font-medium text-[#2E2E2E]/55 hover:text-[#85161B]"><ArrowLeft size={16} />All orders</Link>
+					<div className="mt-6 flex flex-col justify-between gap-5 border-b border-[#E8DED7] pb-7 lg:flex-row lg:items-end">
+						<div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#85161B]">Order details</p><h1 className="mt-2 text-3xl font-bold text-[#2E2E2E]">Order #{order.id}</h1><div className="mt-2 flex flex-wrap gap-4 text-sm text-[#2E2E2E]/55"><span className="inline-flex items-center gap-1.5"><CalendarDays size={15} />{order.date}</span><span>{itemCount} item{itemCount === 1 ? "" : "s"}</span></div></div>
+						<div className="flex flex-wrap items-center gap-3"><span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${statusClasses(order.status)}`}>{order.status}</span><select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-xl border border-[#E8DED7] bg-white px-3 py-2.5 text-sm text-[#2E2E2E] outline-none">{STATUS_OPTIONS.map((option) => <option key={option} value={option}>{statusLabel(option)}</option>)}</select><button type="button" onClick={handleStatusUpdateClick} disabled={saving || status === order.rawStatus} className="inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"><Save size={15} />{saving ? "Saving..." : "Update status"}</button></div>
+					</div>
+					{message && <p className="mt-4 text-sm text-[#85161B]">{message}</p>}
+					{notificationLink && <a href={notificationLink} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#25D366] px-4 py-2.5 text-sm font-semibold text-white"><MessageCircle size={16} />Notify customer on WhatsApp</a>}
 
-				<div className="mt-7 grid gap-5 lg:grid-cols-[1.5fr_1fr]">
-					<section className="space-y-5">
-						<div className="rounded-2xl border border-[#E8DED7] bg-white p-5 sm:p-6"><div className="flex items-center justify-between"><h2 className="text-base font-semibold text-[#2E2E2E]">Items and customizations</h2><span className="text-xs text-[#2E2E2E]/45">{order.items.length} product{order.items.length === 1 ? "" : "s"}</span></div><div className="mt-5 divide-y divide-[#F0E8E2]">{order.items.map((item, index) => <div key={`${item.id ?? index}-${index}`} className="py-5 first:pt-0 last:pb-0"><div className="flex gap-4"><div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-[#F7F2EE]">{item.primary_photo_path && <img src={`${PRODUCT_IMAGE_URL}${item.primary_photo_path}`} alt="" className="h-full w-full object-cover" />}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap justify-between gap-2"><div><h3 className="font-semibold text-[#2E2E2E]">{item.name ?? "Untitled product"}</h3><p className="mt-1 text-xs text-[#2E2E2E]/50">Qty {item.quantity ?? 1} · ₹{asNumber(item.selling_price).toLocaleString("en-IN")}</p></div><span className="text-sm font-semibold text-[#85161B]">₹{(asNumber(item.selling_price) * Math.max(1, asNumber(item.quantity))).toLocaleString("en-IN")}</span></div>{parseCustomization(item).length > 0 && <div className="mt-4 rounded-xl bg-[#FBF9F7] p-3"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#85161B]">Customization</p><div className="mt-2 space-y-2">{parseCustomization(item).map((customization) => <div key={customization.label} className="text-sm"><span className="font-medium text-[#2E2E2E]">{customization.label}:</span> <span className="text-[#2E2E2E]/65">{customization.value}</span>{customization.photos.length > 0 && <div className="mt-2 flex gap-2">{customization.photos.map((photo) => <a key={photo} href={`${UPLOAD_IMAGE_URL}${photo}`} target="_blank" rel="noreferrer"><img src={`${UPLOAD_IMAGE_URL}${photo}`} alt={photo} className="h-12 w-12 rounded-lg object-cover" /></a>)}</div>}</div>)}</div></div>}</div></div></div>)}</div></div>
-						<div className="rounded-2xl border border-[#E8DED7] bg-white p-5 sm:p-6"><h2 className="text-base font-semibold text-[#2E2E2E]">Payment summary</h2><div className="mt-4 space-y-3 text-sm"><div className="flex justify-between text-[#2E2E2E]/60"><span>Products</span><span>₹{order.total.toLocaleString("en-IN")}</span></div><div className="flex justify-between text-[#2E2E2E]/60"><span>Delivery fee</span><span>₹{order.deliveryFee.toLocaleString("en-IN")}</span></div><div className="flex justify-between border-t border-[#F0E8E2] pt-3 text-base font-bold text-[#2E2E2E]"><span>Total</span><span>₹{order.grandTotal.toLocaleString("en-IN")}</span></div><p className="inline-flex items-center gap-2 text-xs text-[#2E2E2E]/50"><CreditCard size={14} />Payment: {order.paymentStatus}</p></div></div>
-					</section>
-					<aside className="space-y-5"><div className="rounded-2xl border border-[#E8DED7] bg-white p-5 sm:p-6"><h2 className="flex items-center gap-2 text-base font-semibold text-[#2E2E2E]"><User size={18} className="text-[#85161B]" />Customer</h2><div className="mt-4 space-y-2 text-sm"><p className="font-semibold text-[#2E2E2E]">{order.customer.name}</p><p className="text-[#2E2E2E]/60">{order.customer.email}</p><p className="text-[#2E2E2E]/60">{order.customer.phone}</p><p className="text-xs text-[#2E2E2E]/40">Account: {order.customer.id}</p></div></div><div className={`rounded-2xl border p-5 sm:p-6 ${order.method === "pickup" ? "border-[#E7C9A2] bg-[#FFF8EF]" : "border-[#E8DED7] bg-white"}`}><h2 className="flex items-center gap-2 text-base font-semibold text-[#2E2E2E]">{order.method === "pickup" ? <Store size={18} className="text-[#85161B]" /> : <Truck size={18} className="text-[#85161B]" />}{order.method === "pickup" ? "Store pickup" : "Delivery address"}</h2>{order.method === "pickup" ? <p className="mt-3 text-sm leading-6 text-[#2E2E2E]/65">Prepare this order for collection at the store. The customer will pick it up instead of receiving a shipment.</p> : order.address ? <div className="mt-4 flex gap-3 text-sm leading-6 text-[#2E2E2E]/65"><MapPin size={17} className="mt-1 shrink-0 text-[#85161B]" /><div><p>{order.address.name}</p><p>{[order.address.flat_house_building, order.address.road_area_colony, order.address.landmark, order.address.city, order.address.state, order.address.pincode].filter(Boolean).join(", ")}</p>{order.address.phone && <p className="mt-2 inline-flex items-center gap-1.5"><Phone size={14} />{order.address.phone}</p>}</div></div> : <p className="mt-3 text-sm text-[#2E2E2E]/55">No address was provided.</p>}</div></aside>
+					<div className="mt-7 grid gap-5 lg:grid-cols-[1.5fr_1fr]">
+						<section className="space-y-5">
+							<div className="rounded-2xl border border-[#E8DED7] bg-white p-5 sm:p-6"><div className="flex items-center justify-between"><h2 className="text-base font-semibold text-[#2E2E2E]">Items and customizations</h2><span className="text-xs text-[#2E2E2E]/45">{order.items.length} product{order.items.length === 1 ? "" : "s"}</span></div><div className="mt-5 divide-y divide-[#F0E8E2]">{order.items.map((item, index) => { const check = productChecks[String(item.id ?? "")]; return <div key={`${item.id ?? index}-${index}`} className="py-5 first:pt-0 last:pb-0"><div className="flex gap-4"><div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-[#F7F2EE]">{item.primary_photo_path && <img src={`${PRODUCT_IMAGE_URL}${item.primary_photo_path}`} alt="" className="h-full w-full object-cover" />}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap justify-between gap-2"><div><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-[#2E2E2E]">{item.name ?? "Untitled product"}</h3>{check?.stale && <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700"><AlertTriangle size={12} />Outdated product</span>}</div><p className="mt-1 text-xs text-[#2E2E2E]/50">Qty {item.quantity ?? 1} · ₹{asNumber(item.selling_price).toLocaleString("en-IN")}</p></div><span className="text-sm font-semibold text-[#85161B]">₹{(asNumber(item.selling_price) * Math.max(1, asNumber(item.quantity))).toLocaleString("en-IN")}</span></div>{parseCustomization(item).length > 0 && <div className="mt-4 rounded-xl bg-[#FBF9F7] p-3"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#85161B]">Customization</p><div className="mt-2 space-y-2">{parseCustomization(item).map((customization) => <div key={customization.label} className="text-sm"><span className="font-medium text-[#2E2E2E]">{customization.label}:</span> <span className="text-[#2E2E2E]/65">{customization.value}</span>{customization.photos.length > 0 && <div className="mt-2 flex gap-2">{customization.photos.map((photo) => <a key={photo} href={`${UPLOAD_IMAGE_URL}${photo}`} target="_blank" rel="noreferrer"><img src={`${UPLOAD_IMAGE_URL}${photo}`} alt={photo} className="h-12 w-12 rounded-lg object-cover" /></a>)}</div>}</div>)}</div></div>}</div></div></div>; })}</div></div>
+							<div className="rounded-2xl border border-[#E8DED7] bg-white p-5 sm:p-6"><div className="flex items-center justify-between gap-3"><h2 className="text-base font-semibold text-[#2E2E2E]">Payment summary</h2><button type="button" onClick={openRefundModal} disabled={paymentSaving || order.paymentStatus.toLowerCase() === "refunded"} className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 disabled:cursor-not-allowed disabled:opacity-50">{paymentSaving ? "Updating..." : order.paymentStatus.toLowerCase() === "refunded" ? "Refunded" : "Mark refunded"}</button></div><div className="mt-4 space-y-3 text-sm"><div className="flex justify-between text-[#2E2E2E]/60"><span>Products</span><span>₹{order.total.toLocaleString("en-IN")}</span></div><div className="flex justify-between text-[#2E2E2E]/60"><span>Delivery fee</span><span>₹{order.deliveryFee.toLocaleString("en-IN")}</span></div><div className="flex justify-between border-t border-[#F0E8E2] pt-3 text-base font-bold text-[#2E2E2E]"><span>Total</span><span>₹{order.grandTotal.toLocaleString("en-IN")}</span></div><p className="inline-flex items-center gap-2 text-xs text-[#2E2E2E]/50"><CreditCard size={14} />Payment: {order.paymentStatus}</p></div></div>
+						</section>
+						<aside className="space-y-5"><div className="rounded-2xl border border-[#E8DED7] bg-white p-5 sm:p-6"><h2 className="flex items-center gap-2 text-base font-semibold text-[#2E2E2E]"><User size={18} className="text-[#85161B]" />Customer</h2><div className="mt-4 space-y-2 text-sm"><p className="font-semibold text-[#2E2E2E]">{order.customer.name}</p><p className="text-[#2E2E2E]/60">{order.customer.email}</p><p className="text-[#2E2E2E]/60">{order.customer.phone}</p><p className="text-xs text-[#2E2E2E]/40">Account: {order.customer.id}</p></div></div><div className={`rounded-2xl border p-5 sm:p-6 ${order.method === "pickup" ? "border-[#E7C9A2] bg-[#FFF8EF]" : "border-[#E8DED7] bg-white"}`}><h2 className="flex items-center gap-2 text-base font-semibold text-[#2E2E2E]">{order.method === "pickup" ? <Store size={18} className="text-[#85161B]" /> : <Truck size={18} className="text-[#85161B]" />}{order.method === "pickup" ? "Store pickup" : "Delivery address"}</h2>{order.method === "pickup" ? <p className="mt-3 text-sm leading-6 text-[#2E2E2E]/65">Prepare this order for collection at the store. The customer will pick it up instead of receiving a shipment.</p> : order.address ? <div className="mt-4 flex gap-3 text-sm leading-6 text-[#2E2E2E]/65"><MapPin size={17} className="mt-1 shrink-0 text-[#85161B]" /><div><p>{order.address.name}</p><p>{[order.address.flat_house_building, order.address.road_area_colony, order.address.landmark, order.address.city, order.address.state, order.address.pincode].filter(Boolean).join(", ")}</p>{order.address.phone && <p className="mt-2 inline-flex items-center gap-1.5"><Phone size={14} />{order.address.phone}</p>}</div></div> : <p className="mt-3 text-sm text-[#2E2E2E]/55">No address was provided.</p>}</div></aside>
+					</div>
 				</div>
-			</div>
-		</main>
+			</main>
+
+			{/* ==========================================================================
+			    CANCELLATION REASON MODAL — client-side only, nothing here is saved server-side
+			========================================================================== */}
+			{cancelModalOpen && order && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+					<div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl sm:p-7">
+						<h3 className="text-lg font-semibold text-[#2E2E2E]">Cancel order #{order.id}</h3>
+						<p className="mt-1.5 text-sm leading-6 text-[#2E2E2E]/55">
+							Let us know why this order is being cancelled. This is only used to
+							write the WhatsApp message sent to the customer — it isn't saved.
+						</p>
+
+						<label className="mt-5 block text-sm font-medium text-[#2E2E2E]">
+							Reason
+							<textarea
+								value={cancelReason}
+								onChange={(event) => {
+									setCancelReason(event.target.value);
+									setCancelFormError("");
+								}}
+								rows={3}
+								placeholder="e.g. Out of stock, customer requested, unable to fulfill design"
+								className="mt-1.5 w-full rounded-xl border border-[#E8DED7] px-3.5 py-2.5 text-sm outline-none focus:border-[#85161B]"
+							/>
+						</label>
+
+						{cancelFormError && (
+							<p className="mt-2 text-xs font-medium text-red-600">{cancelFormError}</p>
+						)}
+
+						<div className="mt-6 flex justify-end gap-3">
+							<button
+								type="button"
+								onClick={() => setCancelModalOpen(false)}
+								className="rounded-xl border border-[#E8DED7] px-4 py-2.5 text-sm font-semibold text-[#2E2E2E]/70"
+							>
+								Back
+							</button>
+							<button
+								type="button"
+								onClick={confirmCancellation}
+								disabled={saving}
+								className="rounded-xl bg-[#85161B] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+							>
+								{saving ? "Cancelling..." : "Confirm cancellation"}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* ==========================================================================
+			    REFUND DETAILS MODAL — client-side only, nothing here is saved server-side
+			========================================================================== */}
+			{refundModalOpen && order && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+					<div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl sm:p-7">
+						<h3 className="text-lg font-semibold text-[#2E2E2E]">Refund order #{order.id}</h3>
+						<p className="mt-1.5 text-sm leading-6 text-[#2E2E2E]/55">
+							Order total is ₹{order.grandTotal.toLocaleString("en-IN")}. These
+							details are only used to write the WhatsApp message — they aren't
+							saved.
+						</p>
+
+						<div className="mt-5 flex gap-3">
+							<label
+								className={`flex flex-1 cursor-pointer items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-medium transition ${
+									refundForm.type === "full"
+										? "border-[#85161B] bg-[#FFF3F0] text-[#85161B]"
+										: "border-[#E8DED7] text-[#2E2E2E]/65"
+								}`}
+							>
+								<input
+									type="radio"
+									name="refund-type"
+									checked={refundForm.type === "full"}
+									onChange={() =>
+										setRefundForm((previous) => ({
+											...previous,
+											type: "full",
+											amount: order.grandTotal.toFixed(2),
+										}))
+									}
+									className="accent-[#85161B]"
+								/>
+								Full refund
+							</label>
+							<label
+								className={`flex flex-1 cursor-pointer items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm font-medium transition ${
+									refundForm.type === "partial"
+										? "border-[#85161B] bg-[#FFF3F0] text-[#85161B]"
+										: "border-[#E8DED7] text-[#2E2E2E]/65"
+								}`}
+							>
+								<input
+									type="radio"
+									name="refund-type"
+									checked={refundForm.type === "partial"}
+									onChange={() =>
+										setRefundForm((previous) => ({ ...previous, type: "partial", amount: "" }))
+									}
+									className="accent-[#85161B]"
+								/>
+								Partial refund
+							</label>
+						</div>
+
+						{refundForm.type === "partial" && (
+							<label className="mt-4 block text-sm font-medium text-[#2E2E2E]">
+								Refund amount (₹)
+								<input
+									type="number"
+									min={0}
+									max={order.grandTotal}
+									value={refundForm.amount}
+									onChange={(event) => {
+										setRefundForm((previous) => ({ ...previous, amount: event.target.value }));
+										setRefundFormError("");
+									}}
+									placeholder={`Up to ${order.grandTotal.toLocaleString("en-IN")}`}
+									className="mt-1.5 w-full rounded-xl border border-[#E8DED7] px-3.5 py-2.5 text-sm outline-none focus:border-[#85161B]"
+								/>
+							</label>
+						)}
+
+						<label className="mt-4 block text-sm font-medium text-[#2E2E2E]">
+							Reason
+							<textarea
+								value={refundForm.reason}
+								onChange={(event) => {
+									setRefundForm((previous) => ({ ...previous, reason: event.target.value }));
+									setRefundFormError("");
+								}}
+								rows={3}
+								placeholder="e.g. Damaged product, printing error, order cancelled"
+								className="mt-1.5 w-full rounded-xl border border-[#E8DED7] px-3.5 py-2.5 text-sm outline-none focus:border-[#85161B]"
+							/>
+						</label>
+
+						{refundFormError && (
+							<p className="mt-2 text-xs font-medium text-red-600">{refundFormError}</p>
+						)}
+
+						<div className="mt-6 flex justify-end gap-3">
+							<button
+								type="button"
+								onClick={() => setRefundModalOpen(false)}
+								className="rounded-xl border border-[#E8DED7] px-4 py-2.5 text-sm font-semibold text-[#2E2E2E]/70"
+							>
+								Back
+							</button>
+							<button
+								type="button"
+								onClick={confirmRefund}
+								disabled={paymentSaving}
+								className="rounded-xl bg-[#85161B] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+							>
+								{paymentSaving ? "Processing..." : "Confirm refund"}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+		</>
 	);
 }

@@ -986,9 +986,9 @@ export default function ProductPage() {
 		return (
 			<main className="min-h-screen bg-[#FBF9F7]">
 				<div className="mx-auto flex min-h-screen max-w-4xl items-center justify-center px-5 py-12">
-					<div className="flex flex-col items-center gap-3">
-						<span className="h-8 w-8 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
-						<p className="text-sm text-[#2E2E2E]/50">Loading product...</p>
+					<div className="flex flex-col items-center gap-4">
+						<span className="h-10 w-10 animate-spin rounded-full border-[3px] border-[#85161B]/25 border-t-[#85161B]" />
+						<p className="text-base text-[#2E2E2E]/55">Loading product...</p>
 					</div>
 				</div>
 			</main>
@@ -1003,35 +1003,35 @@ export default function ProductPage() {
 		return (
 			<main className="min-h-screen bg-[#FBF9F7] pt-[112px] sm:pt-[120px]">
 				<div className="mx-auto flex min-h-screen max-w-4xl items-center justify-center px-5 py-12">
-					<div className="w-full rounded-3xl border border-red-200 bg-white px-6 py-14 text-center shadow-[0_12px_45px_rgba(80,40,20,0.06)] sm:px-12">
-						<div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-red-50">
+					<div className="w-full rounded-3xl border border-red-200 bg-white px-6 py-16 text-center shadow-[0_12px_45px_rgba(80,40,20,0.06)] sm:px-14">
+						<div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-red-50">
 							<AlertCircle
-								size={32}
+								size={38}
 								className="text-red-500"
 								strokeWidth={1.7}
 							/>
 						</div>
 
-						<h1 className="mt-6 text-2xl font-bold text-[#2E2E2E]">
+						<h1 className="mt-7 text-3xl font-bold text-[#2E2E2E]">
 							Couldn't load this product
 						</h1>
 
-						<p className="mx-auto mt-3 max-w-md text-sm leading-7 text-[#2E2E2E]/55">
+						<p className="mx-auto mt-4 max-w-md text-base leading-8 text-[#2E2E2E]/60">
 							{error || "This product doesn't seem to exist."}
 						</p>
 
-						<div className="mt-7 flex items-center justify-center gap-3">
+						<div className="mt-8 flex items-center justify-center gap-3">
 							<button
 								type="button"
 								onClick={fetchProduct}
-								className="inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#721318]"
+								className="inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-7 py-4 text-base font-semibold text-white transition hover:bg-[#721318]"
 							>
 								Try Again
 							</button>
 
 							<Link
 								href="/shop"
-								className="inline-flex items-center gap-2 rounded-xl border border-[#DED6D0] px-6 py-3.5 text-sm font-semibold text-[#2E2E2E]/70 transition hover:border-[#85161B]/30 hover:text-[#85161B]"
+								className="inline-flex items-center gap-2 rounded-xl border border-[#DED6D0] px-7 py-4 text-base font-semibold text-[#2E2E2E]/70 transition hover:border-[#85161B]/30 hover:text-[#85161B]"
 							>
 								Back to Shop
 							</Link>
@@ -1047,7 +1047,7 @@ export default function ProductPage() {
 	return (
 		<main className="min-h-screen bg-[#FBF9F7] pt-[112px] sm:pt-[120px]">
 			<style>{`
-				@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap');
+				@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,800&display=swap');
 
 				.font-display {
 					font-family: 'Fraunces', Georgia, serif;
@@ -1055,23 +1055,23 @@ export default function ProductPage() {
 				}
 			`}</style>
 
-			<section className="mx-auto max-w-7xl px-5 py-7 sm:px-6 lg:px-8 lg:py-10">
+			<section className="mx-auto max-w-7xl px-5 py-8 sm:px-6 lg:px-8 lg:py-12">
 				<button
 					type="button"
 					onClick={() => router.back()}
-					className="mb-7 inline-flex items-center gap-2 rounded-lg px-1 py-1 text-sm font-medium text-[#2E2E2E]/55 transition-colors hover:text-[#85161B]"
+					className="mb-8 inline-flex items-center gap-2 rounded-lg px-1 py-1 text-base font-medium text-[#2E2E2E]/60 transition-colors hover:text-[#85161B]"
 				>
-					<ArrowLeft size={16} />
+					<ArrowLeft size={18} />
 					Back
 				</button>
 
-				<div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-14">
+				<div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-16">
 					{/* =====================================================
 					    GALLERY
 					===================================================== */}
 
 					<div>
-						<div className="group relative aspect-square overflow-hidden rounded-3xl border border-[#E8DED7] bg-white">
+						<div className="group relative aspect-square overflow-hidden rounded-3xl border border-[#E8DED7] bg-white shadow-[0_8px_30px_rgba(80,40,20,0.05)]">
 							{heroImage ? (
 								<img
 									src={heroImage}
@@ -1083,7 +1083,7 @@ export default function ProductPage() {
 								/>
 							) : (
 								<div className="flex h-full w-full items-center justify-center">
-									<ShoppingBag size={40} className="text-[#85161B]/25" />
+									<ShoppingBag size={48} className="text-[#85161B]/25" />
 								</div>
 							)}
 
@@ -1092,9 +1092,9 @@ export default function ProductPage() {
 									type="button"
 									aria-label="Previous image"
 									onClick={showPreviousImage}
-									className="absolute left-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-white/90 text-[#2E2E2E] shadow-md backdrop-blur-sm transition hover:bg-white hover:text-[#85161B]"
+									className="absolute left-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-white/90 text-[#2E2E2E] shadow-md backdrop-blur-sm transition hover:bg-white hover:text-[#85161B]"
 								>
-									<ArrowLeft size={18} />
+									<ArrowLeft size={20} />
 								</button>
 							)}
 
@@ -1103,28 +1103,28 @@ export default function ProductPage() {
 									type="button"
 									aria-label="Next image"
 									onClick={showNextImage}
-									className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-white/90 text-[#2E2E2E] shadow-md backdrop-blur-sm transition hover:bg-white hover:text-[#85161B]"
+									className="absolute right-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-white/90 text-[#2E2E2E] shadow-md backdrop-blur-sm transition hover:bg-white hover:text-[#85161B]"
 								>
-									<ArrowRight size={18} />
+									<ArrowRight size={20} />
 								</button>
 							)}
 
 							{product.images.length > 1 && (
-								<div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-3 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
+								<div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-3.5 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
 									{activeImage + 1} / {product.images.length}
 								</div>
 							)}
 						</div>
 
 						{product.images.length > 1 && (
-							<div className="mt-4 flex gap-3 overflow-x-auto pb-1">
+							<div className="mt-5 flex gap-3 overflow-x-auto pb-1">
 								{product.images.map((img, index) => (
 									<button
 										key={img + index}
 										type="button"
 										aria-label={`View image ${index + 1}`}
 										onClick={() => setActiveImage(index)}
-										className={`h-20 w-20 shrink-0 overflow-hidden rounded-xl border-2 bg-white transition-all ${
+										className={`h-24 w-24 shrink-0 overflow-hidden rounded-2xl border-2 bg-white transition-all ${
 											activeImage === index
 												? "border-[#85161B] opacity-100 shadow-sm"
 												: "border-[#E8DED7] opacity-65 hover:opacity-100"
@@ -1146,21 +1146,21 @@ export default function ProductPage() {
 					===================================================== */}
 
 					<div>
-						<div className="flex flex-wrap items-center gap-2">
+						<div className="flex flex-wrap items-center gap-2.5">
 							{product.inStock ? (
-								<span className="inline-flex items-center gap-1.5 rounded-full bg-[#EDF8F0] px-3 py-1 text-[11px] font-semibold text-[#31824A]">
-									<CheckCircle2 size={12} />
+								<span className="inline-flex items-center gap-1.5 rounded-full bg-[#EDF8F0] px-3.5 py-1.5 text-sm font-semibold text-[#31824A]">
+									<CheckCircle2 size={14} />
 									In Stock
 								</span>
 							) : (
-								<span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3 py-1 text-[11px] font-semibold text-red-600">
-									<PackageX size={12} />
+								<span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3.5 py-1.5 text-sm font-semibold text-red-600">
+									<PackageX size={14} />
 									Out of Stock
 								</span>
 							)}
 
 							{product.sold > 0 && (
-								<span className="text-[11px] text-[#2E2E2E]/40">
+								<span className="text-sm text-[#2E2E2E]/45">
 									{product.sold}+ sold
 								</span>
 							)}
@@ -1168,36 +1168,36 @@ export default function ProductPage() {
 							{!reviewsLoading && reviews.length > 0 && (
 								<a
 									href="#reviews"
-									className="inline-flex items-center gap-1 text-[11px] font-medium text-[#2E2E2E]/55 transition hover:text-[#85161B]"
+									className="inline-flex items-center gap-1.5 text-sm font-medium text-[#2E2E2E]/60 transition hover:text-[#85161B]"
 								>
-									<Star size={12} className="fill-[#F5A623] text-[#F5A623]" />
+									<Star size={14} className="fill-[#F5A623] text-[#F5A623]" />
 									{averageRating.toFixed(1)} ({reviews.length})
 								</a>
 							)}
 						</div>
 
-						<h1 className="font-display mt-3 text-3xl font-semibold leading-tight text-[#2E2E2E] sm:text-4xl">
+						<h1 className="font-display mt-4 text-4xl font-semibold leading-[1.1] text-[#2E2E2E] sm:text-5xl">
 							{product.name}
 						</h1>
 
 						{product.description && (
-							<p className="mt-4 whitespace-pre-line text-[15px] leading-7 text-[#2E2E2E]/60">
+							<p className="mt-5 whitespace-pre-line text-lg leading-8 text-[#2E2E2E]/65">
 								{product.description}
 							</p>
 						)}
 
-						<div className="mt-6 flex flex-wrap items-end gap-3">
-							<span className="text-3xl font-bold text-[#85161B]">
+						<div className="mt-7 flex flex-wrap items-end gap-3.5">
+							<span className="text-4xl font-bold text-[#85161B] sm:text-5xl">
 								₹{product.sellingPrice.toFixed(2)}
 							</span>
 
 							{product.marketPrice > product.sellingPrice && (
 								<>
-									<span className="text-base text-[#2E2E2E]/35 line-through">
+									<span className="text-xl text-[#2E2E2E]/35 line-through">
 										₹{product.marketPrice.toFixed(2)}
 									</span>
 
-									<span className="rounded-full bg-[#F7D6BF]/50 px-2.5 py-1 text-[11px] font-semibold text-[#85161B]">
+									<span className="rounded-full bg-[#F7D6BF]/50 px-3 py-1.5 text-sm font-semibold text-[#85161B]">
 										{discountPercent}% off
 									</span>
 								</>
@@ -1205,8 +1205,8 @@ export default function ProductPage() {
 						</div>
 
 						{product.delivery > 0 && (
-							<p className="mt-2 flex items-center gap-1.5 text-xs text-[#2E2E2E]/45">
-								<Truck size={13} />
+							<p className="mt-3 flex items-center gap-2 text-base text-[#2E2E2E]/50">
+								<Truck size={16} />
 								Delivery ₹{product.delivery.toFixed(2)}
 							</p>
 						)}
@@ -1216,33 +1216,33 @@ export default function ProductPage() {
 						========================================================================== */}
 
 						{hasCustomization && (
-							<div className="relative mt-8 rounded-2xl border-2 border-dashed border-[#D9BBAE] bg-[#FFFBF8] p-6">
+							<div className="relative mt-9 rounded-2xl border-2 border-dashed border-[#D9BBAE] bg-[#FFFBF8] p-7">
 								<div className="absolute -top-3 left-1/2 h-6 w-6 -translate-x-1/2 rounded-full border-2 border-dashed border-[#D9BBAE] bg-[#FBF9F7]" />
 
-								<p className="font-display text-sm font-semibold uppercase tracking-[0.20em] text-[#85161B] sm:text-[15px]">
-									Personalization Ticket
+								<p className="font-display text-lg font-semibold text-[#85161B]">
+									Personalization ticket
 								</p>
 
-								<p className="mt-2 text-[13px] leading-6 text-[#2E2E2E]/55">
+								<p className="mt-2 text-base leading-7 text-[#2E2E2E]/60">
 									Tell us how to make this one yours.
 								</p>
 
 								{/* RAW ORDER TOGGLE */}
 
-								<div className="mt-5 rounded-xl border border-[#DED6D0] bg-white p-4">
-									<label className="flex cursor-pointer items-start gap-3">
+								<div className="mt-6 rounded-xl border border-[#DED6D0] bg-white p-5">
+									<label className="flex cursor-pointer items-start gap-3.5">
 										<input
 											type="checkbox"
 											checked={rawOrder}
 											onChange={handleToggleRawOrder}
-											className="mt-0.5 h-4 w-4 accent-[#85161B]"
+											className="mt-1 h-5 w-5 accent-[#85161B]"
 										/>
 
 										<div className="min-w-0">
-											<span className="text-sm font-semibold text-[#202020]">
+											<span className="text-base font-semibold text-[#202020]">
 												No customization — send raw product
 											</span>
-											<p className="mt-1 text-xs text-black/45">
+											<p className="mt-1.5 text-sm leading-6 text-black/50">
 												Skip personalization and receive the plain product
 												as-is.
 											</p>
@@ -1250,13 +1250,13 @@ export default function ProductPage() {
 									</label>
 
 									{rawOrder && (
-										<div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+										<div className="mt-4 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
 											<AlertTriangle
-												size={14}
+												size={16}
 												strokeWidth={2}
 												className="mt-0.5 shrink-0 text-amber-600"
 											/>
-											<p className="text-[11px] leading-[1.5] text-amber-800">
+											<p className="text-sm leading-6 text-amber-800">
 												A raw product will be delivered without any
 												customization applied — preferably suited for resellers.
 											</p>
@@ -1265,19 +1265,19 @@ export default function ProductPage() {
 								</div>
 
 								{!rawOrder && (
-									<div className="mt-6 space-y-6">
+									<div className="mt-7 space-y-7">
 										{/* OPTION */}
 
 										{hasOptions && (
 											<div>
 												<label
 													htmlFor={`option-${product.id}`}
-													className="mb-2.5 flex items-center justify-between gap-3"
+													className="mb-3 flex items-center justify-between gap-3"
 												>
-													<span className="text-sm font-semibold text-[#2E2E2E]">
+													<span className="text-base font-semibold text-[#2E2E2E]">
 														Select option
 													</span>
-													<span className="text-[10px] font-semibold text-[#85161B]">
+													<span className="text-sm font-semibold text-[#85161B]">
 														Required
 													</span>
 												</label>
@@ -1290,7 +1290,7 @@ export default function ProductPage() {
 															setSelectedOption(e.target.value);
 															setCustomizationValidationError("");
 														}}
-														className="w-full appearance-none rounded-xl border border-[#DED6D0] bg-white px-4 py-3 pr-10 text-sm text-[#2E2E2E] outline-none transition focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
+														className="w-full appearance-none rounded-xl border border-[#DED6D0] bg-white px-4 py-3.5 pr-11 text-base text-[#2E2E2E] outline-none transition focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
 													>
 														<option value="">Select an option</option>
 														{product.options?.map((option, index) => (
@@ -1301,7 +1301,7 @@ export default function ProductPage() {
 													</select>
 
 													<ChevronDown
-														size={17}
+														size={19}
 														className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-black/40"
 													/>
 												</div>
@@ -1318,8 +1318,8 @@ export default function ProductPage() {
 
 											return (
 												<div key={requirement.key}>
-													<div className="mb-2.5 flex items-center justify-between gap-3">
-														<label className="text-sm font-semibold leading-5 text-[#2E2E2E]">
+													<div className="mb-3 flex items-center justify-between gap-3">
+														<label className="text-base font-semibold leading-6 text-[#2E2E2E]">
 															{requirement.placeholder}
 															{!requirement.optional && (
 																<span className="ml-1 text-[#85161B]">*</span>
@@ -1327,7 +1327,7 @@ export default function ProductPage() {
 														</label>
 
 														{requirement.type === "text" && (
-															<span className="shrink-0 text-[11px] font-medium text-[#2E2E2E]/40">
+															<span className="shrink-0 text-sm font-medium text-[#2E2E2E]/45">
 																{textValue.length}/{requirement.max}
 															</span>
 														)}
@@ -1348,7 +1348,7 @@ export default function ProductPage() {
 																)
 															}
 															placeholder={`Enter ${requirement.placeholder.toLowerCase()}`}
-															className="w-full rounded-xl border border-[#DED6D0] bg-white px-3.5 py-3 text-sm text-[#2E2E2E] outline-none transition placeholder:text-[#2E2E2E]/30 focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
+															className="w-full rounded-xl border border-[#DED6D0] bg-white px-4 py-3.5 text-base text-[#2E2E2E] outline-none transition placeholder:text-[#2E2E2E]/30 focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
 														/>
 													)}
 
@@ -1356,8 +1356,8 @@ export default function ProductPage() {
 
 													{requirement.type === "photo" && (
 														<div>
-															<label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#DED6D0] bg-white px-4 py-3 text-sm font-medium text-[#2E2E2E]/60 transition hover:border-[#85161B]/40 hover:text-[#85161B]">
-																<Upload size={15} />
+															<label className="flex cursor-pointer items-center justify-center gap-2.5 rounded-xl border border-[#DED6D0] bg-white px-4 py-3.5 text-base font-medium text-[#2E2E2E]/65 transition hover:border-[#85161B]/40 hover:text-[#85161B]">
+																<Upload size={17} />
 																<span className="max-w-[80%] truncate">
 																	{files[0] ? files[0].name : "Choose a photo"}
 																</span>
@@ -1375,8 +1375,8 @@ export default function ProductPage() {
 															</label>
 
 															{files.length > 0 && (
-																<div className="mt-2 flex items-center justify-between rounded-lg bg-[#F7F4F1] px-3 py-2">
-																	<span className="max-w-[80%] truncate text-xs text-black/65">
+																<div className="mt-2.5 flex items-center justify-between rounded-lg bg-[#F7F4F1] px-4 py-3">
+																	<span className="max-w-[80%] truncate text-sm text-black/65">
 																		{files[0].name}
 																	</span>
 																	<button
@@ -1386,7 +1386,7 @@ export default function ProductPage() {
 																		}
 																		className="text-black/35 transition hover:text-red-600"
 																	>
-																		<Trash2 size={15} />
+																		<Trash2 size={17} />
 																	</button>
 																</div>
 															)}
@@ -1397,12 +1397,12 @@ export default function ProductPage() {
 
 													{requirement.type === "photos" && (
 														<div>
-															<label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#DED6D0] bg-white px-4 py-6 text-center transition hover:border-[#85161B]/50 hover:bg-[#85161B]/[0.02]">
-																<Upload size={18} className="text-[#85161B]" />
-																<span className="text-sm font-medium text-[#2E2E2E]">
+															<label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[#DED6D0] bg-white px-4 py-7 text-center transition hover:border-[#85161B]/50 hover:bg-[#85161B]/[0.02]">
+																<Upload size={20} className="text-[#85161B]" />
+																<span className="text-base font-medium text-[#2E2E2E]">
 																	Select photos
 																</span>
-																<span className="text-[10px] text-black/40">
+																<span className="text-sm text-black/45">
 																	Up to {requirement.max} photos • Each max 10
 																	MB
 																</span>
@@ -1421,13 +1421,13 @@ export default function ProductPage() {
 															</label>
 
 															{files.length > 0 && (
-																<div className="mt-3 space-y-2">
+																<div className="mt-3.5 space-y-2.5">
 																	{files.map((file, index) => (
 																		<div
 																			key={`${file.name}-${file.lastModified}-${index}`}
-																			className="flex items-center justify-between rounded-lg bg-[#F7F4F1] px-3 py-2"
+																			className="flex items-center justify-between rounded-lg bg-[#F7F4F1] px-4 py-3"
 																		>
-																			<span className="max-w-[80%] truncate text-xs text-black/65">
+																			<span className="max-w-[80%] truncate text-sm text-black/65">
 																				{file.name}
 																			</span>
 																			<button
@@ -1437,7 +1437,7 @@ export default function ProductPage() {
 																				}
 																				className="text-black/35 transition hover:text-red-600"
 																			>
-																				<Trash2 size={15} />
+																				<Trash2 size={17} />
 																			</button>
 																		</div>
 																	))}
@@ -1452,7 +1452,7 @@ export default function ProductPage() {
 								)}
 
 								{customizationValidationError && (
-									<div className="mt-5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-xs font-medium text-red-600">
+									<div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm font-medium text-red-600">
 										{customizationValidationError}
 									</div>
 								)}
@@ -1463,29 +1463,29 @@ export default function ProductPage() {
 						    ADD TO CART
 						========================================================================== */}
 
-						<div className="mt-8">
+						<div className="mt-9">
 							<button
 								type="button"
 								disabled={!product.inStock || addingToCart}
 								onClick={handleAddToCart}
-								className="group flex w-full items-center justify-center gap-2 rounded-xl bg-[#85161B] py-3.5 text-sm font-semibold text-white transition-all hover:bg-[#721318] hover:shadow-lg active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+								className="group flex w-full items-center justify-center gap-2.5 rounded-xl bg-[#85161B] py-4 text-base font-semibold text-white transition-all hover:bg-[#721318] hover:shadow-lg active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
 							>
 								{addingToCart ? (
 									<>
-										<span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+										<span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
 										Adding...
 									</>
 								) : addedToCart ? (
 									<>
-										<CheckCircle2 size={17} />
+										<CheckCircle2 size={19} />
 										Added to Cart
 									</>
 								) : (
 									<>
-										<ShoppingBag size={17} />
+										<ShoppingBag size={19} />
 										{hasCustomization ? "Customize & Add" : "Add to Cart"}
 										<ArrowRight
-											size={15}
+											size={17}
 											className="transition-transform group-hover:translate-x-1"
 										/>
 									</>
@@ -1494,20 +1494,20 @@ export default function ProductPage() {
 						</div>
 
 						{addError && (
-							<p className="mt-3 text-xs font-medium text-red-600">
+							<p className="mt-3.5 text-sm font-medium text-red-600">
 								{addError}
 							</p>
 						)}
 
-						<div className="mt-7 space-y-3">
-							<div className="flex items-center gap-2.5 text-[13px] font-medium text-[#2E2E2E]/55">
-								<ShieldCheck size={16} className="shrink-0 text-[#85161B]" />
+						<div className="mt-8 space-y-3.5">
+							<div className="flex items-center gap-3 text-base font-medium text-[#2E2E2E]/60">
+								<ShieldCheck size={18} className="shrink-0 text-[#85161B]" />
 								<span>Secure checkout · Made to order</span>
 							</div>
 
-							<p className="flex items-start gap-2.5 text-[13px] leading-6 text-[#2E2E2E]/50">
+							<p className="flex items-start gap-3 text-base leading-7 text-[#2E2E2E]/55">
 								<ShieldCheck
-									size={15}
+									size={17}
 									className="mt-0.5 shrink-0 text-[#85161B]"
 								/>
 								<span>
@@ -1526,22 +1526,22 @@ export default function ProductPage() {
 
 			<section
 				id="reviews"
-				className="mx-auto max-w-7xl px-5 pb-14 sm:px-6 lg:px-8"
+				className="mx-auto max-w-7xl px-5 pb-16 sm:px-6 lg:px-8"
 			>
-				<div className="rounded-3xl border border-[#E8DED7] bg-white p-6 sm:p-8">
+				<div className="rounded-3xl border border-[#E8DED7] bg-white p-7 sm:p-9">
 					<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 						<div>
-							<h2 className="font-display text-2xl font-semibold text-[#2E2E2E]">
-								Customer Reviews
+							<h2 className="font-display text-3xl font-semibold text-[#2E2E2E]">
+								Customer reviews
 							</h2>
 
 							{!reviewsLoading && !reviewsError && reviews.length > 0 && (
-								<div className="mt-2 flex items-center gap-2">
+								<div className="mt-2.5 flex items-center gap-2.5">
 									<StarRating rating={averageRating} />
-									<span className="text-sm font-semibold text-[#2E2E2E]">
+									<span className="text-base font-semibold text-[#2E2E2E]">
 										{averageRating.toFixed(1)}
 									</span>
-									<span className="text-sm text-[#2E2E2E]/45">
+									<span className="text-base text-[#2E2E2E]/50">
 										· {reviews.length} review
 										{reviews.length === 1 ? "" : "s"}
 									</span>
@@ -1553,22 +1553,22 @@ export default function ProductPage() {
 					{/* LOADING */}
 
 					{reviewsLoading && (
-						<div className="mt-8 flex items-center justify-center gap-3 py-10">
-							<span className="h-6 w-6 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
-							<p className="text-sm text-[#2E2E2E]/50">Loading reviews...</p>
+						<div className="mt-9 flex items-center justify-center gap-3 py-12">
+							<span className="h-7 w-7 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
+							<p className="text-base text-[#2E2E2E]/55">Loading reviews...</p>
 						</div>
 					)}
 
 					{/* ERROR */}
 
 					{!reviewsLoading && reviewsError && (
-						<div className="mt-8 flex flex-col items-center gap-3 py-10 text-center">
-							<AlertCircle size={24} className="text-red-500" />
-							<p className="text-sm text-[#2E2E2E]/55">{reviewsError}</p>
+						<div className="mt-9 flex flex-col items-center gap-3.5 py-12 text-center">
+							<AlertCircle size={28} className="text-red-500" />
+							<p className="text-base text-[#2E2E2E]/60">{reviewsError}</p>
 							<button
 								type="button"
 								onClick={fetchReviews}
-								className="rounded-lg border border-[#DED6D0] px-4 py-2 text-xs font-semibold text-[#2E2E2E]/70 transition hover:border-[#85161B]/30 hover:text-[#85161B]"
+								className="rounded-lg border border-[#DED6D0] px-5 py-2.5 text-sm font-semibold text-[#2E2E2E]/70 transition hover:border-[#85161B]/30 hover:text-[#85161B]"
 							>
 								Try Again
 							</button>
@@ -1578,11 +1578,11 @@ export default function ProductPage() {
 					{/* EMPTY */}
 
 					{!reviewsLoading && !reviewsError && reviews.length === 0 && (
-						<div className="mt-8 flex flex-col items-center gap-3 py-10 text-center">
-							<div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#F7D6BF]/40">
-								<MessageSquare size={22} className="text-[#85161B]" />
+						<div className="mt-9 flex flex-col items-center gap-3.5 py-12 text-center">
+							<div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#F7D6BF]/40">
+								<MessageSquare size={26} className="text-[#85161B]" />
 							</div>
-							<p className="text-sm text-[#2E2E2E]/55">
+							<p className="text-base text-[#2E2E2E]/60">
 								No reviews yet for this product.
 							</p>
 						</div>
@@ -1590,19 +1590,18 @@ export default function ProductPage() {
 
 					{/* LIST */}
 
-					{/* LIST */}
 					{!reviewsLoading && !reviewsError && reviews.length > 0 && (
-						<div className="mt-8 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+						<div className="mt-9 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
 							{reviews.map((review) => (
 								<div
 									key={review.id}
-									className="flex h-full flex-col rounded-2xl border border-[#E8DED7] bg-[#FFFCFA] p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#D9C8BE] hover:shadow-[0_10px_30px_rgba(80,40,20,0.06)]"
+									className="flex h-full flex-col rounded-2xl border border-[#E8DED7] bg-[#FFFCFA] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#D9C8BE] hover:shadow-[0_10px_30px_rgba(80,40,20,0.06)]"
 								>
 									{/* HEADER */}
 									<div className="flex items-start justify-between gap-3">
-										<div className="flex min-w-0 items-center gap-3">
+										<div className="flex min-w-0 items-center gap-3.5">
 											{/* Avatar */}
-											<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F7D6BF]/50 text-xs font-bold text-[#85161B]">
+											<div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F7D6BF]/50 text-sm font-bold text-[#85161B]">
 												{review.name
 													.split(" ")
 													.map((part) => part[0])
@@ -1613,19 +1612,19 @@ export default function ProductPage() {
 
 											{/* Name + Rating */}
 											<div className="min-w-0">
-												<p className="truncate text-sm font-semibold text-[#2E2E2E]">
+												<p className="truncate text-base font-semibold text-[#2E2E2E]">
 													{review.name}
 												</p>
 
 												<div className="mt-1">
-													<StarRating rating={review.rating} size={12} />
+													<StarRating rating={review.rating} size={13} />
 												</div>
 											</div>
 										</div>
 
 										{/* DATE */}
 										{review.date && (
-											<span className="shrink-0 text-[11px] text-[#2E2E2E]/40">
+											<span className="shrink-0 text-sm text-[#2E2E2E]/45">
 												{review.date}
 											</span>
 										)}
@@ -1633,14 +1632,14 @@ export default function ProductPage() {
 
 									{/* REVIEW TEXT */}
 									{review.comment && (
-										<p className="mt-4 line-clamp-4 text-sm leading-6 text-[#2E2E2E]/65">
+										<p className="mt-4 line-clamp-4 text-base leading-7 text-[#2E2E2E]/70">
 											{review.comment}
 										</p>
 									)}
 
 									{/* REVIEW PHOTOS */}
 									{review.photos.length > 0 && (
-										<div className="mt-4 grid grid-cols-3 gap-2">
+										<div className="mt-4 grid grid-cols-3 gap-2.5">
 											{review.photos.map((photo, index) => (
 												<a
 													key={`${photo}-${index}`}
@@ -1661,9 +1660,9 @@ export default function ProductPage() {
 
 									{/* FOOTER */}
 									<div className="mt-auto pt-4">
-										<div className="border-t border-[#EEE6E1] pt-3">
-											<span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#2E2E2E]/40">
-												<CheckCircle2 size={12} className="text-[#31824A]" />
+										<div className="border-t border-[#EEE6E1] pt-3.5">
+											<span className="inline-flex items-center gap-2 text-sm font-medium text-[#2E2E2E]/45">
+												<CheckCircle2 size={13} className="text-[#31824A]" />
 												Verified customer
 											</span>
 										</div>
@@ -1682,7 +1681,7 @@ export default function ProductPage() {
    STAR RATING
 ============================================================================ */
 
-function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
+function StarRating({ rating, size = 16 }: { rating: number; size?: number }) {
 	const rounded = Math.round(rating);
 
 	return (

@@ -73,8 +73,13 @@ function normalizeStatus(value?: string) {
 
 function parseUsers(data: unknown): Customer[] {
 	if (!data || typeof data !== "object") return [];
-	const value = data as { users?: Customer[] };
-	return Array.isArray(value.users) ? value.users : [];
+	const value = data as { users?: Customer | Customer[]; user?: Customer; result?: Customer | Customer[] };
+	if (Array.isArray(value.users)) return value.users;
+	if (value.users) return [value.users];
+	if (value.user) return [value.user];
+	if (Array.isArray(value.result)) return value.result;
+	if (value.result) return [value.result];
+	return [];
 }
 
 function parseOrders(data: unknown, customerId: string): Order[] {
@@ -117,8 +122,10 @@ export default function AdminCustomerDetailsPage() {
 		if (!customerKey) return;
 		void (async () => {
 			try {
+				const userBody = new FormData();
+				userBody.append("user_id", customerKey);
 				const [usersResponse, ordersResponse] = await Promise.all([
-					fetch("/api/admin/users", { cache: "no-store", credentials: "include" }),
+					fetch("/api/admin/users", { method: "POST", body: userBody, cache: "no-store", credentials: "include" }),
 					fetch("/api/admin/orders", { cache: "no-store", credentials: "include" }),
 				]);
 				const usersData = await usersResponse.json().catch(() => ({}));
