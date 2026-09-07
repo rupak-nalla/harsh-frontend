@@ -22,7 +22,7 @@ async function forwardOrderRequest(
 		backendFormData.append("order_status", status);
 		backendFormData.append("status", status);
 	}
-
+    console.log(backendFormData);
 	const response = await fetch(`${API_URL}/api/orders`, {
 		method,
 		headers: {
