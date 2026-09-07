@@ -1,78 +1,69 @@
 "use client";
 
-import React from "react";
+import {
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
+
+import Image from "next/image";
+
 import { motion } from "framer-motion";
-import { Quote, BadgeCheck } from "lucide-react";
 
-const TESTIMONIALS = [
-	{
-		id: 1,
-		name: "Anaya Sharma",
-		text: "The customized rakhi and gift bundle was beyond beautiful. Fast delivery and lovely packaging!",
-		rating: 5,
-	},
-	{
-		id: 2,
-		name: "Rohan Mehta",
-		text: "Excellent print quality on our corporate flyers. Highly recommend for bulk orders.",
-		rating: 5,
-	},
-	{
-		id: 3,
-		name: "Priya Kapoor",
-		text: "Customer support helped fine-tune our designs. The final products looked premium.",
-		rating: 5,
-	},
-	{
-		id: 4,
-		name: "Arjun Verma",
-		text: "The photo frame looked even better than I expected. The print quality and finishing were excellent.",
-		rating: 5,
-	},
-	{
-		id: 5,
-		name: "Sneha Reddy",
-		text: "Loved the personalized gifts. Everything was packed beautifully and delivered on time.",
-		rating: 5,
-	},
-	{
-		id: 6,
-		name: "Karan Malhotra",
-		text: "We ordered customized merchandise for our team and the quality was fantastic. Great experience overall.",
-		rating: 5,
-	},
-	{
-		id: 7,
-		name: "Meera Iyer",
-		text: "The customization process was simple and the final product was beautiful. Definitely ordering again!",
-		rating: 5,
-	},
-	{
-		id: 8,
-		name: "Aditya Nair",
-		text: "Very impressed with the printing quality. Colors were accurate and the delivery was quick.",
-		rating: 5,
-	},
-];
+import {
+	Quote,
+	BadgeCheck,
+} from "lucide-react";
 
-/*
-|--------------------------------------------------------------------------
-| TESTIMONIAL CARD
-|--------------------------------------------------------------------------
-*/
+import {
+	assetUrl,
+	fetchSiteConfig,
+	type SiteReview,
+} from "./siteConfig";
+
+const FALLBACK_TESTIMONIALS: SiteReview[] = [];
 
 function TestimonialCard({
 	testimonial,
 }: {
-	testimonial: (typeof TESTIMONIALS)[number];
+	testimonial: SiteReview;
 }) {
+	const [photoIndex, setPhotoIndex] =
+		useState(0);
+
+	const photos =
+		testimonial.photos ?? [];
+
+	useEffect(() => {
+		setPhotoIndex(0);
+	}, [
+		testimonial.name,
+		photos.length,
+	]);
+
+	const initials = testimonial.name
+		.split(" ")
+		.filter(Boolean)
+		.map((part) => part[0])
+		.join("")
+		.slice(0, 2)
+		.toUpperCase();
+
+	const starCount = Math.max(
+		0,
+		Math.min(
+			5,
+			Number(testimonial.star_count) || 0,
+		),
+	);
+
 	return (
 		<article
 			className="
 				group
 				relative
 				flex
-				h-[280px]
+				h-[310px]
 				w-[300px]
 				shrink-0
 				flex-col
@@ -86,17 +77,13 @@ function TestimonialCard({
 				duration-300
 				hover:-translate-y-1
 				hover:shadow-lg
-
-				sm:h-[290px]
+				sm:h-[330px]
 				sm:w-[340px]
 				sm:p-7
-
-				lg:h-[300px]
+				lg:h-[340px]
 				lg:w-[360px]
 			"
 		>
-			{/* Decorative quote */}
-
 			<div
 				className="
 					pointer-events-none
@@ -109,41 +96,125 @@ function TestimonialCard({
 					group-hover:scale-110
 				"
 			>
-				<Quote size={54} strokeWidth={1.5} fill="currentColor" />
+				<Quote
+					size={54}
+					strokeWidth={1.5}
+					fill="currentColor"
+				/>
 			</div>
 
-			{/* Content */}
-
-			<div className="relative z-10">
-				{/* Rating */}
-
-				<div className="mb-5 flex items-center gap-1">
+			<div className="relative z-10 min-h-0">
+				<div className="mb-3 flex items-center gap-1">
 					{Array.from({
-						length: testimonial.rating,
-					}).map((_, starIndex) => (
-						<span key={starIndex} className="text-sm text-[#D89A3D]">
-							★
-						</span>
-					))}
+						length: starCount,
+					}).map(
+						(_, starIndex) => (
+							<span
+								key={
+									starIndex
+								}
+								className="
+									text-sm
+									text-[#D89A3D]
+								"
+							>
+								★
+							</span>
+						),
+					)}
 				</div>
-
-				{/* Review */}
 
 				<p
 					className="
 						line-clamp-4
+						whitespace-pre-line
 						text-[15px]
 						leading-7
 						text-[#2E2E2E]/75
-
 						sm:text-base
 					"
 				>
-					“{testimonial.text}”
+					“{testimonial.description}”
 				</p>
-			</div>
 
-			{/* Customer */}
+				{photos.length > 0 && (
+					<div className="mt-4 flex items-center gap-2">
+						<div
+							className="
+								relative
+								h-16
+								w-16
+								overflow-hidden
+								rounded-xl
+								bg-[#F7D6BF]/30
+							"
+						>
+							<Image
+								src={assetUrl(
+									photos[
+										photoIndex
+									],
+								)}
+								alt={`${testimonial.name} review photo ${
+									photoIndex + 1
+								}`}
+								fill
+								sizes="64px"
+								className="object-cover"
+							/>
+						</div>
+
+						{photos.length > 1 && (
+							<div className="flex gap-1.5">
+								{photos.map(
+									(
+										photo,
+										index,
+									) => (
+										<button
+											key={`${photo}-${index}`}
+											type="button"
+											onClick={() =>
+												setPhotoIndex(
+													index,
+												)
+											}
+											aria-label={`Show review photo ${
+												index +
+												1
+											}`}
+											className={`
+												relative
+												h-10
+												w-10
+												overflow-hidden
+												rounded-lg
+												border-2
+												${
+													index ===
+													photoIndex
+														? "border-[#85161B]"
+														: "border-transparent"
+												}
+											`}
+										>
+											<Image
+												src={assetUrl(
+													photo,
+												)}
+												alt=""
+												fill
+												sizes="40px"
+												className="object-cover"
+											/>
+										</button>
+									),
+								)}
+							</div>
+						)}
+					</div>
+				)}
+			</div>
 
 			<div
 				className="
@@ -155,8 +226,6 @@ function TestimonialCard({
 					pt-5
 				"
 			>
-				{/* Avatar */}
-
 				<div
 					className="
 						flex
@@ -172,10 +241,7 @@ function TestimonialCard({
 						text-[#85161B]
 					"
 				>
-					{testimonial.name
-						.split(" ")
-						.map((name) => name[0])
-						.join("")}
+					{initials}
 				</div>
 
 				<div className="min-w-0">
@@ -189,16 +255,29 @@ function TestimonialCard({
 							text-[#2E2E2E]
 						"
 					>
-						<span className="truncate">{testimonial.name}</span>
+						<span className="truncate">
+							{
+								testimonial.name
+							}
+						</span>
 
 						<BadgeCheck
 							size={15}
-							className="shrink-0 text-[#85161B]"
+							className="
+								shrink-0
+								text-[#85161B]
+							"
 							fill="#F7D6BF"
 						/>
 					</div>
 
-					<div className="mt-0.5 text-xs text-[#2E2E2E]/50">
+					<div
+						className="
+							mt-0.5
+							text-xs
+							text-[#2E2E2E]/50
+						"
+					>
 						Verified customer
 					</div>
 				</div>
@@ -207,46 +286,68 @@ function TestimonialCard({
 	);
 }
 
-/*
-|--------------------------------------------------------------------------
-| TESTIMONIALS
-|--------------------------------------------------------------------------
-*/
-
 export default function Testimonials() {
-	/*
-	 * Duplicate the array so the second set follows the first
-	 * seamlessly when the animation loops.
-	 */
-	const marqueeTestimonials = [...TESTIMONIALS, ...TESTIMONIALS];
+	const [testimonials, setTestimonials] =
+		useState<SiteReview[]>(
+			FALLBACK_TESTIMONIALS,
+		);
+
+	useEffect(() => {
+		let mounted = true;
+
+		fetchSiteConfig()
+			.then((config) => {
+				if (
+					mounted &&
+					Array.isArray(
+						config.reviews,
+					)
+				) {
+					setTestimonials(
+						config.reviews,
+					);
+				}
+			})
+			.catch((error) => {
+				console.error(
+					"Failed to load review config:",
+					error,
+				);
+			});
+
+		return () => {
+			mounted = false;
+		};
+	}, []);
+
+	const marqueeTestimonials =
+		useMemo(
+			() => [
+				...testimonials,
+				...testimonials,
+			],
+			[testimonials],
+		);
 
 	return (
 		<section
 			className="
 				my-10
 				overflow-hidden
+				rounded-3xl
 				bg-[#F7D6BF]/25
 				py-12
-
 				sm:py-14
-
 				lg:py-16
-				rounded-3xl
 			"
 		>
 			<div className="mx-auto w-full">
-				{/* =====================================================
-				    HEADER
-				===================================================== */}
-
 				<div
 					className="
 						mb-9
 						px-5
 						text-center
-
 						sm:px-6
-
 						lg:px-8
 					"
 				>
@@ -269,7 +370,6 @@ export default function Testimonials() {
 							font-bold
 							tracking-tight
 							text-[#2E2E2E]
-
 							sm:text-4xl
 						"
 					>
@@ -284,95 +384,110 @@ export default function Testimonials() {
 							text-sm
 							leading-relaxed
 							text-[#2E2E2E]/60
-
 							sm:text-base
 						"
 					>
-						Real experiences from people who made their moments a little more
-						special with us.
+						Real experiences from people
+						who made their moments a
+						little more special with us.
 					</p>
 				</div>
 
-				{/* =====================================================
-				    AUTO SCROLL
-				===================================================== */}
+				{testimonials.length > 0 ? (
+					<div className="relative w-full overflow-hidden">
+						<div
+							className="
+								pointer-events-none
+								absolute
+								left-0
+								top-0
+								z-10
+								h-full
+								w-10
+								bg-gradient-to-r
+								from-[#F9E9E0]/90
+								to-transparent
+								sm:w-20
+							"
+						/>
 
-				<div className="relative w-full overflow-hidden">
-					{/* Left fade */}
+						<div
+							className="
+								pointer-events-none
+								absolute
+								right-0
+								top-0
+								z-10
+								h-full
+								w-10
+								bg-gradient-to-l
+								from-[#F9E9E0]/90
+								to-transparent
+								sm:w-20
+							"
+						/>
 
+						<motion.div
+							className="
+								flex
+								w-max
+								gap-5
+								px-5
+								sm:gap-6
+								sm:px-6
+							"
+							animate={{
+								x: [
+									"0%",
+									"-50%",
+								],
+							}}
+							transition={{
+								x: {
+									duration: 60,
+									ease: "linear",
+									repeat: Infinity,
+									repeatType:
+										"loop",
+								},
+							}}
+						>
+							{marqueeTestimonials.map(
+								(
+									testimonial,
+									index,
+								) => (
+									<TestimonialCard
+										key={`${testimonial.name}-${testimonial.timestamp}-${index}`}
+										testimonial={
+											testimonial
+										}
+									/>
+								),
+							)}
+						</motion.div>
+					</div>
+				) : (
 					<div
 						className="
-							pointer-events-none
-							absolute
-							left-0
-							top-0
-							z-10
-							h-full
-							w-10
-							bg-gradient-to-r
-							from-[#F9E9E0]/90
-							to-transparent
-
-							sm:w-20
-						"
-					/>
-
-					{/* Right fade */}
-
-					<div
-						className="
-							pointer-events-none
-							absolute
-							right-0
-							top-0
-							z-10
-							h-full
-							w-10
-							bg-gradient-to-l
-							from-[#F9E9E0]/90
-							to-transparent
-
-							sm:w-20
-						"
-					/>
-
-					<motion.div
-						className="
-							flex
-							w-max
-							gap-5
 							px-5
-
-							sm:gap-6
-							sm:px-6
+							text-center
+							text-sm
+							text-[#2E2E2E]/50
 						"
-						animate={{
-							x: ["0%", "-50%"],
-						}}
-						transition={{
-							x: {
-								duration: 28,
-								ease: "linear",
-								repeat: Infinity,
-								repeatType: "loop",
-							},
-						}}
 					>
-						{marqueeTestimonials.map((testimonial, index) => (
-							<TestimonialCard
-								key={`${testimonial.id}-${index}`}
-								testimonial={testimonial}
-							/>
-						))}
-					</motion.div>
-				</div>
-
-				{/* =====================================================
-				    BOTTOM TRUST MESSAGE
-				===================================================== */}
+						Loading customer
+						reviews…
+					</div>
+				)}
 
 				<div className="mt-8 px-5 text-center">
-					<p className="text-sm text-[#2E2E2E]/55">
+					<p
+						className="
+							text-sm
+							text-[#2E2E2E]/55
+						"
+					>
 						Loved by customers across India
 					</p>
 				</div>

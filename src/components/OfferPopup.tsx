@@ -1,20 +1,97 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
 import { X } from "lucide-react";
 
-export default function OfferPopup() {
-	const [isOpen, setIsOpen] = useState(true);
+import {
+	assetUrl,
+	fetchSiteConfig,
+} from "./siteConfig";
 
-	if (!isOpen) return null;
+export default function OfferPopup() {
+	const [isOpen, setIsOpen] =
+		useState(false);
+
+	const [enabled, setEnabled] =
+		useState(false);
+
+	const [image, setImage] =
+		useState("");
+
+	useEffect(() => {
+		let mounted = true;
+
+		fetchSiteConfig()
+			.then((config) => {
+				if (!mounted) {
+					return;
+				}
+
+				const popupEnabled =
+					config.popup?.enabled ===
+					true;
+
+				const popupImage =
+					assetUrl(
+						config.popup?.image,
+					);
+
+				setEnabled(
+					popupEnabled,
+				);
+
+				setImage(
+					popupImage,
+				);
+
+				setIsOpen(
+					popupEnabled &&
+						Boolean(
+							popupImage,
+						),
+				);
+			})
+			.catch((error) => {
+				console.error(
+					"Failed to load popup config:",
+					error,
+				);
+			});
+
+		return () => {
+			mounted = false;
+		};
+	}, []);
+
+	if (
+		!enabled ||
+		!image ||
+		!isOpen
+	) {
+		return null;
+	}
 
 	return (
-		<div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 px-4 backdrop-blur-[2px]">
+		<div
+			className="
+				fixed
+				inset-0
+				z-[9999]
+				flex
+				items-center
+				justify-center
+				bg-black/55
+				px-4
+				backdrop-blur-[2px]
+			"
+		>
 			<div className="relative w-full max-w-lg">
-				{/* Floating Close Button */}
 				<button
 					type="button"
-					onClick={() => setIsOpen(false)}
+					onClick={() =>
+						setIsOpen(false)
+					}
 					aria-label="Close offer"
 					className="
 						absolute
@@ -40,13 +117,15 @@ export default function OfferPopup() {
 						sm:-top-3
 					"
 				>
-					<X size={20} strokeWidth={2.2} />
+					<X
+						size={20}
+						strokeWidth={2.2}
+					/>
 				</button>
 
-				{/* Transparent Image Container */}
 				<div className="overflow-visible">
 					<img
-						src="/Images/offerpop-removebg-preview.png"
+						src={image}
 						alt="Special Offer"
 						className="
 							block
