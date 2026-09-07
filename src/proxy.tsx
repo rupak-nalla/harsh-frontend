@@ -2,17 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 
 const INIT_API_URL = "https://printinghouseujjain.in/api/init";
 
-const BLOCKED_ROUTES = [
-	// "/login",
-	// "/admin",
-	// "/checkout",
-	// "/cart",
-	// "/register",
-	// "/forgot-password",
-	// "/profile",
-	// "/orders",
-	// "/order-tracking",
-];
+// const BLOCKED_ROUTES = [
+// 	// "/login",
+// 	// "/admin",
+// 	// "/checkout",
+// 	// "/cart",
+// 	// "/register",
+// 	// "/forgot-password",
+// 	// "/profile",
+// 	// "/orders",
+// 	// "/order-tracking",
+// ];
 
 export async function proxy(request: NextRequest) {
 	const pathname = request.nextUrl.pathname;
@@ -85,15 +85,15 @@ export async function proxy(request: NextRequest) {
 		return NextResponse.next();
 	}
 
-	const isBlocked = BLOCKED_ROUTES.some(
-		(route) => pathname === route || pathname.startsWith(`${route}/`),
-	);
+	// const isBlocked = BLOCKED_ROUTES.some(
+	// 	(route) => pathname === route || pathname.startsWith(`${route}/`),
+	// );
 
-	if (isBlocked) {
-		return new NextResponse(null, {
-			status: 404,
-		});
-	}
+	// if (isBlocked) {
+	// 	return new NextResponse(null, {
+	// 		status: 404,
+	// 	});
+	// }
 
 	return NextResponse.next();
 }
