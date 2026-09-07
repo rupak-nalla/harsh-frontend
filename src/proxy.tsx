@@ -11,7 +11,7 @@ const BLOCKED_ROUTES = [
 	// "/forgot-password",
 	// "/profile",
 	// "/orders",
-	"/order-tracking",
+	// "/order-tracking",
 ];
 
 export async function proxy(request: NextRequest) {
