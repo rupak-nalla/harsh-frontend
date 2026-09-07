@@ -1316,7 +1316,6 @@ function PriceSummary({ order }: { order: Order }) {
 /* ─────────────────────────────────────────
    STATUS TIMELINE
 ───────────────────────────────────────── */
-
 function StatusTimeline({ order }: { order: Order }) {
 	const statuses: {
 		label: OrderStatus;
@@ -1324,23 +1323,23 @@ function StatusTimeline({ order }: { order: Order }) {
 	}[] = [
 		{
 			label: "Order placed",
-			icon: <Package size={16} />,
+			icon: <Package size={17} />,
 		},
 		{
 			label: "Order accepted",
-			icon: <CheckCircle2 size={16} />,
+			icon: <CheckCircle2 size={17} />,
 		},
 		{
 			label: "Packed",
-			icon: <Box size={16} />,
+			icon: <Box size={17} />,
 		},
 		{
 			label: "Shipped",
-			icon: <Truck size={16} />,
+			icon: <Truck size={17} />,
 		},
 		{
 			label: "Delivered",
-			icon: <CheckCircle2 size={16} />,
+			icon: <CheckCircle2 size={17} />,
 		},
 	];
 
@@ -1349,19 +1348,27 @@ function StatusTimeline({ order }: { order: Order }) {
 			return -1;
 		}
 
-		return statuses.findIndex((item) => item.label === order.status);
+		return statuses.findIndex(
+			(item) => item.label === order.status,
+		);
 	}, [order.status]);
+
+	/* ─────────────────────────────────────────
+	   CANCELLED
+	───────────────────────────────────────── */
 
 	if (order.status === "Cancelled") {
 		return (
-			<div className="rounded-2xl border border-red-200 bg-white p-5">
+			<div className="rounded-2xl border border-red-200 bg-white p-5 sm:p-6">
 				<div className="flex items-center gap-3">
-					<div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-500">
-						<AlertCircle size={19} />
+					<div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-500">
+						<AlertCircle size={20} />
 					</div>
 
 					<div>
-						<h3 className="text-sm font-bold text-red-600">Order cancelled</h3>
+						<h3 className="text-sm font-bold text-red-600">
+							Order cancelled
+						</h3>
 
 						<p className="mt-1 text-xs text-[#2E2E2E]/50">
 							This order has been cancelled.
@@ -1372,65 +1379,82 @@ function StatusTimeline({ order }: { order: Order }) {
 		);
 	}
 
+	/* ─────────────────────────────────────────
+	   STATUS TIMELINE
+	───────────────────────────────────────── */
+
 	return (
-		<div className="overflow-x-auto rounded-2xl border border-[#E9DED7] bg-white p-5 sm:p-6">
-			<div className="min-w-[650px]">
-				<div className="flex items-start">
-					{statuses.map((item, index) => {
-						const completed = index <= currentIndex;
+		<div className="rounded-2xl border border-[#E9DED7] bg-white p-5 sm:p-6">
+			<div className="overflow-x-auto">
+				<div className="min-w-[650px]">
+					<div className="flex items-start">
+						{statuses.map((item, index) => {
+							const completed =
+								index <= currentIndex;
 
-						const active = index === currentIndex;
+							const active =
+								index === currentIndex;
 
-						return (
-							<React.Fragment key={item.label}>
-								<div className="flex flex-1 flex-col items-center">
-									<div
-										className={`
-												flex
-												h-10
-												w-10
-												items-center
-												justify-center
-												rounded-full
-												border-2
-												transition
+							const connectorCompleted =
+								index < currentIndex;
+
+							return (
+								<React.Fragment key={item.label}>
+									{/* STATUS */}
+									<div className="flex min-w-0 flex-1 flex-col items-center">
+										<div
+											className={`
+												flex h-11 w-11 items-center justify-center
+												rounded-full border-2
+												transition-all duration-300
 												${
 													completed
 														? "border-[#85161B] bg-[#85161B] text-white"
 														: "border-[#E5DCD6] bg-white text-[#2E2E2E]/25"
 												}
-												${active ? "ring-4 ring-[#85161B]/10" : ""}
+												${
+													active
+														? "ring-4 ring-[#85161B]/10 scale-105"
+														: ""
+												}
 											`}
-									>
+										>
+											{item.icon}
+										</div>
+
+										<p
+											className={`
+												mt-2 text-center text-[10px]
+												font-semibold sm:text-xs
+												${
+													completed
+														? "text-[#85161B]"
+														: "text-[#2E2E2E]/35"
+												}
+											`}
+										>
+											{item.label}
+										</p>
 									</div>
 
-									<p
-										className={`
-												mt-2
-												text-center
-												text-[10px]
-												font-semibold
-												sm:text-xs
-												${completed ? "text-[#85161B]" : "text-[#2E2E2E]/35"}
+									{/* CONNECTOR */}
+									{index < statuses.length - 1 && (
+										<div
+											className={`
+												mt-[22px] h-0.5 flex-1
+												transition-colors duration-300
+												${
+													connectorCompleted
+														? "bg-[#85161B]"
+														: "bg-[#E9DED7]"
+												}
 											`}
-									>
-										{item.label}
-									</p>
-								</div>
-
-								{index < statuses.length - 1 && (
-									<div
-										className={`
-												mt-5
-												h-0.5
-												flex-1
-												${index < currentIndex ? "bg-[#85161B]" : "bg-[#E9DED7]"}
-											`}
-									/>
-								)}
-							</React.Fragment>
-						);
-					})}
+										/>
+									)}
+								</React.Fragment>
+							);
+						})}
+					</div>
 				</div>
 			</div>
 		</div>

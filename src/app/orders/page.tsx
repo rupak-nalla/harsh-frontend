@@ -1,7 +1,13 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, {
+	useCallback,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
 	Package,
 	ArrowRight,
@@ -18,7 +24,8 @@ import {
    IMAGE BASE URL
 ───────────────────────────────────────── */
 
-const PRODUCT_IMAGE_URL = "https://printinghouseujjain.in/assets/products/";
+const PRODUCT_IMAGE_URL =
+	"https://printinghouseujjain.in/assets/products/";
 
 /* ─────────────────────────────────────────
    TYPES
@@ -32,7 +39,11 @@ type OrderStatus =
 	| "Delivered"
 	| "Cancelled";
 
-type OrderStatusType = "processing" | "shipping" | "delivered" | "cancelled";
+type OrderStatusType =
+	| "processing"
+	| "shipping"
+	| "delivered"
+	| "cancelled";
 
 type OrderItem = {
 	id: string;
@@ -63,36 +74,7 @@ type Order = {
 };
 
 /* ─────────────────────────────────────────
-   RAW /api/orders RESPONSE
-
-   Actual response:
-   {
-     "status": 200,
-     "message": "success.",
-     "wishlist": [
-       {
-         "id": 1,
-         "user_id": 17,
-         "cart_id": null,
-         "type": "user",
-         "order_id": "order_TTt7w4DEW4VqoY",
-         "payment_status": "paid",
-         "order_status": "pending",
-         "address": "{...JSON string...}",
-         "transaction_id": "...",
-         "products_count": "1",
-         "total_price": "89.00",
-         "delivery_fee": "60.00",
-         "grand_total": "149.00",
-         "cart": "[...JSON string...]",
-         "created_at": "2026-08-25 05:31:52"
-       }
-     ]
-   }
-
-   Despite the key name, "wishlist" is the orders array here.
-   "address" and "cart" both arrive as JSON-encoded strings, not
-   nested objects/arrays, so they need an extra JSON.parse step.
+   RAW API TYPES
 ───────────────────────────────────────── */
 
 type RawOrderItem = {
@@ -104,6 +86,7 @@ type RawOrderItem = {
 };
 
 type RawOrderAddress = {
+	name?: string;
 	flat_house_building?: string;
 	road_area_colony?: string;
 	landmark?: string;
@@ -140,6 +123,20 @@ type OrdersResponse = {
 };
 
 /* ─────────────────────────────────────────
+   INIT RESPONSE
+───────────────────────────────────────── */
+
+type InitResponse = {
+	status?: number;
+	message?: string;
+	login_status?: boolean;
+	type?: string;
+	name?: string;
+	is_reseller?: boolean;
+	credit_eligibility?: boolean;
+};
+
+/* ─────────────────────────────────────────
    STATUS FILTERS
 ───────────────────────────────────────── */
 
@@ -152,121 +149,222 @@ const STATUS_FILTERS = [
 
 /* ─────────────────────────────────────────
    STATUS NORMALIZATION
-
-   Maps whatever status string the backend sends (any casing,
-   spaces, underscores, or hyphens) to the display label + badge
-   type this page already knows how to render.
 ───────────────────────────────────────── */
 
-function normalizeStatus(rawStatus: string | undefined): {
+function normalizeStatus(
+	rawStatus: string | undefined,
+): {
 	status: OrderStatus;
 	statusType: OrderStatusType;
 } {
-	const key = (rawStatus ?? "").toLowerCase().replace(/[\s_-]+/g, "");
+	const key = (rawStatus ?? "")
+		.toLowerCase()
+		.replace(/[\s_-]+/g, "");
 
 	if (key.includes("cancel")) {
-		return { status: "Cancelled", statusType: "cancelled" };
+		return {
+			status: "Cancelled",
+			statusType: "cancelled",
+		};
 	}
 
 	if (key.includes("delivered")) {
-		return { status: "Delivered", statusType: "delivered" };
+		return {
+			status: "Delivered",
+			statusType: "delivered",
+		};
 	}
 
-	if (key.includes("shipped") || key.includes("dispatch")) {
-		return { status: "Shipped", statusType: "shipping" };
+	if (
+		key.includes("shipped") ||
+		key.includes("dispatch") ||
+		key.includes("outfordelivery")
+	) {
+		return {
+			status: "Shipped",
+			statusType: "shipping",
+		};
 	}
 
 	if (key.includes("packed")) {
-		return { status: "Packed", statusType: "processing" };
+		return {
+			status: "Packed",
+			statusType: "processing",
+		};
 	}
 
-	if (key.includes("accepted") || key.includes("confirmed")) {
-		return { status: "Order accepted", statusType: "processing" };
+	if (
+		key.includes("accepted") ||
+		key.includes("confirmed") ||
+		key.includes("processing")
+	) {
+		return {
+			status: "Order accepted",
+			statusType: "processing",
+		};
 	}
 
-	// "pending" and any other unrecognized status falls here.
-	return { status: "Order placed", statusType: "processing" };
+	/*
+	 * pending and unknown statuses
+	 * are treated as Order placed.
+	 */
+	return {
+		status: "Order placed",
+		statusType: "processing",
+	};
 }
 
 /* ─────────────────────────────────────────
    NORMALIZE ORDER
 ───────────────────────────────────────── */
 
-function normalizeOrder(raw: RawOrder, index: number): Order {
-	const id = String(raw.order_id ?? raw.id ?? `order-${index}`);
+function normalizeOrder(
+	raw: RawOrder,
+	index: number,
+): Order {
+	const id = String(
+		raw.order_id ??
+			raw.id ??
+			`order-${index}`,
+	);
 
 	let date = raw.created_at ?? "";
 
 	if (date) {
-		const parsed = new Date(date.replace(" ", "T"));
+		const parsed = new Date(
+			date.replace(" ", "T"),
+		);
 
 		if (!Number.isNaN(parsed.getTime())) {
-			date = parsed.toLocaleDateString("en-IN", {
-				year: "numeric",
-				month: "long",
-				day: "numeric",
-			});
+			date = parsed.toLocaleDateString(
+				"en-IN",
+				{
+					year: "numeric",
+					month: "long",
+					day: "numeric",
+				},
+			);
 		}
 	}
 
-	const { status, statusType } = normalizeStatus(raw.order_status);
+	const {
+		status,
+		statusType,
+	} = normalizeStatus(
+		raw.order_status,
+	);
 
-	const rawTotal = Number(raw.grand_total ?? 0);
+	const rawTotal = Number(
+		raw.grand_total ?? 0,
+	);
 
-	const total = `₹${(Number.isFinite(rawTotal) ? rawTotal : 0).toFixed(2)}`;
+	const total = `₹${(
+		Number.isFinite(rawTotal)
+			? rawTotal
+			: 0
+	).toFixed(2)}`;
 
-	/* =================================================
-	   PARSE CART (JSON-encoded string)
-	================================================= */
+	/* ─────────────────────────────────────
+	   PARSE CART
+	───────────────────────────────────── */
 
 	let items: OrderItem[] = [];
 
 	if (raw.cart) {
 		try {
-			const rawItems: RawOrderItem[] = JSON.parse(raw.cart);
+			const rawItems: RawOrderItem[] =
+				JSON.parse(raw.cart);
 
-			items = rawItems.map((rawItem, itemIndex) => {
-				const quantity = Number(rawItem.quantity ?? 1);
+			items = rawItems.map(
+				(rawItem, itemIndex) => {
+					const quantity = Number(
+						rawItem.quantity ?? 1,
+					);
 
-				return {
-					id: String(rawItem.id ?? `${id}-item-${itemIndex}`),
-					name: rawItem.name ?? "Untitled product",
-					image: rawItem.primary_photo_path
-						? `${PRODUCT_IMAGE_URL}${rawItem.primary_photo_path}`
-						: "",
-					qty:
-						Number.isFinite(quantity) && quantity > 0
-							? Math.floor(quantity)
-							: 1,
-				};
-			});
+					return {
+						id: String(
+							rawItem.id ??
+								`${id}-item-${itemIndex}`,
+						),
+
+						name:
+							rawItem.name ??
+							"Untitled product",
+
+						image:
+							rawItem.primary_photo_path
+								? `${PRODUCT_IMAGE_URL}${rawItem.primary_photo_path}`
+								: "",
+
+						qty:
+							Number.isFinite(
+								quantity,
+							) &&
+							quantity > 0
+								? Math.floor(
+										quantity,
+									)
+								: 1,
+					};
+				},
+			);
 		} catch (err) {
-			console.error("Failed to parse order cart JSON:", err, raw.cart);
+			console.error(
+				"Failed to parse order cart JSON:",
+				err,
+				raw.cart,
+			);
 		}
 	}
 
-	/* =================================================
-	   PARSE ADDRESS (JSON-encoded string)
-	================================================= */
+	/* ─────────────────────────────────────
+	   PARSE ADDRESS
+	───────────────────────────────────── */
 
-	let address: OrderAddress | null = null;
+	let address:
+		| OrderAddress
+		| null = null;
 
 	if (raw.address) {
 		try {
-			const rawAddress: RawOrderAddress = JSON.parse(raw.address);
+			const rawAddress: RawOrderAddress =
+				JSON.parse(raw.address);
 
 			address = {
-				flatHouseBuilding: rawAddress.flat_house_building ?? "",
-				roadAreaColony: rawAddress.road_area_colony ?? "",
-				landmark: rawAddress.landmark ?? "",
-				city: rawAddress.city ?? "",
-				state: rawAddress.state ?? "",
+				flatHouseBuilding:
+					rawAddress.flat_house_building ??
+					"",
+
+				roadAreaColony:
+					rawAddress.road_area_colony ??
+					"",
+
+				landmark:
+					rawAddress.landmark ?? "",
+
+				city:
+					rawAddress.city ?? "",
+
+				state:
+					rawAddress.state ?? "",
+
 				pincode:
-					rawAddress.pincode !== undefined ? String(rawAddress.pincode) : "",
-				phone: rawAddress.phone ?? "",
+					rawAddress.pincode !==
+					undefined
+						? String(
+								rawAddress.pincode,
+							)
+						: "",
+
+				phone:
+					rawAddress.phone ?? "",
 			};
 		} catch (err) {
-			console.error("Failed to parse order address JSON:", err, raw.address);
+			console.error(
+				"Failed to parse order address JSON:",
+				err,
+				raw.address,
+			);
 		}
 	}
 
@@ -275,7 +373,8 @@ function normalizeOrder(raw: RawOrder, index: number): Order {
 		date: date || "—",
 		status,
 		statusType,
-		paymentStatus: raw.payment_status ?? "",
+		paymentStatus:
+			raw.payment_status ?? "",
 		total,
 		items,
 		address,
@@ -287,80 +386,227 @@ function normalizeOrder(raw: RawOrder, index: number): Order {
 ───────────────────────────────────────── */
 
 export default function OrdersPage() {
-	const [activeFilter, setActiveFilter] = useState("All orders");
+	const router = useRouter();
 
-	const [orders, setOrders] = useState<Order[]>([]);
+	const [
+		activeFilter,
+		setActiveFilter,
+	] = useState("All orders");
 
-	const [loading, setLoading] = useState(true);
+	const [
+		orders,
+		setOrders,
+	] = useState<Order[]>([]);
 
-	const [error, setError] = useState("");
+	const [loading, setLoading] =
+		useState(true);
+
+	const [checkingLogin, setCheckingLogin] =
+		useState(true);
+
+	const [error, setError] =
+		useState("");
+
+	/* ─────────────────────────────────────
+	   CHECK LOGIN FIRST
+	───────────────────────────────────── */
+
+	const checkLogin = useCallback(
+		async () => {
+			try {
+				const response =
+					await fetch(
+						"/api/auth/init",
+						{
+							method: "GET",
+							credentials:
+								"include",
+							cache: "no-store",
+						},
+					);
+
+				const data =
+					(await response
+						.json()
+						.catch(
+							() => ({}),
+						)) as InitResponse;
+
+				console.log(
+					"INIT RESPONSE:",
+					data,
+				);
+
+				if (
+					data.login_status !==
+					true
+				) {
+					router.replace(
+						"/order-tracking",
+					);
+					return false;
+				}
+
+				return true;
+			} catch (err) {
+				console.error(
+					"Login check failed:",
+					err,
+				);
+
+				router.replace(
+					"/order-tracking",
+				);
+
+				return false;
+			} finally {
+				setCheckingLogin(false);
+			}
+		},
+		[router],
+	);
 
 	/* ─────────────────────────────────────
 	   FETCH ORDERS
 	───────────────────────────────────── */
 
-	const fetchOrders = async () => {
-		setLoading(true);
-		setError("");
+	const fetchOrders =
+		useCallback(async () => {
+			setLoading(true);
+			setError("");
 
-		try {
-			const response = await fetch("/api/orders", {
-				method: "GET",
-				credentials: "include",
-				cache: "no-store",
-			});
+			try {
+				const response =
+					await fetch(
+						"/api/orders",
+						{
+							method: "GET",
+							credentials:
+								"include",
+							cache: "no-store",
+						},
+					);
 
-			const data: OrdersResponse = await response.json().catch(() => ({}));
+				const data =
+					(await response
+						.json()
+						.catch(
+							() => ({}),
+						)) as OrdersResponse;
 
-			console.log("ORDERS RESPONSE:", data);
-
-			if (!response.ok) {
-				throw new Error(
-					(data as { message?: string })?.message || "Unable to load your orders.",
+				console.log(
+					"ORDERS RESPONSE:",
+					data,
 				);
+
+				if (!response.ok) {
+					throw new Error(
+						data.message ??
+							"Unable to load your orders.",
+					);
+				}
+
+				const rawOrders =
+					data.wishlist ??
+					data.orders ??
+					data.result ??
+					[];
+
+				const normalizedOrders =
+					rawOrders.map(
+						(
+							raw,
+							index,
+						) =>
+							normalizeOrder(
+								raw,
+								index,
+							),
+					);
+
+				/*
+				 * Most recent first.
+				 */
+				normalizedOrders.sort(
+					(a, b) =>
+						b.id.localeCompare(
+							a.id,
+						),
+				);
+
+				setOrders(
+					normalizedOrders,
+				);
+			} catch (err) {
+				console.error(
+					"Fetch orders failed:",
+					err,
+				);
+
+				setError(
+					err instanceof Error
+						? err.message
+						: "Unable to load your orders.",
+				);
+			} finally {
+				setLoading(false);
 			}
-
-			const rawOrders = data.wishlist ?? data.orders ?? data.result ?? [];
-
-			const normalizedOrders = rawOrders.map((raw, index) =>
-				normalizeOrder(raw, index),
-			);
-
-			console.log("NORMALIZED ORDERS:", normalizedOrders);
-
-			// Most recent first.
-			normalizedOrders.sort((a, b) => b.id.localeCompare(a.id));
-
-			setOrders(normalizedOrders);
-		} catch (err) {
-			console.error("Fetch orders failed:", err);
-
-			setError(
-				err instanceof Error ? err.message : "Unable to load your orders.",
-			);
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	useEffect(() => {
-		fetchOrders();
-	}, []);
+		}, []);
 
 	/* ─────────────────────────────────────
-	   CALCULATE STATS
+	   AUTH → ORDERS
+	───────────────────────────────────── */
+
+	useEffect(() => {
+		let cancelled = false;
+
+		const init = async () => {
+			const loggedIn =
+				await checkLogin();
+
+			if (
+				cancelled ||
+				!loggedIn
+			) {
+				return;
+			}
+
+			await fetchOrders();
+		};
+
+		init();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [
+		checkLogin,
+		fetchOrders,
+	]);
+
+	/* ─────────────────────────────────────
+	   STATS
 	───────────────────────────────────── */
 
 	const stats = useMemo(() => {
-		const totalOrders = orders.length;
+		const totalOrders =
+			orders.length;
 
-		const delivered = orders.filter(
-			(order) => order.status === "Delivered",
-		).length;
+		const delivered =
+			orders.filter(
+				(order) =>
+					order.status ===
+					"Delivered",
+			).length;
 
-		const inProgress = orders.filter(
-			(order) => order.status !== "Delivered" && order.status !== "Cancelled",
-		).length;
+		const inProgress =
+			orders.filter(
+				(order) =>
+					order.status !==
+						"Delivered" &&
+					order.status !==
+						"Cancelled",
+			).length;
 
 		return {
 			totalOrders,
@@ -370,49 +616,109 @@ export default function OrdersPage() {
 	}, [orders]);
 
 	/* ─────────────────────────────────────
-	   FILTER ORDERS
+	   FILTER
 	───────────────────────────────────── */
 
-	const filteredOrders = useMemo(() => {
-		if (activeFilter === "All orders") {
+	const filteredOrders =
+		useMemo(() => {
+			if (
+				activeFilter ===
+				"All orders"
+			) {
+				return orders;
+			}
+
+			if (
+				activeFilter ===
+				"Processing"
+			) {
+				return orders.filter(
+					(order) =>
+						order.status ===
+							"Order placed" ||
+						order.status ===
+							"Order accepted" ||
+						order.status ===
+							"Packed",
+				);
+			}
+
+			if (
+				activeFilter ===
+				"Shipped"
+			) {
+				return orders.filter(
+					(order) =>
+						order.status ===
+						"Shipped",
+				);
+			}
+
+			if (
+				activeFilter ===
+				"Delivered"
+			) {
+				return orders.filter(
+					(order) =>
+						order.status ===
+						"Delivered",
+				);
+			}
+
 			return orders;
-		}
-
-		if (activeFilter === "Processing") {
-			return orders.filter(
-				(order) =>
-					order.status === "Order placed" ||
-					order.status === "Order accepted" ||
-					order.status === "Packed",
-			);
-		}
-
-		if (activeFilter === "Shipped") {
-			return orders.filter((order) => order.status === "Shipped");
-		}
-
-		if (activeFilter === "Delivered") {
-			return orders.filter((order) => order.status === "Delivered");
-		}
-
-		return orders;
-	}, [activeFilter, orders]);
+		}, [
+			activeFilter,
+			orders,
+		]);
 
 	/* ─────────────────────────────────────
-	   LOADING
+	   AUTH CHECK LOADING
 	───────────────────────────────────── */
 
-	if (loading) {
+	if (checkingLogin) {
 		return (
 			<main
-				className="min-h-[calc(100vh-90px)] bg-[#FBF9F7] pt-[112px]
-					sm:pt-[120px]"
+				className="
+					min-h-[calc(100vh-90px)]
+					bg-[#FBF9F7]
+					pt-[112px]
+					sm:pt-[120px]
+				"
 			>
 				<div className="mx-auto flex min-h-[calc(100vh-90px)] max-w-6xl items-center justify-center px-5 py-12">
 					<div className="flex flex-col items-center gap-3">
 						<span className="h-8 w-8 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
 
-						<p className="text-sm text-[#2E2E2E]/50">Loading your orders...</p>
+						<p className="text-sm text-[#2E2E2E]/50">
+							Checking your account...
+						</p>
+					</div>
+				</div>
+			</main>
+		);
+	}
+
+	/* ─────────────────────────────────────
+	   LOADING ORDERS
+	───────────────────────────────────── */
+
+	if (loading) {
+		return (
+			<main
+				className="
+					min-h-[calc(100vh-90px)]
+					bg-[#FBF9F7]
+					pt-[112px]
+					sm:pt-[120px]
+				"
+			>
+				<div className="mx-auto flex min-h-[calc(100vh-90px)] max-w-6xl items-center justify-center px-5 py-12">
+					<div className="flex flex-col items-center gap-3">
+						<span className="h-8 w-8 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
+
+						<p className="text-sm text-[#2E2E2E]/50">
+							Loading your orders...
+						</p>
 					</div>
 				</div>
 			</main>
@@ -425,8 +731,14 @@ export default function OrdersPage() {
 
 	if (error) {
 		return (
-			<main className="min-h-[calc(100vh-90px)] bg-[#FBF9F7] pt-[112px]
-					sm:pt-[120px]">
+			<main
+				className="
+					min-h-[calc(100vh-90px)]
+					bg-[#FBF9F7]
+					pt-[112px]
+					sm:pt-[120px]
+				"
+			>
 				<div className="mx-auto flex min-h-[calc(100vh-90px)] max-w-4xl items-center justify-center px-5 py-12">
 					<div className="w-full rounded-3xl border border-red-200 bg-white px-6 py-14 text-center shadow-[0_12px_45px_rgba(80,40,20,0.06)] sm:px-12">
 						<div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-red-50">
@@ -447,7 +759,9 @@ export default function OrdersPage() {
 
 						<button
 							type="button"
-							onClick={fetchOrders}
+							onClick={
+								fetchOrders
+							}
 							className="mt-7 inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[#721318]"
 						>
 							Try Again
@@ -458,13 +772,22 @@ export default function OrdersPage() {
 		);
 	}
 
+	/* ─────────────────────────────────────
+	   LOGGED-IN ORDERS PAGE
+	───────────────────────────────────── */
+
 	return (
-		<main className="min-h-[calc(100vh-90px)] bg-[#FBF9F7] pt-[112px]
-					sm:pt-[120px]">
+		<main
+			className="
+				min-h-[calc(100vh-90px)]
+				bg-[#FBF9F7]
+				pt-[112px]
+				sm:pt-[120px]
+			"
+		>
 			<section className="mx-auto max-w-6xl px-5 py-10 sm:px-6 lg:px-8 lg:py-14">
-				{/* ─────────────────────────
-				    HEADER
-				───────────────────────── */}
+
+				{/* HEADER */}
 
 				<div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
 					<div>
@@ -477,7 +800,9 @@ export default function OrdersPage() {
 						</h1>
 
 						<p className="mt-2 text-sm text-[#2E2E2E]/55 sm:text-base">
-							Track your purchases and view your order history.
+							Track your purchases
+							and view your order
+							history.
 						</p>
 					</div>
 
@@ -501,79 +826,114 @@ export default function OrdersPage() {
 							active:scale-[0.98]
 						"
 					>
-						<ShoppingBag size={17} />
+						<ShoppingBag
+							size={17}
+						/>
 						Continue Shopping
 					</Link>
 				</div>
 
-				{/* ─────────────────────────
-				    ORDER SUMMARY
-				───────────────────────── */}
+				{/* SUMMARY */}
 
 				<div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
 					<StatCard
 						label="Total orders"
-						value={stats.totalOrders}
-						icon={<Package size={19} />}
+						value={
+							stats.totalOrders
+						}
+						icon={
+							<Package
+								size={19}
+							/>
+						}
 						iconClass="bg-[#F7D6BF]/50 text-[#85161B]"
 					/>
 
 					<StatCard
 						label="In progress"
-						value={stats.inProgress}
-						icon={<Clock3 size={19} />}
+						value={
+							stats.inProgress
+						}
+						icon={
+							<Clock3
+								size={19}
+							/>
+						}
 						iconClass="bg-[#FFF3E8] text-[#B56B27]"
 					/>
 
 					<StatCard
 						label="Delivered"
-						value={stats.delivered}
-						icon={<CheckCircle2 size={19} />}
+						value={
+							stats.delivered
+						}
+						icon={
+							<CheckCircle2
+								size={19}
+							/>
+						}
 						iconClass="bg-[#EDF8F0] text-[#31824A]"
 					/>
 				</div>
 
-				{/* ─────────────────────────
-				    FILTERS
-				───────────────────────── */}
+				{/* FILTERS */}
 
 				<div className="mb-6 rounded-2xl border border-[#E9DED7] bg-white p-4">
 					<div className="flex gap-2 overflow-x-auto scrollbar-hide">
-						{STATUS_FILTERS.map((filter) => (
-							<button
-								key={filter}
-								type="button"
-								onClick={() => setActiveFilter(filter)}
-								className={`
-									whitespace-nowrap
-									rounded-full
-									px-4
-									py-2.5
-									text-xs
-									font-medium
-									transition-all
-									${
-										activeFilter === filter
-											? "bg-[#85161B] text-white shadow-sm"
-											: "bg-[#F8F3F0] text-[#2E2E2E]/65 hover:bg-[#F1E7E1]"
+						{STATUS_FILTERS.map(
+							(filter) => (
+								<button
+									key={
+										filter
 									}
-								`}
-							>
-								{filter}
-							</button>
-						))}
+									type="button"
+									onClick={() =>
+										setActiveFilter(
+											filter,
+										)
+									}
+									className={`
+										whitespace-nowrap
+										rounded-full
+										px-4
+										py-2.5
+										text-xs
+										font-medium
+										transition-all
+										${
+											activeFilter ===
+											filter
+												? "bg-[#85161B] text-white shadow-sm"
+												: "bg-[#F8F3F0] text-[#2E2E2E]/65 hover:bg-[#F1E7E1]"
+										}
+									`}
+								>
+									{
+										filter
+									}
+								</button>
+							),
+						)}
 					</div>
 				</div>
 
-				{/* ─────────────────────────
-				    ORDERS
-				───────────────────────── */}
+				{/* ORDERS */}
 
-				{filteredOrders.length > 0 ? (
+				{filteredOrders.length >
+				0 ? (
 					<div className="space-y-4">
-						{filteredOrders.map((order) => (
-							<OrderCard key={order.id} order={order} />
-						))}
+						{filteredOrders.map(
+							(order) => (
+								<OrderCard
+									key={
+										order.id
+									}
+									order={
+										order
+									}
+								/>
+							),
+						)}
 					</div>
 				) : (
 					<EmptyOrders />
@@ -599,14 +959,16 @@ function StatCard({
 	iconClass: string;
 }) {
 	return (
-		<div
-			className="rounded-2xl border border-[#E9DED7] bg-white p-5"
-		>
+		<div className="rounded-2xl border border-[#E9DED7] bg-white p-5">
 			<div className="flex items-center justify-between">
 				<div>
-					<p className="text-xs font-medium text-[#2E2E2E]/50">{label}</p>
+					<p className="text-xs font-medium text-[#2E2E2E]/50">
+						{label}
+					</p>
 
-					<p className="mt-1 text-2xl font-bold text-[#2E2E2E]">{value}</p>
+					<p className="mt-1 text-2xl font-bold text-[#2E2E2E]">
+						{value}
+					</p>
 				</div>
 
 				<div
@@ -631,8 +993,14 @@ function StatCard({
    ORDER CARD
 ───────────────────────────────────────── */
 
-function OrderCard({ order }: { order: Order }) {
-	const isDelivered = order.status === "Delivered";
+function OrderCard({
+	order,
+}: {
+	order: Order;
+}) {
+	const isDelivered =
+		order.status ===
+		"Delivered";
 
 	return (
 		<article
@@ -667,7 +1035,8 @@ function OrderCard({ order }: { order: Order }) {
 			>
 				<div>
 					<p className="text-xs text-[#2E2E2E]/45">
-						Order placed on {order.date}
+						Order placed on{" "}
+						{order.date}
 					</p>
 
 					<p className="mt-1 text-sm font-semibold text-[#2E2E2E]">
@@ -676,24 +1045,42 @@ function OrderCard({ order }: { order: Order }) {
 
 					{order.address && (
 						<p className="mt-1 text-xs text-[#2E2E2E]/45">
-							<MapPin size={11} className="mr-1 inline-block align-[-1px]" />
-							{order.address.city}, {order.address.state}
+							<MapPin
+								size={11}
+								className="mr-1 inline-block align-[-1px]"
+							/>
+							{order.address.city ||
+								"—"}
+							{order.address.state
+								? `, ${order.address.state}`
+								: ""}
 						</p>
 					)}
 				</div>
 
 				<div className="flex flex-col items-start gap-1.5 sm:items-end">
-					<StatusBadge status={order.status} type={order.statusType} />
+					<StatusBadge
+						status={
+							order.status
+						}
+						type={
+							order.statusType
+						}
+					/>
 
 					{order.paymentStatus && (
 						<span
 							className={`text-[10px] font-semibold uppercase tracking-wide ${
-								order.paymentStatus.toLowerCase() === "paid"
+								order.paymentStatus.toLowerCase() ===
+								"paid"
 									? "text-[#31824A]"
 									: "text-[#B56B27]"
 							}`}
 						>
-							Payment {order.paymentStatus}
+							Payment{" "}
+							{
+								order.paymentStatus
+							}
 						</span>
 					)}
 				</div>
@@ -703,60 +1090,100 @@ function OrderCard({ order }: { order: Order }) {
 
 			<div className="px-5 py-5 sm:px-6">
 				<div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-					{/* PRODUCT INFORMATION */}
-
 					<div className="flex min-w-0 flex-1 items-center gap-4">
-						{/* PRODUCT IMAGES */}
-
 						<div className="flex -space-x-3">
-							{order.items.map((item) => (
-								<div
-									key={item.id}
-									className="
-										h-16
-										w-16
-										overflow-hidden
-										rounded-xl
-										border-2
-										border-white
-										bg-[#F5F1ED]
-										shadow-sm
-										sm:h-20
-										sm:w-20
-									"
-								>
-									{item.image ? (
-										<img
-											src={item.image}
-											alt={item.name}
-											className="h-full w-full object-cover"
-										/>
-									) : (
-										<div className="flex h-full w-full items-center justify-center">
-											<ShoppingBag
-												size={20}
-												className="text-[#85161B]/30"
-											/>
+							{order.items.length >
+							0 ? (
+								order.items.map(
+									(
+										item,
+									) => (
+										<div
+											key={
+												item.id
+											}
+											className="
+												h-16
+												w-16
+												overflow-hidden
+												rounded-xl
+												border-2
+												border-white
+												bg-[#F5F1ED]
+												shadow-sm
+												sm:h-20
+												sm:w-20
+											"
+										>
+											{item.image ? (
+												<img
+													src={
+														item.image
+													}
+													alt={
+														item.name
+													}
+													className="h-full w-full object-cover"
+												/>
+											) : (
+												<div className="flex h-full w-full items-center justify-center">
+													<ShoppingBag
+														size={
+															20
+														}
+														className="text-[#85161B]/30"
+													/>
+												</div>
+											)}
 										</div>
-									)}
+									),
+								)
+							) : (
+								<div className="flex h-16 w-16 items-center justify-center rounded-xl bg-[#F5F1ED] sm:h-20 sm:w-20">
+									<ShoppingBag
+										size={
+											20
+										}
+										className="text-[#85161B]/30"
+									/>
 								</div>
-							))}
+							)}
 						</div>
 
 						<div className="min-w-0">
 							<p className="text-sm font-semibold text-[#2E2E2E]">
-								{order.items[0]?.name ?? "Untitled product"}
+								{order
+									.items[0]
+									?.name ??
+									"Untitled product"}
 							</p>
 
-							{order.items.length > 1 && (
+							{order.items
+								.length >
+								1 && (
 								<p className="mt-1 text-xs text-[#2E2E2E]/50">
-									+ {order.items.length - 1} more item
-									{order.items.length > 2 ? "s" : ""}
+									+
+									{" "}
+									{
+										order
+											.items
+											.length -
+											1
+									}{" "}
+									more item
+									{order
+										.items
+										.length >
+									2
+										? "s"
+										: ""}
 								</p>
 							)}
 
 							<p className="mt-2 text-sm font-bold text-[#85161B]">
-								{order.total}
+								{
+									order.total
+								}
 							</p>
 						</div>
 					</div>
@@ -764,10 +1191,10 @@ function OrderCard({ order }: { order: Order }) {
 					{/* ACTIONS */}
 
 					<div className="flex flex-col gap-2 sm:flex-row">
-						{/* VIEW ORDER */}
-
 						<Link
-							href={`/orders/${encodeURIComponent(order.id)}`}
+							href={`/orders/${encodeURIComponent(
+								order.id,
+							)}`}
 							className="
 								group
 								inline-flex
@@ -789,19 +1216,19 @@ function OrderCard({ order }: { order: Order }) {
 							"
 						>
 							View order
+
 							<ArrowRight
 								size={15}
-								className="
-									transition-transform
-									group-hover:translate-x-0.5
-								"
+								className="transition-transform group-hover:translate-x-0.5"
 							/>
 						</Link>
 
-						{/* TRACK / DELIVERY */}
+						{/* TRACK ORDER */}
 
-						{/* <Link
-							href={`/order-tracking/${encodeURIComponent(order.id)}`}
+						<Link
+							href={`/order-tracking?order_id=${encodeURIComponent(
+								order.id,
+							)}`}
 							className={`
 								group
 								inline-flex
@@ -835,31 +1262,36 @@ function OrderCard({ order }: { order: Order }) {
 						>
 							{isDelivered ? (
 								<>
-									<CheckCircle2 size={15} />
+									<CheckCircle2
+										size={
+											15
+										}
+									/>
 									View delivery
 								</>
 							) : (
 								<>
 									<MapPin
-										size={15}
-										className="
-											transition-transform
-											group-hover:-translate-y-0.5
-										"
+										size={
+											15
+										}
+										className="transition-transform group-hover:-translate-y-0.5"
 									/>
 									Track order
 								</>
 							)}
-						</Link> */}
+						</Link>
 					</div>
 				</div>
 
-				{/* CURRENT STATUS MESSAGE */}
+				{/* CURRENT STATUS */}
 
 				{!isDelivered && (
 					<div className="mt-5 flex items-center gap-3 rounded-xl bg-[#F8F3F0] px-4 py-3">
 						<div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F7D6BF] text-[#85161B]">
-							<Package size={15} />
+							<Package
+								size={15}
+							/>
 						</div>
 
 						<div>
@@ -868,7 +1300,11 @@ function OrderCard({ order }: { order: Order }) {
 							</p>
 
 							<p className="mt-0.5 text-xs text-[#2E2E2E]/55">
-								Your order is currently at the &quot;{order.status}&quot; stage.
+								Your order is
+								currently at
+								the "
+								{order.status}
+								" stage.
 							</p>
 						</div>
 					</div>
@@ -892,33 +1328,55 @@ function StatusBadge({
 	const getStatusIcon = () => {
 		switch (status) {
 			case "Order placed":
-				return <Package size={14} />;
+				return (
+					<Package size={14} />
+				);
 
 			case "Order accepted":
-				return <CheckCircle2 size={14} />;
+				return (
+					<CheckCircle2
+						size={14}
+					/>
+				);
 
 			case "Packed":
 				return <Box size={14} />;
 
 			case "Shipped":
-				return <Truck size={14} />;
+				return (
+					<Truck size={14} />
+				);
 
 			case "Delivered":
-				return <CheckCircle2 size={14} />;
+				return (
+					<CheckCircle2
+						size={14}
+					/>
+				);
 
 			case "Cancelled":
-				return <AlertCircle size={14} />;
+				return (
+					<AlertCircle
+						size={14}
+					/>
+				);
 
 			default:
-				return <Package size={14} />;
+				return (
+					<Package size={14} />
+				);
 		}
 	};
 
 	const styles = {
-		delivered: "bg-[#EDF8F0] text-[#31824A]",
-		shipping: "bg-[#EEF5FF] text-[#3973B9]",
-		processing: "bg-[#FFF3E8] text-[#B56B27]",
-		cancelled: "bg-red-50 text-red-600",
+		delivered:
+			"bg-[#EDF8F0] text-[#31824A]",
+		shipping:
+			"bg-[#EEF5FF] text-[#3973B9]",
+		processing:
+			"bg-[#FFF3E8] text-[#B56B27]",
+		cancelled:
+			"bg-red-50 text-red-600",
 	};
 
 	return (
@@ -958,7 +1416,8 @@ function EmptyOrders() {
 			</h3>
 
 			<p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[#2E2E2E]/55">
-				There are no orders in this category yet.
+				There are no orders in
+				this category yet.
 			</p>
 
 			<Link

@@ -1,141 +1,185 @@
 "use client";
 
-import React from "react";
+import React, {
+	useCallback,
+	useEffect,
+	useState,
+} from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
-	ArrowLeft,
-	Check,
-	CheckCircle2,
-	MapPin,
 	Package,
-	Phone,
-	ShoppingBag,
+	ArrowRight,
+	CheckCircle2,
 	Truck,
-	MessageCircle,
-	Clock3,
+	Box,
+	AlertCircle,
+	Search,
+	Loader2,
+	LogIn,
 } from "lucide-react";
 
 /* ─────────────────────────────────────────
-   ORDER DATA
+   TYPES
 ───────────────────────────────────────── */
 
-const order = {
-	id: "GIF-10294",
-	date: "August 18, 2026",
-	estimatedDelivery: "August 21, 2026",
+type OrderStatus =
+	| "Order placed"
+	| "Order accepted"
+	| "Packed"
+	| "Shipped"
+	| "Delivered"
+	| "Cancelled";
 
-	customer: {
-		name: "Rupak",
-		phone: "+91 98765 43210",
-	},
+type OrderStatusType =
+	| "processing"
+	| "shipping"
+	| "delivered"
+	| "cancelled";
 
-	delivery: {
-		name: "Rupak Nalla",
-		address: "Flat 204, Rajapushpa Residency, Hyderabad, Telangana - 500032",
-	},
+type Order = {
+	id: string;
+	date: string;
+	status: OrderStatus;
+	statusType: OrderStatusType;
+	deliveryMethod: string;
+};
 
-	items: [
-		{
-			id: "1",
-			name: "Personalized Rakhi",
-			description: "Custom name & photo",
-			price: 999,
-			quantity: 1,
-			image: "/images/rakhi.jpg",
-		},
-		{
-			id: "2",
-			name: "Custom Bracelet",
-			description: "Personalized engraving",
-			price: 499,
-			quantity: 1,
-			image: "/images/customised-bracelet.jpg",
-		},
-	],
+type RawOrder = {
+	id?: string | number;
+	order_id?: string | number;
+	order_status?: string;
+	delivery_method?: string;
+	created_at?: string;
+};
 
-	subtotal: 1498,
-	deliveryFee: 0,
-	total: 1498,
+type OrdersResponse = {
+	status?: number;
+	message?: string;
+	detailed?: boolean;
+	orders?: RawOrder;
 };
 
 /* ─────────────────────────────────────────
-   CURRENT ORDER STATUS
-
-   1 = Order placed
-   2 = Order accepted
-   3 = Packed
-   4 = Shipped
-   5 = Out for delivery
-   6 = Delivered
-
-   Later, replace this with the status
-   received from your backend.
+   STATUS NORMALIZATION
 ───────────────────────────────────────── */
 
-const currentStageId = 2;
+function normalizeStatus(
+	rawStatus: string | undefined,
+): {
+	status: OrderStatus;
+	statusType: OrderStatusType;
+} {
+	const key = (rawStatus ?? "")
+		.toLowerCase()
+		.replace(/[\s_-]+/g, "");
 
-/* ─────────────────────────────────────────
-   TRACKING STAGES
-───────────────────────────────────────── */
+	if (key.includes("cancel")) {
+		return {
+			status: "Cancelled",
+			statusType: "cancelled",
+		};
+	}
 
-const trackingStages = [
-	{
-		id: 1,
-		title: "Order placed",
-		description: "We received your order",
-		date: "Aug 18",
-		icon: ShoppingBag,
-	},
+	if (key.includes("delivered")) {
+		return {
+			status: "Delivered",
+			statusType: "delivered",
+		};
+	}
 
-	{
-		id: 2,
-		title: "Order accepted",
-		description: "Your order has been accepted",
-		date: "Aug 18",
-		icon: CheckCircle2,
-	},
+	if (
+		key.includes("shipped") ||
+		key.includes("dispatch") ||
+		key.includes("outfordelivery")
+	) {
+		return {
+			status: "Shipped",
+			statusType: "shipping",
+		};
+	}
 
-	{
-		id: 3,
-		title: "Packed",
-		description: "Your items have been packed",
-		date: "",
-		icon: Package,
-	},
+	if (key.includes("packed")) {
+		return {
+			status: "Packed",
+			statusType: "processing",
+		};
+	}
 
-	{
-		id: 4,
-		title: "Shipped",
-		description: "Your package is on its way",
-		date: "",
-		icon: Truck,
-	},
+	if (
+		key.includes("accepted") ||
+		key.includes("confirmed") ||
+		key.includes("processing")
+	) {
+		return {
+			status: "Order accepted",
+			statusType: "processing",
+		};
+	}
 
-	{
-		id: 5,
-		title: "Out for delivery",
-		description: "Your order is arriving today",
-		date: "",
-		icon: MapPin,
-	},
-
-	{
-		id: 6,
-		title: "Delivered",
-		description: "Your order has been delivered",
-		date: "",
-		icon: Check,
-	},
-];
-
-/* ─────────────────────────────────────────
-   HELPER
-───────────────────────────────────────── */
-
-function getStageState(stageId: number) {
 	return {
-		completed: stageId <= currentStageId,
-		current: stageId === currentStageId,
+		status: "Order placed",
+		statusType: "processing",
+	};
+}
+
+/* ─────────────────────────────────────────
+   DATE
+───────────────────────────────────────── */
+
+function formatOrderDate(
+	dateValue: string | undefined,
+) {
+	if (!dateValue) {
+		return "—";
+	}
+
+	const parsed = new Date(
+		dateValue.replace(" ", "T"),
+	);
+
+	if (Number.isNaN(parsed.getTime())) {
+		return dateValue;
+	}
+
+	return parsed.toLocaleDateString("en-IN", {
+		year: "numeric",
+		month: "long",
+		day: "numeric",
+	});
+}
+
+/* ─────────────────────────────────────────
+   NORMALIZE ORDER
+───────────────────────────────────────── */
+
+function normalizeOrder(
+	raw: RawOrder,
+): Order {
+	const {
+		status,
+		statusType,
+	} = normalizeStatus(
+		raw.order_status,
+	);
+
+	return {
+		id: String(
+			raw.order_id ??
+				raw.id ??
+				"",
+		),
+
+		date: formatOrderDate(
+			raw.created_at,
+		),
+
+		status,
+		statusType,
+
+		deliveryMethod:
+			raw.delivery_method ??
+			"",
 	};
 }
 
@@ -144,668 +188,573 @@ function getStageState(stageId: number) {
 ───────────────────────────────────────── */
 
 export default function OrderTrackingPage() {
-	const currentStage = trackingStages.find(
-		(stage) => stage.id === currentStageId,
-	);
+	const searchParams =
+		useSearchParams();
 
 	/*
-	 * Percentage of the desktop progress line
-	 * that should be filled.
+	 * Read order_id from the URL.
 	 *
-	 * The actual line starts at 8.33% and ends
-	 * at 91.67%, so its usable width is 83.34%.
+	 * Example:
+	 * /order-tracking?order_id=order_TYLc3Rf7jEhv7M
 	 */
-	const progressPercentage =
-		((currentStageId - 1) / (trackingStages.length - 1)) * 83.34;
+	const queryOrderId =
+		searchParams
+			.get("order_id")
+			?.trim() ?? "";
+
+	const [orderId, setOrderId] =
+		useState("");
+
+	const [
+		trackingOrder,
+		setTrackingOrder,
+	] = useState<Order | null>(null);
+
+	const [
+		trackingLoading,
+		setTrackingLoading,
+	] = useState(false);
+
+	const [
+		trackingError,
+		setTrackingError,
+	] = useState("");
+
+	const [hasTracked, setHasTracked] =
+		useState(false);
+
+	/* ─────────────────────────────────────
+	   TRACK ORDER
+	───────────────────────────────────── */
+
+	const trackOrder = useCallback(
+		async (idToTrack: string) => {
+			const id =
+				idToTrack.trim();
+
+			if (!id) {
+				setTrackingError(
+					"Please enter your order ID.",
+				);
+
+				setTrackingOrder(null);
+				setHasTracked(false);
+
+				return;
+			}
+
+			setTrackingLoading(true);
+			setTrackingError("");
+			setTrackingOrder(null);
+			setHasTracked(true);
+
+			try {
+				/*
+				 * Send order ID as
+				 * multipart FormData.
+				 */
+				const formData =
+					new FormData();
+
+				formData.append(
+					"order_id",
+					id,
+				);
+
+				const response =
+					await fetch(
+						"/api/orders",
+						{
+							method: "POST",
+							body: formData,
+							credentials:
+								"include",
+							cache: "no-store",
+						},
+					);
+
+				const data =
+					(await response
+						.json()
+						.catch(
+							() => null,
+						)) as
+						| OrdersResponse
+						| null;
+
+				console.log(
+					"TRACK ORDER RESPONSE:",
+					data,
+				);
+
+				if (!response.ok) {
+					throw new Error(
+						data?.message ??
+							"Order not found. Please check your order ID.",
+					);
+				}
+
+				if (!data?.orders) {
+					throw new Error(
+						"Order not found. Please check your order ID.",
+					);
+				}
+
+				const normalized =
+					normalizeOrder(
+						data.orders,
+					);
+
+				if (!normalized.id) {
+					throw new Error(
+						"Order not found. Please check your order ID.",
+					);
+				}
+
+				setTrackingOrder(
+					normalized,
+				);
+			} catch (error) {
+				console.error(
+					"Track order failed:",
+					error,
+				);
+
+				setTrackingError(
+					error instanceof Error
+						? error.message
+						: "Unable to find this order.",
+				);
+			} finally {
+				setTrackingLoading(
+					false,
+				);
+			}
+		},
+		[],
+	);
+
+	/* ─────────────────────────────────────
+	   QUERY PARAMETER
+	───────────────────────────────────── */
+
+	useEffect(() => {
+		/*
+		 * If the URL contains:
+		 *
+		 * ?order_id=order_123
+		 *
+		 * put it into the input and
+		 * automatically track it.
+		 */
+
+		setOrderId(queryOrderId);
+
+		if (queryOrderId) {
+			trackOrder(queryOrderId);
+		}
+	}, [
+		queryOrderId,
+		trackOrder,
+	]);
+
+	/* ─────────────────────────────────────
+	   FORM SUBMIT
+	───────────────────────────────────── */
+
+	const handleSubmit = (
+		event: React.FormEvent<HTMLFormElement>,
+	) => {
+		event.preventDefault();
+
+		trackOrder(orderId);
+	};
+
+	/* ─────────────────────────────────────
+	   RENDER
+	───────────────────────────────────── */
 
 	return (
 		<main
-			className="min-h-screen bg-[#FAF7F4] text-[#2E2E2E] pt-[112px]
-					sm:pt-[120px]"
+			className="
+				min-h-[calc(100vh-90px)]
+				bg-[#FBF9F7]
+				pt-[112px]
+				sm:pt-[120px]
+			"
 		>
-			<div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-				{/* =========================================
-				    BACK
-				========================================= */}
+			<section className="mx-auto max-w-4xl px-5 py-10 sm:px-6 lg:px-8 lg:py-16">
 
-				<Link
-					href="/orders"
-					className="
-						mb-7
-						inline-flex
-						items-center
-						gap-2
-						text-sm
-						font-medium
-						text-[#2E2E2E]/60
-						transition
-						hover:text-[#85161B]
-					"
-				>
-					<ArrowLeft size={17} />
-					Back to orders
-				</Link>
+				{/* ─────────────────────────────
+				    HEADER
+				───────────────────────────── */}
 
-				{/* =========================================
-				    PAGE HEADER
-				========================================= */}
+				<div className="mx-auto max-w-2xl text-center">
+					<div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#F7D6BF]/50 text-[#85161B]">
+						<Package
+							size={28}
+							strokeWidth={1.8}
+						/>
+					</div>
 
-				<div className="mb-8">
-					<div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-						<div>
-							<p
-								className="
-									mb-2
-									text-sm
-									font-semibold
-									uppercase
-									tracking-[0.15em]
-									text-[#85161B]
-								"
-							>
-								Order tracking
-							</p>
+					<p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#85161B]">
+						Order tracking
+					</p>
 
-							<h1
-								className="
-									text-3xl
-									font-bold
-									tracking-tight
-									sm:text-4xl
-									lg:text-5xl
-								"
-							>
-								Track your order
-							</h1>
+					<h1 className="mt-2 text-3xl font-bold tracking-tight text-[#2E2E2E] sm:text-4xl">
+						Track your order
+					</h1>
 
-							<p className="mt-2 text-sm text-[#2E2E2E]/55 sm:text-base">
-								Order #{order.id} · Placed on {order.date}
-							</p>
-						</div>
+					<p className="mx-auto mt-3 max-w-xl text-sm leading-7 text-[#2E2E2E]/55 sm:text-base">
+						Enter your order ID
+						to check the latest
+						status of your order.
+					</p>
+				</div>
 
-						{/* Current status */}
+				{/* ─────────────────────────────
+				    TRACKING FORM
+				───────────────────────────── */}
 
-						{currentStage && (
-							<div
+				<div className="mx-auto mt-8 max-w-2xl rounded-3xl border border-[#E9DED7] bg-white p-5 shadow-[0_12px_45px_rgba(80,40,20,0.06)] sm:p-7">
+					<form
+						onSubmit={
+							handleSubmit
+						}
+					>
+						<label
+							htmlFor="order-id"
+							className="mb-2 block text-sm font-semibold text-[#2E2E2E]"
+						>
+							Order ID
+						</label>
+
+						<div className="flex flex-col gap-3 sm:flex-row">
+							<div className="relative flex-1">
+								<Search
+									size={18}
+									className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#2E2E2E]/35"
+								/>
+
+								<input
+									id="order-id"
+									type="text"
+									value={
+										orderId
+									}
+									onChange={(
+										event,
+									) => {
+										setOrderId(
+											event
+												.target
+												.value,
+										);
+
+										/*
+										 * Clear previous
+										 * result/error
+										 * when user starts
+										 * typing a new ID.
+										 */
+										if (
+											trackingError
+										) {
+											setTrackingError(
+												"",
+											);
+										}
+
+										if (
+											trackingOrder
+										) {
+											setTrackingOrder(
+												null,
+											);
+										}
+									}}
+									placeholder="e.g. order_TYLc3Rf7jEhv7M"
+									autoComplete="off"
+									className="
+										h-12
+										w-full
+										rounded-xl
+										border
+										border-[#DED6D0]
+										bg-[#FCFAF8]
+										pl-11
+										pr-4
+										text-sm
+										text-[#2E2E2E]
+										outline-none
+										transition
+										placeholder:text-[#2E2E2E]/30
+										focus:border-[#85161B]/40
+										focus:bg-white
+										focus:ring-4
+										focus:ring-[#85161B]/5
+									"
+								/>
+							</div>
+
+							<button
+								type="submit"
+								disabled={
+									trackingLoading
+								}
 								className="
 									inline-flex
-									w-fit
-									items-center
-									gap-2
-									rounded-full
-									bg-[#F7D6BF]
-									px-4
-									py-2
-									text-sm
-									font-semibold
-									text-[#85161B]
-								"
-							>
-								<Clock3 size={16} />
-								{currentStage.title}
-							</div>
-						)}
-					</div>
-				</div>
-
-				{/* =========================================
-				    TOP GRID
-				========================================= */}
-
-				<div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-					{/* =====================================
-					    ORDER PROGRESS
-					===================================== */}
-
-					<section
-						className="
-							rounded-[30px]
-							border
-							border-[#E8D7CC]
-							bg-white
-							p-5
-							shadow-[0_8px_30px_rgba(60,30,20,0.04)]
-							sm:p-7
-							lg:p-9
-						"
-					>
-						<div className="mb-8">
-							<h2 className="text-xl font-bold sm:text-2xl">Order progress</h2>
-
-							<p className="mt-1 text-sm text-[#2E2E2E]/50">
-								We'll keep you updated as your order moves.
-							</p>
-						</div>
-
-						{/* =====================================
-						    DESKTOP TIMELINE
-						===================================== */}
-
-						<div className="hidden md:block">
-							<div className="relative">
-								{/* Background connecting line */}
-
-								<div
-									className="
-										absolute
-										left-[8.33%]
-										right-[8.33%]
-										top-[22px]
-										h-[2px]
-										bg-[#E8DDD7]
-									"
-								/>
-
-								{/* Completed connecting line */}
-
-								<div
-									className="
-										absolute
-										left-[8.33%]
-										top-[22px]
-										h-[2px]
-										bg-[#85161B]
-										transition-all
-										duration-500
-									"
-									style={{
-										width: `${progressPercentage}%`,
-									}}
-								/>
-
-								<div className="relative grid grid-cols-6 gap-2">
-									{trackingStages.map((stage) => {
-										const Icon = stage.icon;
-										const state = getStageState(stage.id);
-
-										return (
-											<div
-												key={stage.id}
-												className="flex flex-col items-center text-center"
-											>
-												{/* Stage icon */}
-
-												<div
-													className={`
-														flex
-														h-11
-														w-11
-														items-center
-														justify-center
-														rounded-full
-														border-2
-														transition-all
-														duration-300
-														${
-															state.completed
-																? "border-[#85161B] bg-[#85161B] text-white"
-																: "border-[#DED2CB] bg-white text-[#A99B93]"
-														}
-														${state.current ? "ring-4 ring-[#F7D6BF]" : ""}
-													`}
-												>
-													<Icon size={18} />
-												</div>
-
-												{/* Stage information */}
-
-												<div className="mt-4">
-													<p
-														className={`
-															text-sm
-															font-semibold
-															${state.completed ? "text-[#2E2E2E]" : "text-[#2E2E2E]/45"}
-														`}
-													>
-														{stage.title}
-													</p>
-
-													<p
-														className="
-															mx-auto
-															mt-1
-															max-w-[130px]
-															text-xs
-															leading-relaxed
-															text-[#2E2E2E]/45
-														"
-													>
-														{stage.description}
-													</p>
-
-													{stage.date && (
-														<p className="mt-2 text-[11px] font-medium text-[#85161B]">
-															{stage.date}
-														</p>
-													)}
-
-													{state.current && (
-														<span
-															className="
-																mt-2
-																inline-block
-																rounded-full
-																bg-[#F7D6BF]
-																px-2.5
-																py-1
-																text-[9px]
-																font-bold
-																uppercase
-																tracking-wide
-																text-[#85161B]
-															"
-														>
-															Current
-														</span>
-													)}
-												</div>
-											</div>
-										);
-									})}
-								</div>
-							</div>
-						</div>
-
-						{/* =====================================
-						    MOBILE TIMELINE
-						===================================== */}
-
-						<div className="md:hidden">
-							<div className="relative">
-								{/* Vertical background line */}
-
-								<div
-									className="
-										absolute
-										bottom-5
-										left-[20px]
-										top-5
-										w-[2px]
-										bg-[#E8DDD7]
-									"
-								/>
-
-								{/* Vertical completed line */}
-
-								<div
-									className="
-										absolute
-										left-[20px]
-										top-5
-										w-[2px]
-										bg-[#85161B]
-										transition-all
-										duration-500
-									"
-									style={{
-										height: `${
-											((currentStageId - 1) / (trackingStages.length - 1)) * 100
-										}%`,
-									}}
-								/>
-
-								<div className="space-y-6">
-									{trackingStages.map((stage) => {
-										const Icon = stage.icon;
-										const state = getStageState(stage.id);
-
-										return (
-											<div key={stage.id} className="relative flex gap-4">
-												{/* Stage icon */}
-
-												<div
-													className={`
-														relative
-														z-10
-														flex
-														h-10
-														w-10
-														shrink-0
-														items-center
-														justify-center
-														rounded-full
-														border-2
-														transition-all
-														duration-300
-														${
-															state.completed
-																? "border-[#85161B] bg-[#85161B] text-white"
-																: "border-[#DED2CB] bg-white text-[#A99B93]"
-														}
-														${state.current ? "ring-4 ring-[#F7D6BF]" : ""}
-													`}
-												>
-													<Icon size={17} />
-												</div>
-
-												{/* Stage content */}
-
-												<div className="pt-0.5">
-													<div className="flex flex-wrap items-center gap-2">
-														<h3
-															className={`
-																text-sm
-																font-semibold
-																${state.completed ? "text-[#2E2E2E]" : "text-[#2E2E2E]/45"}
-															`}
-														>
-															{stage.title}
-														</h3>
-
-														{state.current && (
-															<span
-																className="
-																	rounded-full
-																	bg-[#F7D6BF]
-																	px-2
-																	py-0.5
-																	text-[9px]
-																	font-bold
-																	uppercase
-																	tracking-wide
-																	text-[#85161B]
-																"
-															>
-																Now
-															</span>
-														)}
-													</div>
-
-													<p className="mt-1 text-xs text-[#2E2E2E]/50">
-														{stage.description}
-													</p>
-
-													{stage.date && (
-														<p className="mt-1 text-[11px] font-medium text-[#85161B]">
-															{stage.date}
-														</p>
-													)}
-												</div>
-											</div>
-										);
-									})}
-								</div>
-							</div>
-						</div>
-
-						{/* =====================================
-						    CURRENT STATUS
-						===================================== */}
-
-						{currentStage && (
-							<div
-								className="
-									mt-8
-									rounded-2xl
-									border
-									border-[#E8CDBB]
-									bg-[#F7D6BF]/35
-									p-4
-									sm:p-5
-								"
-							>
-								<div className="flex gap-3">
-									<div
-										className="
-											flex
-											h-10
-											w-10
-											shrink-0
-											items-center
-											justify-center
-											rounded-full
-											bg-[#85161B]
-											text-white
-										"
-									>
-										<currentStage.icon size={18} />
-									</div>
-
-									<div>
-										<p className="text-sm font-bold text-[#85161B]">
-											{currentStage.title}
-										</p>
-
-										<p className="mt-1 text-xs leading-relaxed text-[#2E2E2E]/60 sm:text-sm">
-											{currentStage.description}. We'll keep you updated when
-											your order moves to the next stage.
-										</p>
-									</div>
-								</div>
-							</div>
-						)}
-					</section>
-
-					{/* =====================================
-					    DELIVERY CARD
-					===================================== */}
-
-					<section
-						className="
-							rounded-[30px]
-							border
-							border-[#E8D7CC]
-							bg-[#F7D6BF]/35
-							p-5
-							sm:p-7
-						"
-					>
-						<div className="flex items-center gap-3">
-							<div
-								className="
-									flex
-									h-11
-									w-11
+									h-12
 									items-center
 									justify-center
-									rounded-full
+									gap-2
+									rounded-xl
 									bg-[#85161B]
+									px-6
+									text-sm
+									font-semibold
 									text-white
+									transition
+									hover:bg-[#721318]
+									disabled:cursor-not-allowed
+									disabled:opacity-60
 								"
 							>
-								<Truck size={19} />
-							</div>
-
-							<div>
-								<p className="text-xs font-medium text-[#2E2E2E]/50">
-									Estimated delivery
-								</p>
-
-								<h2 className="text-lg font-bold text-[#85161B]">
-									{order.estimatedDelivery}
-								</h2>
-							</div>
+								{trackingLoading ? (
+									<>
+										<Loader2
+											size={
+												17
+											}
+											className="animate-spin"
+										/>
+										Tracking...
+									</>
+								) : (
+									<>
+										Track Order
+										<ArrowRight
+											size={
+												16
+											}
+										/>
+									</>
+								)}
+							</button>
 						</div>
 
-						<div className="my-6 h-px bg-[#DCC8BB]" />
-
-						{/* Address */}
-
-						<div>
-							<div className="mb-3 flex items-center gap-2">
-								<MapPin size={17} className="text-[#85161B]" />
-
-								<h3 className="text-sm font-bold">Delivery address</h3>
-							</div>
-
-							<div className="rounded-2xl bg-white/80 p-4">
-								<p className="text-sm font-semibold">{order.delivery.name}</p>
-
-								<p className="mt-1 text-xs leading-relaxed text-[#2E2E2E]/55">
-									{order.delivery.address}
-								</p>
-							</div>
-						</div>
-
-						{/* Contact */}
-
-						<div className="mt-5">
-							<div className="mb-3 flex items-center gap-2">
-								<Phone size={16} className="text-[#85161B]" />
-
-								<h3 className="text-sm font-bold">Contact</h3>
-							</div>
-
-							<p className="text-sm text-[#2E2E2E]/60">
-								{order.customer.phone}
-							</p>
-						</div>
-					</section>
+						<p className="mt-3 text-xs text-[#2E2E2E]/40">
+							Your order ID can
+							be found in your
+							order confirmation.
+						</p>
+					</form>
 				</div>
 
-				{/* =========================================
-				    ORDER ITEMS
-				========================================= */}
+				{/* ─────────────────────────────
+				    ERROR
+				───────────────────────────── */}
 
-				<section
-					className="
-						mt-6
-						rounded-[30px]
-						border
-						border-[#E8D7CC]
-						bg-white
-						p-5
-						shadow-[0_8px_30px_rgba(60,30,20,0.04)]
-						sm:p-7
-						lg:p-8
-					"
-				>
-					<div className="mb-6 flex items-end justify-between">
+				{trackingError && (
+					<div className="mx-auto mt-5 flex max-w-2xl items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4">
+						<div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-red-500">
+							<AlertCircle
+								size={18}
+							/>
+						</div>
+
 						<div>
-							<h2 className="text-xl font-bold sm:text-2xl">Your order</h2>
+							<p className="text-sm font-semibold text-red-700">
+								Unable to find
+								order
+							</p>
 
-							<p className="mt-1 text-sm text-[#2E2E2E]/50">
-								{order.items.length} items
+							<p className="mt-1 text-xs leading-5 text-red-600/80">
+								{
+									trackingError
+								}
 							</p>
 						</div>
-
-						<span className="hidden text-sm text-[#2E2E2E]/45 sm:block">
-							Order #{order.id}
-						</span>
 					</div>
+				)}
 
-					<div className="divide-y divide-[#EEE5DF]">
-						{order.items.map((item) => (
-							<div
-								key={item.id}
-								className="
-									flex
-									gap-4
-									py-4
-									first:pt-0
-									last:pb-0
-									sm:gap-5
-								"
-							>
-								{/* Product image */}
+				{/* ─────────────────────────────
+				    RESULT
+				───────────────────────────── */}
 
-								<div
-									className="
-										h-20
-										w-20
-										shrink-0
-										overflow-hidden
-										rounded-2xl
-										bg-[#F4F0EC]
-										sm:h-24
-										sm:w-24
-									"
-								>
-									<img
-										src={item.image}
-										alt={item.name}
-										className="h-full w-full object-cover"
-									/>
-								</div>
+				{trackingOrder && (
+					<div className="mt-8">
+						<div className="mb-4 flex items-center justify-between gap-4">
+							<div>
+								<p className="text-xs font-semibold uppercase tracking-[0.15em] text-[#85161B]">
+									Order found
+								</p>
 
-								{/* Product information */}
-
-								<div className="flex min-w-0 flex-1 flex-col justify-center">
-									<h3 className="text-sm font-semibold sm:text-base">
-										{item.name}
-									</h3>
-
-									<p className="mt-1 text-xs text-[#2E2E2E]/50">
-										{item.description}
-									</p>
-
-									<p className="mt-2 text-xs font-medium text-[#2E2E2E]/45">
-										Qty: {item.quantity}
-									</p>
-								</div>
-
-								{/* Price */}
-
-								<div className="flex items-center">
-									<p className="text-sm font-bold sm:text-base">
-										₹{item.price.toFixed(2)}
-									</p>
-								</div>
-							</div>
-						))}
-					</div>
-
-					{/* =====================================
-					    ORDER TOTAL
-					===================================== */}
-
-					<div
-						className="
-							mt-6
-							border-t
-							border-[#EEE5DF]
-							pt-5
-						"
-					>
-						<div className="ml-auto max-w-sm space-y-3">
-							<div className="flex justify-between text-sm">
-								<span className="text-[#2E2E2E]/50">Subtotal</span>
-
-								<span>₹{order.subtotal.toFixed(2)}</span>
+								<h2 className="mt-1 text-xl font-bold text-[#2E2E2E]">
+									Order status
+								</h2>
 							</div>
 
-							<div className="flex justify-between text-sm">
-								<span className="text-[#2E2E2E]/50">Delivery</span>
-
-								<span className="font-medium text-[#85161B]">Free</span>
-							</div>
-
-							<div className="flex justify-between border-t border-[#EEE5DF] pt-3">
-								<span className="font-bold">Total</span>
-
-								<span className="text-lg font-bold text-[#85161B]">
-									₹{order.total.toFixed(2)}
-								</span>
+							<div className="hidden max-w-[250px] break-all rounded-full bg-[#F8F3F0] px-3 py-2 text-xs font-medium text-[#2E2E2E]/55 sm:block">
+								{
+									trackingOrder.id
+								}
 							</div>
 						</div>
+
+						<GuestOrderCard
+							order={
+								trackingOrder
+							}
+						/>
 					</div>
-				</section>
+				)}
 
-				{/* =========================================
-				    HELP
-				========================================= */}
+				{/* ─────────────────────────────
+				    DEFAULT INFORMATION
+				───────────────────────────── */}
 
-				<section
-					className="
-						mt-6
-						flex
-						flex-col
-						gap-4
-						rounded-[30px]
-						border
-						border-[#E8D7CC]
-						bg-[#85161B]
-						p-5
-						text-white
-						sm:flex-row
-						sm:items-center
-						sm:justify-between
-						sm:p-7
-					"
-				>
-					<div className="flex items-center gap-4">
+				{!trackingOrder &&
+					!trackingError &&
+					!hasTracked && (
+						<div className="mx-auto mt-8 max-w-2xl rounded-2xl border border-[#E9DED7] bg-white px-6 py-7 text-center">
+							<div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F8F3F0] text-[#85161B]">
+								<Package
+									size={
+										21
+									}
+								/>
+							</div>
+
+							<p className="mt-4 text-sm font-semibold text-[#2E2E2E]">
+								Enter your order
+								ID to get
+								started
+							</p>
+
+							<p className="mx-auto mt-1 max-w-sm text-xs leading-6 text-[#2E2E2E]/45">
+								You don't need
+								to sign in to
+								track an order.
+							</p>
+						</div>
+					)}
+
+				{/* ─────────────────────────────
+				    LOGIN OPTION
+				───────────────────────────── */}
+
+				<div className="mx-auto mt-8 flex max-w-2xl flex-col items-center justify-center gap-3 rounded-2xl border border-[#E9DED7] bg-white px-5 py-5 text-center sm:flex-row sm:text-left">
+					<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F8F3F0] text-[#85161B]">
+						<LogIn size={18} />
+					</div>
+
+					<div className="flex-1">
+						<p className="text-sm font-semibold text-[#2E2E2E]">
+							Have an account?
+						</p>
+
+						<p className="mt-0.5 text-xs text-[#2E2E2E]/45">
+							Sign in to view
+							your complete
+							order history.
+						</p>
+					</div>
+
+					<Link
+						href="/login"
+						className="
+							inline-flex
+							items-center
+							justify-center
+							gap-2
+							rounded-xl
+							border
+							border-[#DED6D0]
+							px-4
+							py-2.5
+							text-xs
+							font-semibold
+							text-[#2E2E2E]/70
+							transition
+							hover:border-[#85161B]/20
+							hover:bg-[#F8F3F0]
+							hover:text-[#85161B]
+						"
+					>
+						Sign in
+						<ArrowRight
+							size={14}
+						/>
+					</Link>
+				</div>
+			</section>
+		</main>
+	);
+}
+
+/* ─────────────────────────────────────────
+   GUEST ORDER CARD
+───────────────────────────────────────── */
+
+function GuestOrderCard({
+	order,
+}: {
+	order: Order;
+}) {
+	const isDelivered =
+		order.status ===
+		"Delivered";
+
+	const isCancelled =
+		order.status ===
+		"Cancelled";
+
+	return (
+		<article className="overflow-hidden rounded-3xl border border-[#E9DED7] bg-white shadow-[0_12px_45px_rgba(80,40,20,0.06)]">
+
+			{/* ORDER HEADER */}
+
+			<div className="border-b border-[#EEE6E1] px-5 py-5 sm:px-6">
+				<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+					<div>
+						<p className="text-xs text-[#2E2E2E]/45">
+							Order placed on{" "}
+							{order.date}
+						</p>
+
+						<p className="mt-1 break-all text-sm font-semibold text-[#2E2E2E]">
+							#{order.id}
+						</p>
+
+						{order.deliveryMethod && (
+							<p className="mt-1 text-xs capitalize text-[#2E2E2E]/45">
+								Delivery method:{" "}
+								{
+									order.deliveryMethod
+								}
+							</p>
+						)}
+					</div>
+
+					<StatusBadge
+						status={
+							order.status
+						}
+						type={
+							order.statusType
+						}
+					/>
+				</div>
+			</div>
+
+			{/* CURRENT STATUS */}
+
+			<div className="px-5 py-6 sm:px-6">
+				<div className="rounded-2xl bg-[#F8F3F0] p-5">
+					<div className="flex items-start gap-4">
 						<div
-							className="
+							className={`
 								flex
 								h-11
 								w-11
@@ -813,49 +762,393 @@ export default function OrderTrackingPage() {
 								items-center
 								justify-center
 								rounded-full
-								bg-white
-								text-[#85161B]
-							"
+								${
+									isCancelled
+										? "bg-red-100 text-red-600"
+										: isDelivered
+											? "bg-[#EDF8F0] text-[#31824A]"
+											: "bg-[#F7D6BF] text-[#85161B]"
+								}
+							`}
 						>
-							<MessageCircle size={20} />
+							{isCancelled ? (
+								<AlertCircle
+									size={
+										21
+									}
+								/>
+							) : isDelivered ? (
+								<CheckCircle2
+									size={
+										21
+									}
+								/>
+							) : (
+								<Package
+									size={
+										21
+									}
+								/>
+							)}
 						</div>
 
 						<div>
-							<h2 className="text-base font-bold">
-								Need help with your order?
-							</h2>
+							<p className="text-xs font-semibold uppercase tracking-wide text-[#85161B]">
+								Current status
+							</p>
 
-							<p className="mt-1 text-xs text-white/65 sm:text-sm">
-								Our team is happy to help you.
+							<h3 className="mt-1 text-lg font-bold text-[#2E2E2E]">
+								{
+									order.status
+								}
+							</h3>
+
+							<p className="mt-1 text-sm leading-6 text-[#2E2E2E]/55">
+								{getStatusMessage(
+									order.status,
+								)}
 							</p>
 						</div>
 					</div>
+				</div>
 
-					<a
-						href="https://wa.me/917000000000"
-						target="_blank"
-						rel="noopener noreferrer"
-						className="
-							inline-flex
-							items-center
-							justify-center
-							gap-2
-							rounded-full
-							bg-white
-							px-5
-							py-3
-							text-sm
-							font-semibold
-							text-[#85161B]
-							transition
-							hover:bg-[#F7D6BF]
-						"
-					>
-						<MessageCircle size={17} />
-						Chat with us
-					</a>
-				</section>
+				{/* PROGRESS */}
+
+				{!isCancelled && (
+					<StatusProgress
+						status={
+							order.status
+						}
+					/>
+				)}
+
+				{/* ORDER INFORMATION */}
+
+				<div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+					<div className="rounded-xl border border-[#E9DED7] bg-white p-4">
+						<p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#2E2E2E]/40">
+							Order ID
+						</p>
+
+						<p className="mt-1 break-all text-sm font-semibold text-[#2E2E2E]">
+							{order.id}
+						</p>
+					</div>
+
+					<div className="rounded-xl border border-[#E9DED7] bg-white p-4">
+						<p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#2E2E2E]/40">
+							Order date
+						</p>
+
+						<p className="mt-1 text-sm font-semibold text-[#2E2E2E]">
+							{order.date}
+						</p>
+					</div>
+
+					{order.deliveryMethod && (
+						<div className="rounded-xl border border-[#E9DED7] bg-white p-4">
+							<p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#2E2E2E]/40">
+								Delivery method
+							</p>
+
+							<p className="mt-1 text-sm font-semibold capitalize text-[#2E2E2E]">
+								{
+									order.deliveryMethod
+								}
+							</p>
+						</div>
+					)}
+
+					<div className="rounded-xl border border-[#E9DED7] bg-white p-4">
+						<p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#2E2E2E]/40">
+							Status
+						</p>
+
+						<p className="mt-1 text-sm font-semibold text-[#85161B]">
+							{
+								order.status
+							}
+						</p>
+					</div>
+				</div>
 			</div>
-		</main>
+		</article>
+	);
+}
+
+/* ─────────────────────────────────────────
+   STATUS MESSAGE
+───────────────────────────────────────── */
+
+function getStatusMessage(
+	status: OrderStatus,
+) {
+	switch (status) {
+		case "Order placed":
+			return "We've received your order and it is waiting to be processed.";
+
+		case "Order accepted":
+			return "Your order has been accepted and is being prepared.";
+
+		case "Packed":
+			return "Your order has been packed and is getting ready for dispatch.";
+
+		case "Shipped":
+			return "Your order has been shipped and is on its way.";
+
+		case "Delivered":
+			return "Your order has been successfully delivered.";
+
+		case "Cancelled":
+			return "This order has been cancelled.";
+
+		default:
+			return "Your order is being processed.";
+	}
+}
+
+/* ─────────────────────────────────────────
+   STATUS PROGRESS
+───────────────────────────────────────── */
+
+function StatusProgress({
+	status,
+}: {
+	status: OrderStatus;
+}) {
+	const steps = [
+		{
+			label: "Order placed",
+			icon: Package,
+		},
+		{
+			label: "Accepted",
+			icon: CheckCircle2,
+		},
+		{
+			label: "Packed",
+			icon: Box,
+		},
+		{
+			label: "Shipped",
+			icon: Truck,
+		},
+		{
+			label: "Delivered",
+			icon: CheckCircle2,
+		},
+	];
+
+	const currentStep =
+		(() => {
+			switch (status) {
+				case "Order placed":
+					return 1;
+
+				case "Order accepted":
+					return 2;
+
+				case "Packed":
+					return 3;
+
+				case "Shipped":
+					return 4;
+
+				case "Delivered":
+					return 5;
+
+				default:
+					return 1;
+			}
+		})();
+
+	return (
+		<div className="mt-7 rounded-2xl border border-[#E9DED7] bg-white p-5 sm:p-6">
+			<p className="mb-5 text-xs font-semibold uppercase tracking-[0.14em] text-[#2E2E2E]/45">
+				Order progress
+			</p>
+
+			<div className="overflow-x-auto">
+				<div className="flex min-w-[560px] items-start">
+					{steps.map(
+						(
+							step,
+							index,
+						) => {
+							const stepNumber =
+								index +
+								1;
+
+							const completed =
+								stepNumber <=
+								currentStep;
+
+							const Icon =
+								step.icon;
+
+							return (
+								<React.Fragment
+									key={
+										step.label
+									}
+								>
+									<div className="flex flex-1 flex-col items-center">
+										<div
+											className={`
+												flex
+												h-9
+												w-9
+												items-center
+												justify-center
+												rounded-full
+												transition
+												${
+													completed
+														? "bg-[#85161B] text-white"
+														: "bg-[#F3ECE7] text-[#2E2E2E]/30"
+												}
+											`}
+										>
+											<Icon
+												size={
+													15
+												}
+											/>
+										</div>
+
+										<p
+											className={`
+												mt-2
+												text-center
+												text-[10px]
+												font-semibold
+												${
+													completed
+														? "text-[#85161B]"
+														: "text-[#2E2E2E]/35"
+												}
+											`}
+										>
+											{
+												step.label
+											}
+										</p>
+									</div>
+
+									{index <
+										steps.length -
+											1 && (
+										<div
+											className={`
+												mt-4
+												h-0.5
+												flex-1
+												${
+													stepNumber <
+													currentStep
+														? "bg-[#85161B]"
+														: "bg-[#E9DED7]"
+												}
+											`}
+										/>
+									)}
+								</React.Fragment>
+							);
+						},
+					)}
+				</div>
+			</div>
+		</div>
+	);
+}
+
+/* ─────────────────────────────────────────
+   STATUS BADGE
+───────────────────────────────────────── */
+
+function StatusBadge({
+	status,
+	type,
+}: {
+	status: OrderStatus;
+	type: OrderStatusType;
+}) {
+	const getStatusIcon = () => {
+		switch (status) {
+			case "Order placed":
+				return (
+					<Package size={14} />
+				);
+
+			case "Order accepted":
+				return (
+					<CheckCircle2
+						size={14}
+					/>
+				);
+
+			case "Packed":
+				return (
+					<Box size={14} />
+				);
+
+			case "Shipped":
+				return (
+					<Truck size={14} />
+				);
+
+			case "Delivered":
+				return (
+					<CheckCircle2
+						size={14}
+					/>
+				);
+
+			case "Cancelled":
+				return (
+					<AlertCircle
+						size={14}
+					/>
+				);
+
+			default:
+				return (
+					<Package size={14} />
+				);
+		}
+	};
+
+	const styles = {
+		delivered:
+			"bg-[#EDF8F0] text-[#31824A]",
+
+		shipping:
+			"bg-[#EEF5FF] text-[#3973B9]",
+
+		processing:
+			"bg-[#FFF3E8] text-[#B56B27]",
+
+		cancelled:
+			"bg-red-50 text-red-600",
+	};
+
+	return (
+		<span
+			className={`
+				inline-flex
+				w-fit
+				items-center
+				gap-1.5
+				rounded-full
+				px-3
+				py-1.5
+				text-xs
+				font-semibold
+				${styles[type]}
+			`}
+		>
+			{getStatusIcon()}
+			{status}
+		</span>
 	);
 }
