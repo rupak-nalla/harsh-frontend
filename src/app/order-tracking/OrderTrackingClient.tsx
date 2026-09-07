@@ -356,7 +356,7 @@ export default function OrderTrackingPage() {
 											setTrackingOrder(null);
 										}
 									}}
-									placeholder="e.g. order_TYLc3Rf7jEhv7M"
+									placeholder="e.g. order_example"
 									autoComplete="off"
 									className="
 										h-12
