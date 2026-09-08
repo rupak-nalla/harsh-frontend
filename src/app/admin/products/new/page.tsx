@@ -749,9 +749,6 @@ export default function NewProductPage() {
 			return "Please upload a primary product image.";
 		}
 
-		if (selectedOccasionIds.length === 0) {
-			return "Please select at least one occasion.";
-		}
 
 		for (const customization of customizations) {
 			if (!customization.label.trim()) {
@@ -1285,8 +1282,7 @@ export default function NewProductPage() {
 						<div
 							className="flex h-11 w-11 items-center justify-center rounded-xl text-white"
 							style={{
-								backgroundColor:
-									"#85161B",
+								backgroundColor: "#85161B",
 							}}
 						>
 							<Package size={22} />
@@ -1298,11 +1294,7 @@ export default function NewProductPage() {
 							</h1>
 
 							<p className="text-sm text-gray-500">
-								Add product details,
-								photos,
-								customization
-								options and
-								variants.
+								Add product details, photos, customization options and variants.
 							</p>
 						</div>
 					</div>
@@ -1312,28 +1304,17 @@ export default function NewProductPage() {
 
 				{error && (
 					<div className="mb-5 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-						<AlertCircle
-							size={20}
-							className="mt-0.5 shrink-0"
-						/>
+						<AlertCircle size={20} className="mt-0.5 shrink-0" />
 
 						<div className="flex-1">
-							<p className="font-semibold">
-								Unable to
-								save
-								product
-							</p>
+							<p className="font-semibold">Unable to save product</p>
 
-							<p className="mt-1">
-								{error}
-							</p>
+							<p className="mt-1">{error}</p>
 						</div>
 
 						<button
 							type="button"
-							onClick={() =>
-								setError("")
-							}
+							onClick={() => setError("")}
 							className="text-red-500 hover:text-red-700"
 						>
 							<X size={18} />
@@ -1343,27 +1324,17 @@ export default function NewProductPage() {
 
 				{success && (
 					<div className="mb-5 flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
-						<Check
-							size={20}
-							className="mt-0.5 shrink-0"
-						/>
+						<Check size={20} className="mt-0.5 shrink-0" />
 
 						<div>
-							<p className="font-semibold">
-								Success
-							</p>
+							<p className="font-semibold">Success</p>
 
-							<p className="mt-1">
-								{success}
-							</p>
+							<p className="mt-1">{success}</p>
 						</div>
 					</div>
 				)}
 
-				<form
-					onSubmit={handleSubmit}
-					className="space-y-6"
-				>
+				<form onSubmit={handleSubmit} className="space-y-6">
 					{/* BASIC INFORMATION */}
 
 					<section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
@@ -1373,9 +1344,7 @@ export default function NewProductPage() {
 							</h2>
 
 							<p className="mt-1 text-sm text-gray-500">
-								Enter the basic
-								details of your
-								product.
+								Enter the basic details of your product.
 							</p>
 						</div>
 
@@ -1388,15 +1357,7 @@ export default function NewProductPage() {
 								<input
 									type="text"
 									value={name}
-									onChange={(
-										event,
-									) =>
-										setName(
-											event
-												.target
-												.value,
-										)
-									}
+									onChange={(event) => setName(event.target.value)}
 									placeholder="Example: Personalized Coffee Mug"
 									className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
 								/>
@@ -1408,18 +1369,8 @@ export default function NewProductPage() {
 								</label>
 
 								<textarea
-									value={
-										description
-									}
-									onChange={(
-										event,
-									) =>
-										setDescription(
-											event
-												.target
-												.value,
-										)
-									}
+									value={description}
+									onChange={(event) => setDescription(event.target.value)}
 									rows={5}
 									placeholder="Describe the product..."
 									className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
@@ -1433,27 +1384,14 @@ export default function NewProductPage() {
 
 								<input
 									type="text"
-									value={
-										keywords
-									}
-									onChange={(
-										event,
-									) =>
-										setKeywords(
-											event
-												.target
-												.value,
-										)
-									}
+									value={keywords}
+									onChange={(event) => setKeywords(event.target.value)}
 									placeholder="gift, mug, personalized, birthday"
 									className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
 								/>
 
 								<p className="mt-1.5 text-xs text-gray-500">
-									Separate
-									keywords
-									using commas
-									or spaces.
+									Separate keywords using commas or spaces.
 								</p>
 							</div>
 						</div>
@@ -1463,15 +1401,10 @@ export default function NewProductPage() {
 
 					<section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
 						<div className="mb-5">
-							<h2 className="text-lg font-semibold text-gray-900">
-								Pricing
-							</h2>
+							<h2 className="text-lg font-semibold text-gray-900">Pricing</h2>
 
 							<p className="mt-1 text-sm text-gray-500">
-								Set the
-								different prices
-								for this
-								product.
+								Set the different prices for this product.
 							</p>
 						</div>
 
@@ -1480,72 +1413,44 @@ export default function NewProductPage() {
 								{
 									label: "Market Price",
 									value: marketPrice,
-									setValue:
-										setMarketPrice,
-									placeholder:
-										"150",
+									setValue: setMarketPrice,
+									placeholder: "150",
 								},
 								{
 									label: "Selling Price",
 									value: sellingPrice,
-									setValue:
-										setSellingPrice,
-									placeholder:
-										"100",
+									setValue: setSellingPrice,
+									placeholder: "100",
 								},
 								{
 									label: "Reseller Price",
 									value: resellerPrice,
-									setValue:
-										setResellerPrice,
-									placeholder:
-										"80",
+									setValue: setResellerPrice,
+									placeholder: "80",
 								},
-							].map(
-								(
-									price,
-								) => (
-									<div
-										key={
-											price.label
-										}
-									>
-										<label className="mb-2 block text-sm font-medium text-gray-700">
-											{
-												price.label
-											}
-										</label>
+							].map((price) => (
+								<div key={price.label}>
+									<label className="mb-2 block text-sm font-medium text-gray-700">
+										{price.label}
+									</label>
 
-										<div className="relative">
-											<span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-gray-500">
-												₹
-											</span>
+									<div className="relative">
+										<span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-gray-500">
+											₹
+										</span>
 
-											<input
-												type="number"
-												min="0"
-												step="0.01"
-												value={
-													price.value
-												}
-												onChange={(
-													event,
-												) =>
-													price.setValue(
-														event
-															.target
-															.value,
-													)
-												}
-												placeholder={
-													price.placeholder
-												}
-												className="w-full rounded-xl border border-gray-300 py-3 pl-8 pr-4 text-sm outline-none focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
-											/>
-										</div>
+										<input
+											type="number"
+											min="0"
+											step="0.01"
+											value={price.value}
+											onChange={(event) => price.setValue(event.target.value)}
+											placeholder={price.placeholder}
+											className="w-full rounded-xl border border-gray-300 py-3 pl-8 pr-4 text-sm outline-none focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
+										/>
 									</div>
-								),
-							)}
+								</div>
+							))}
 						</div>
 					</section>
 
@@ -1558,10 +1463,7 @@ export default function NewProductPage() {
 							</h2>
 
 							<p className="mt-1 text-sm text-gray-500">
-								Upload a main
-								product image
-								and additional
-								images.
+								Upload a main product image and additional images.
 							</p>
 						</div>
 
@@ -1571,65 +1473,40 @@ export default function NewProductPage() {
 							<div>
 								<label className="mb-2 block text-sm font-medium text-gray-700">
 									Primary Photo
-									<span className="ml-1 text-red-500">
-										*
-									</span>
+									<span className="ml-1 text-red-500">*</span>
 								</label>
 
 								<label className="flex min-h-[240px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 transition hover:border-[#85161B] hover:bg-gray-100">
 									{primaryPhoto ? (
 										<div className="relative h-full w-full">
 											<PreviewImage
-												file={
-													primaryPhoto
-												}
+												file={primaryPhoto}
 												className="h-[240px] w-full object-contain"
 											/>
 
 											<button
 												type="button"
-												onClick={(
-													event,
-												) => {
+												onClick={(event) => {
 													event.preventDefault();
 													event.stopPropagation();
 
-													setPrimaryPhoto(
-														null,
-													);
+													setPrimaryPhoto(null);
 												}}
 												className="absolute right-3 top-3 rounded-full bg-white p-2 text-red-600 shadow"
 											>
-												<Trash2
-													size={
-														17
-													}
-												/>
+												<Trash2 size={17} />
 											</button>
 										</div>
 									) : (
 										<>
-											<Upload
-												size={
-													30
-												}
-												className="mb-3 text-gray-400"
-											/>
+											<Upload size={30} className="mb-3 text-gray-400" />
 
 											<span className="text-sm font-medium text-gray-700">
-												Click
-												to
-												upload
+												Click to upload
 											</span>
 
 											<span className="mt-1 text-xs text-gray-500">
-												PNG,
-												JPG,
-												WEBP
-												(up
-												to
-												10
-												MB)
+												PNG, JPG, WEBP (up to 10 MB)
 											</span>
 										</>
 									)}
@@ -1637,9 +1514,7 @@ export default function NewProductPage() {
 									<input
 										type="file"
 										accept="image/*"
-										onChange={
-											handlePrimaryPhoto
-										}
+										onChange={handlePrimaryPhoto}
 										className="hidden"
 									/>
 								</label>
@@ -1649,76 +1524,50 @@ export default function NewProductPage() {
 
 							<div>
 								<label className="mb-2 block text-sm font-medium text-gray-700">
-									Additional
-									Photos
+									Additional Photos
 								</label>
 
 								<label className="flex min-h-[100px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 transition hover:border-[#85161B] hover:bg-gray-100">
-									<Upload
-										size={26}
-										className="mb-2 text-gray-400"
-									/>
+									<Upload size={26} className="mb-2 text-gray-400" />
 
 									<span className="text-sm font-medium text-gray-700">
-										Add more
-										photos
+										Add more photos
 									</span>
 
 									<span className="mt-1 text-xs text-gray-500">
-										You can
-										select
-										multiple
-										images
+										You can select multiple images
 									</span>
 
 									<input
 										type="file"
 										accept="image/*"
 										multiple
-										onChange={
-											handleOtherPhotos
-										}
+										onChange={handleOtherPhotos}
 										className="hidden"
 									/>
 								</label>
 
-								{otherPhotos.length >
-									0 && (
+								{otherPhotos.length > 0 && (
 									<div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4">
-										{otherPhotos.map(
-											(
-												photo,
-												index,
-											) => (
-												<div
-													key={`${photo.name}-${index}`}
-													className="group relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
-												>
-													<PreviewImage
-														file={
-															photo
-														}
-														className="h-full w-full object-cover"
-													/>
+										{otherPhotos.map((photo, index) => (
+											<div
+												key={`${photo.name}-${index}`}
+												className="group relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
+											>
+												<PreviewImage
+													file={photo}
+													className="h-full w-full object-cover"
+												/>
 
-													<button
-														type="button"
-														onClick={() =>
-															removeOtherPhoto(
-																index,
-															)
-														}
-														className="absolute right-1.5 top-1.5 rounded-full bg-white p-1.5 text-red-600 opacity-0 shadow transition group-hover:opacity-100"
-													>
-														<X
-															size={
-																14
-															}
-														/>
-													</button>
-												</div>
-											),
-										)}
+												<button
+													type="button"
+													onClick={() => removeOtherPhoto(index)}
+													className="absolute right-1.5 top-1.5 rounded-full bg-white p-1.5 text-red-600 opacity-0 shadow transition group-hover:opacity-100"
+												>
+													<X size={14} />
+												</button>
+											</div>
+										))}
 									</div>
 								)}
 							</div>
@@ -1730,21 +1579,17 @@ export default function NewProductPage() {
 					<section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
 						<div className="mb-5">
 							<h2 className="text-lg font-semibold text-gray-900">
-								Categories &
-								Occasions
+								Categories & Occasions
 							</h2>
 
 							<p className="mt-1 text-sm text-gray-500">
-								Choose where this
-								product should
-								appear.
+								Choose where this product should appear.
 							</p>
 						</div>
 
 						{loadingOptions ? (
 							<div className="py-8 text-center text-sm text-gray-500">
-								Loading categories
-								and occasions...
+								Loading categories and occasions...
 							</div>
 						) : (
 							<div className="grid gap-6 lg:grid-cols-2">
@@ -1753,60 +1598,41 @@ export default function NewProductPage() {
 								<div>
 									<label className="mb-3 block text-sm font-medium text-gray-700">
 										Categories
+										<span className="ml-1 text-red-500">*</span>
 									</label>
 
 									<div className="flex max-h-56 flex-wrap gap-2 overflow-y-auto rounded-xl border border-gray-200 p-3">
-										{categories.length ===
-										0 ? (
+										{categories.length === 0 ? (
 											<p className="text-sm text-gray-500">
-												No
-												categories
-												found.
+												No categories found.
 											</p>
 										) : (
-											categories.map(
-												(
-													category,
-												) => {
-													const selected =
-														selectedCategoryIds.includes(
-															category.id,
-														);
+											categories.map((category) => {
+												const selected = selectedCategoryIds.includes(
+													category.id,
+												);
 
-													return (
-														<button
-															type="button"
-															key={
-																category.id
-															}
-															onClick={() =>
-																toggleCategory(
-																	category.id,
-																)
-															}
-															className={`rounded-full border px-3 py-2 text-sm transition ${
-																selected
-																	? "border-[#85161B] bg-[#85161B] text-white"
-																	: "border-gray-300 bg-white text-gray-700 hover:border-[#85161B]"
-															}`}
-														>
-															{
-																category.name
-															}
-														</button>
-													);
-												},
-											)
+												return (
+													<button
+														type="button"
+														key={category.id}
+														onClick={() => toggleCategory(category.id)}
+														className={`rounded-full border px-3 py-2 text-sm transition ${
+															selected
+																? "border-[#85161B] bg-[#85161B] text-white"
+																: "border-gray-300 bg-white text-gray-700 hover:border-[#85161B]"
+														}`}
+													>
+														{category.name}
+													</button>
+												);
+											})
 										)}
 									</div>
 
-									{selectedCategoryNames.length >
-										0 && (
+									{selectedCategoryNames.length > 0 && (
 										<p className="mt-2 text-xs text-gray-500">
-											Selected:{" "}
-											{selectedCategoryNames.join(
-												", ",
-											)}
+											Selected: {selectedCategoryNames.join(", ")}
 										</p>
 									)}
 								</div>
@@ -1816,63 +1642,40 @@ export default function NewProductPage() {
 								<div>
 									<label className="mb-3 block text-sm font-medium text-gray-700">
 										Occasions
-										<span className="ml-1 text-red-500">
-											*
-										</span>
 									</label>
 
 									<div className="flex max-h-56 flex-wrap gap-2 overflow-y-auto rounded-xl border border-gray-200 p-3">
-										{occasions.length ===
-										0 ? (
+										{occasions.length === 0 ? (
 											<p className="text-sm text-gray-500">
-												No
-												occasions
-												found.
+												No occasions found.
 											</p>
 										) : (
-											occasions.map(
-												(
-													occasion,
-												) => {
-													const selected =
-														selectedOccasionIds.includes(
-															occasion.id,
-														);
+											occasions.map((occasion) => {
+												const selected = selectedOccasionIds.includes(
+													occasion.id,
+												);
 
-													return (
-														<button
-															type="button"
-															key={
-																occasion.id
-															}
-															onClick={() =>
-																toggleOccasion(
-																	occasion.id,
-																)
-															}
-															className={`rounded-full border px-3 py-2 text-sm transition ${
-																selected
-																	? "border-[#85161B] bg-[#85161B] text-white"
-																	: "border-gray-300 bg-white text-gray-700 hover:border-[#85161B]"
-															}`}
-														>
-															{
-																occasion.name
-															}
-														</button>
-													);
-												},
-											)
+												return (
+													<button
+														type="button"
+														key={occasion.id}
+														onClick={() => toggleOccasion(occasion.id)}
+														className={`rounded-full border px-3 py-2 text-sm transition ${
+															selected
+																? "border-[#85161B] bg-[#85161B] text-white"
+																: "border-gray-300 bg-white text-gray-700 hover:border-[#85161B]"
+														}`}
+													>
+														{occasion.name}
+													</button>
+												);
+											})
 										)}
 									</div>
 
-									{selectedOccasionNames.length >
-										0 && (
+									{selectedOccasionNames.length > 0 && (
 										<p className="mt-2 text-xs text-gray-500">
-											Selected:{" "}
-											{selectedOccasionNames.join(
-												", ",
-											)}
+											Selected: {selectedOccasionNames.join(", ")}
 										</p>
 									)}
 								</div>
@@ -1890,18 +1693,13 @@ export default function NewProductPage() {
 								</h2>
 
 								<p className="mt-1 text-sm text-gray-500">
-									Tell customers what
-									they need to
-									provide for
-									personalization.
+									Tell customers what they need to provide for personalization.
 								</p>
 							</div>
 
 							<button
 								type="button"
-								onClick={
-									addCustomization
-								}
+								onClick={addCustomization}
 								className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#85161B] px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
 							>
 								<Plus size={17} />
@@ -1909,180 +1707,122 @@ export default function NewProductPage() {
 							</button>
 						</div>
 
-						{customizations.length ===
-						0 ? (
+						{customizations.length === 0 ? (
 							<div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-5 py-10 text-center">
-								<ImageIcon
-									size={28}
-									className="mx-auto mb-3 text-gray-400"
-								/>
+								<ImageIcon size={28} className="mx-auto mb-3 text-gray-400" />
 
 								<p className="text-sm font-medium text-gray-700">
-									No customization
-									requirements
+									No customization requirements
 								</p>
 
 								<p className="mt-1 text-xs text-gray-500">
-									Add one if
-									customers need to
-									provide text or
-									photos.
+									Add one if customers need to provide text or photos.
 								</p>
 							</div>
 						) : (
 							<div className="space-y-3">
-								{customizations.map(
-									(
-										requirement,
-										index,
-									) => (
-										<div
-											key={
-												requirement.id
-											}
-											className="rounded-xl border border-gray-200 bg-gray-50 p-4"
-										>
-											<div className="mb-3 flex items-center justify-between">
-												<span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-													Requirement{" "}
-													{index +
-														1}
-												</span>
+								{customizations.map((requirement, index) => (
+									<div
+										key={requirement.id}
+										className="rounded-xl border border-gray-200 bg-gray-50 p-4"
+									>
+										<div className="mb-3 flex items-center justify-between">
+											<span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+												Requirement {index + 1}
+											</span>
 
-												<button
-													type="button"
-													onClick={() =>
-														removeCustomization(
+											<button
+												type="button"
+												onClick={() => removeCustomization(requirement.id)}
+												className="inline-flex items-center gap-1.5 text-sm text-red-600 hover:text-red-700"
+											>
+												<Trash2 size={15} />
+												Remove
+											</button>
+										</div>
+
+										<div className="grid gap-3 lg:grid-cols-3">
+											<div>
+												<label className="mb-1.5 block text-xs font-medium text-gray-600">
+													Type
+												</label>
+
+												<select
+													value={requirement.type}
+													onChange={(event) =>
+														updateCustomization(
 															requirement.id,
+															"type",
+															event.target.value,
 														)
 													}
-													className="inline-flex items-center gap-1.5 text-sm text-red-600 hover:text-red-700"
+													className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#85161B]"
 												>
-													<Trash2
-														size={
-															15
-														}
-													/>
-													Remove
-												</button>
+													<option value="text">Text</option>
+
+													<option value="photo">Photo</option>
+
+													<option value="photos">Photos</option>
+												</select>
 											</div>
 
-											<div className="grid gap-3 lg:grid-cols-3">
+											{requirement.type !== "photo" && (
 												<div>
 													<label className="mb-1.5 block text-xs font-medium text-gray-600">
-														Type
-													</label>
-
-													<select
-														value={
-															requirement.type
-														}
-														onChange={(
-															event,
-														) =>
-															updateCustomization(
-																requirement.id,
-																"type",
-																event
-																	.target
-																	.value,
-															)
-														}
-														className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#85161B]"
-													>
-														<option value="text">
-															Text
-														</option>
-
-														<option value="photo">
-															Photo
-														</option>
-
-														<option value="photos">
-															Photos
-														</option>
-													</select>
-												</div>
-
-												{requirement.type !==
-													"photo" && (
-													<div>
-														<label className="mb-1.5 block text-xs font-medium text-gray-600">
-															Limit
-														</label>
-
-														<input
-															type="number"
-															min="1"
-															value={
-																requirement.limit
-															}
-															onChange={(
-																event,
-															) =>
-																updateCustomization(
-																	requirement.id,
-																	"limit",
-																	event
-																		.target
-																		.value,
-																)
-															}
-															placeholder={
-																requirement.type ===
-																"text"
-																	? "25"
-																	: "5"
-															}
-															className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#85161B]"
-														/>
-													</div>
-												)}
-
-												<div
-													className={
-														requirement.type ===
-														"photo"
-															? "lg:col-span-2"
-															: ""
-													}
-												>
-													<label className="mb-1.5 block text-xs font-medium text-gray-600">
-														Example
+														Limit
 													</label>
 
 													<input
-														type="text"
-														value={
-															requirement.label
-														}
-														onChange={(
-															event,
-														) =>
+														type="number"
+														min="1"
+														value={requirement.limit}
+														onChange={(event) =>
 															updateCustomization(
 																requirement.id,
-																"label",
-																event
-																	.target
-																	.value,
+																"limit",
+																event.target.value,
 															)
 														}
 														placeholder={
-															requirement.type ===
-															"text"
-																? "Example: Brand name"
-																: requirement.type ===
-																	  "photo"
-																	? "Example: Upload profile photo"
-																	: "Example: Upload photos"
+															requirement.type === "text" ? "25" : "5"
 														}
 														className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#85161B]"
 													/>
 												</div>
+											)}
+
+											<div
+												className={
+													requirement.type === "photo" ? "lg:col-span-2" : ""
+												}
+											>
+												<label className="mb-1.5 block text-xs font-medium text-gray-600">
+													Example
+												</label>
+
+												<input
+													type="text"
+													value={requirement.label}
+													onChange={(event) =>
+														updateCustomization(
+															requirement.id,
+															"label",
+															event.target.value,
+														)
+													}
+													placeholder={
+														requirement.type === "text"
+															? "Example: Brand name"
+															: requirement.type === "photo"
+																? "Example: Upload profile photo"
+																: "Example: Upload photos"
+													}
+													className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-[#85161B]"
+												/>
 											</div>
 										</div>
-									),
-								)}
+									</div>
+								))}
 							</div>
 						)}
 					</section>
@@ -2097,9 +1837,7 @@ export default function NewProductPage() {
 								</h2>
 
 								<p className="mt-1 text-sm text-gray-500">
-									Add options such as
-									size, color,
-									material, etc.
+									Add options such as size, color, material, etc.
 								</p>
 							</div>
 
@@ -2113,308 +1851,215 @@ export default function NewProductPage() {
 							</button>
 						</div>
 
-						{variants.length ===
-						0 ? (
+						{variants.length === 0 ? (
 							<div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-5 py-10 text-center">
-								<Package
-									size={30}
-									className="mx-auto mb-3 text-gray-400"
-								/>
+								<Package size={30} className="mx-auto mb-3 text-gray-400" />
 
 								<p className="text-sm font-medium text-gray-700">
 									No variants added
 								</p>
 
 								<p className="mt-1 text-xs text-gray-500">
-									For example, add a
-									Color variant
-									with Red and
-									Green options.
+									For example, add a Color variant with Red and Green options.
 								</p>
 							</div>
 						) : (
 							<div className="space-y-5">
-								{variants.map(
-									(
-										variant,
-									) => (
-										<div
-											key={
-												variant.id
-											}
-											className="rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:p-5"
-										>
-											{/* VARIANT HEADER */}
+								{variants.map((variant) => (
+									<div
+										key={variant.id}
+										className="rounded-2xl border border-gray-200 bg-gray-50 p-4 sm:p-5"
+									>
+										{/* VARIANT HEADER */}
 
-											<div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end">
-												<div className="flex-1">
-													<label className="mb-2 block text-sm font-medium text-gray-700">
-														Variant
-														Name
-													</label>
+										<div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end">
+											<div className="flex-1">
+												<label className="mb-2 block text-sm font-medium text-gray-700">
+													Variant Name
+												</label>
 
-													<input
-														type="text"
-														value={
-															variant.name
-														}
-														onChange={(
-															event,
-														) =>
-															updateVariantName(
-																variant.id,
-																event
-																	.target
-																	.value,
-															)
-														}
-														placeholder="Example: Color"
-														className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
-													/>
-												</div>
-
-												<button
-													type="button"
-													onClick={() =>
-														removeVariant(
-															variant.id,
-														)
+												<input
+													type="text"
+													value={variant.name}
+													onChange={(event) =>
+														updateVariantName(variant.id, event.target.value)
 													}
-													className="inline-flex h-[46px] items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-medium text-red-600 hover:bg-red-50"
-												>
-													<Trash2
-														size={
-															17
-														}
-													/>
-													Remove
-												</button>
+													placeholder="Example: Color"
+													className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
+												/>
 											</div>
 
-											{/* OPTIONS */}
+											<button
+												type="button"
+												onClick={() => removeVariant(variant.id)}
+												className="inline-flex h-[46px] items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-medium text-red-600 hover:bg-red-50"
+											>
+												<Trash2 size={17} />
+												Remove
+											</button>
+										</div>
 
-											<div className="space-y-3">
-												<div className="hidden grid-cols-[1fr_150px_200px_40px] gap-3 px-1 text-xs font-semibold uppercase tracking-wide text-gray-500 md:grid">
-													<span>
-														Option
-													</span>
+										{/* OPTIONS */}
 
-													<span>
-														Additional
-														Price
-													</span>
+										<div className="space-y-3">
+											<div className="hidden grid-cols-[1fr_150px_200px_40px] gap-3 px-1 text-xs font-semibold uppercase tracking-wide text-gray-500 md:grid">
+												<span>Option</span>
 
-													<span>
-														Image
-													</span>
+												<span>Additional Price</span>
 
-													<span />
-												</div>
+												<span>Image</span>
 
-												{variant.options.map(
-													(
-														option,
-													) => (
-														<div
-															key={
-																option.id
-															}
-															className="rounded-xl border border-gray-200 bg-white p-3"
-														>
-															<div className="grid gap-3 md:grid-cols-[1fr_150px_200px_40px] md:items-center">
-																{/* OPTION NAME */}
+												<span />
+											</div>
 
-																<div>
-																	<label className="mb-1.5 block text-xs font-medium text-gray-600 md:hidden">
-																		Option
-																	</label>
+											{variant.options.map((option) => (
+												<div
+													key={option.id}
+													className="rounded-xl border border-gray-200 bg-white p-3"
+												>
+													<div className="grid gap-3 md:grid-cols-[1fr_150px_200px_40px] md:items-center">
+														{/* OPTION NAME */}
 
-																	<input
-																		type="text"
-																		value={
-																			option.name
-																		}
-																		onChange={(
-																			event,
-																		) =>
-																			updateVariantOption(
-																				variant.id,
-																				option.id,
-																				"name",
-																				event
-																					.target
-																					.value,
-																			)
-																		}
-																		placeholder="Example: Red"
-																		className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-[#85161B]"
-																	/>
-																</div>
+														<div>
+															<label className="mb-1.5 block text-xs font-medium text-gray-600 md:hidden">
+																Option
+															</label>
 
-																{/* PRICE */}
+															<input
+																type="text"
+																value={option.name}
+																onChange={(event) =>
+																	updateVariantOption(
+																		variant.id,
+																		option.id,
+																		"name",
+																		event.target.value,
+																	)
+																}
+																placeholder="Example: Red"
+																className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-[#85161B]"
+															/>
+														</div>
 
-																<div>
-																	<label className="mb-1.5 block text-xs font-medium text-gray-600 md:hidden">
-																		Additional
-																		Price
-																	</label>
+														{/* PRICE */}
 
-																	<div className="relative">
-																		<span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
-																			₹
-																		</span>
+														<div>
+															<label className="mb-1.5 block text-xs font-medium text-gray-600 md:hidden">
+																Additional Price
+															</label>
 
-																		<input
-																			type="number"
-																			min="0"
-																			step="0.01"
-																			value={
-																				option.additionalPrice
-																			}
-																			onChange={(
-																				event,
-																			) =>
-																				updateVariantOption(
-																					variant.id,
-																					option.id,
-																					"additionalPrice",
-																					event
-																						.target
-																						.value,
-																				)
-																			}
-																			placeholder="0"
-																			className="w-full rounded-lg border border-gray-300 py-2.5 pl-7 pr-3 text-sm outline-none focus:border-[#85161B]"
+															<div className="relative">
+																<span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">
+																	₹
+																</span>
+
+																<input
+																	type="number"
+																	min="0"
+																	step="0.01"
+																	value={option.additionalPrice}
+																	onChange={(event) =>
+																		updateVariantOption(
+																			variant.id,
+																			option.id,
+																			"additionalPrice",
+																			event.target.value,
+																		)
+																	}
+																	placeholder="0"
+																	className="w-full rounded-lg border border-gray-300 py-2.5 pl-7 pr-3 text-sm outline-none focus:border-[#85161B]"
+																/>
+															</div>
+														</div>
+
+														{/* IMAGE */}
+
+														<div>
+															<label className="mb-1.5 block text-xs font-medium text-gray-600 md:hidden">
+																Image
+															</label>
+
+															{option.image ? (
+																<div className="flex items-center gap-2">
+																	<div className="h-11 w-11 overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+																		<PreviewImage
+																			file={option.image}
+																			className="h-full w-full object-cover"
 																		/>
 																	</div>
-																</div>
 
-																{/* IMAGE */}
-
-																<div>
-																	<label className="mb-1.5 block text-xs font-medium text-gray-600 md:hidden">
-																		Image
-																	</label>
-
-																	{option.image ? (
-																		<div className="flex items-center gap-2">
-																			<div className="h-11 w-11 overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
-																				<PreviewImage
-																					file={
-																						option.image
-																					}
-																					className="h-full w-full object-cover"
-																				/>
-																			</div>
-
-																			<button
-																				type="button"
-																				onClick={() =>
-																					updateVariantOptionImage(
-																						variant.id,
-																						option.id,
-																						null,
-																					)
-																				}
-																				className="text-xs font-medium text-red-600 hover:text-red-700"
-																			>
-																				Remove
-																			</button>
-																		</div>
-																	) : (
-																		<label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2.5 text-xs font-medium text-gray-600 hover:border-[#85161B]">
-																			<Upload
-																				size={
-																					15
-																				}
-																			/>
-																			Upload
-																			Image
-
-																			<input
-																				type="file"
-																				accept="image/*"
-																				onChange={(
-																					event,
-																				) =>
-																					updateVariantOptionImage(
-																						variant.id,
-																						option.id,
-																						event
-																							.target
-																							.files?.[0] ??
-																							null,
-																					)
-																				}
-																				className="hidden"
-																			/>
-																		</label>
-																	)}
-																</div>
-
-																{/* REMOVE OPTION */}
-
-																<div className="flex justify-end">
 																	<button
 																		type="button"
 																		onClick={() =>
-																			removeVariantOption(
+																			updateVariantOptionImage(
 																				variant.id,
 																				option.id,
+																				null,
 																			)
 																		}
-																		disabled={
-																			variant
-																				.options
-																				.length ===
-																			1
-																		}
-																		className="rounded-lg p-2 text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-30"
-																		title="Remove option"
+																		className="text-xs font-medium text-red-600 hover:text-red-700"
 																	>
-																		<Trash2
-																			size={
-																				17
-																			}
-																		/>
+																		Remove
 																	</button>
 																</div>
-															</div>
+															) : (
+																<label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2.5 text-xs font-medium text-gray-600 hover:border-[#85161B]">
+																	<Upload size={15} />
+																	Upload Image
+																	<input
+																		type="file"
+																		accept="image/*"
+																		onChange={(event) =>
+																			updateVariantOptionImage(
+																				variant.id,
+																				option.id,
+																				event.target.files?.[0] ?? null,
+																			)
+																		}
+																		className="hidden"
+																	/>
+																</label>
+															)}
 														</div>
-													),
-												)}
-											</div>
 
-											{/* ADD OPTION */}
+														{/* REMOVE OPTION */}
 
-											<div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-												<p className="text-xs text-gray-500">
-													Option price is
-													added to the
-													base selling
-													price.
-												</p>
-
-												<button
-													type="button"
-													onClick={() =>
-														addVariantOption(
-															variant.id,
-														)
-													}
-													className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#85161B] px-3 py-2 text-sm font-medium text-[#85161B] hover:bg-[#85161B]/5"
-												>
-													<Plus
-														size={
-															16
-														}
-													/>
-													Add Option
-												</button>
-											</div>
+														<div className="flex justify-end">
+															<button
+																type="button"
+																onClick={() =>
+																	removeVariantOption(variant.id, option.id)
+																}
+																disabled={variant.options.length === 1}
+																className="rounded-lg p-2 text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-30"
+																title="Remove option"
+															>
+																<Trash2 size={17} />
+															</button>
+														</div>
+													</div>
+												</div>
+											))}
 										</div>
-									),
-								)}
+
+										{/* ADD OPTION */}
+
+										<div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+											<p className="text-xs text-gray-500">
+												Option price is added to the base selling price.
+											</p>
+
+											<button
+												type="button"
+												onClick={() => addVariantOption(variant.id)}
+												className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#85161B] px-3 py-2 text-sm font-medium text-[#85161B] hover:bg-[#85161B]/5"
+											>
+												<Plus size={16} />
+												Add Option
+											</button>
+										</div>
+									</div>
+								))}
 							</div>
 						)}
 					</section>
@@ -2424,13 +2069,9 @@ export default function NewProductPage() {
 					<div className="sticky bottom-4 z-10 rounded-2xl border border-gray-200 bg-white/95 p-4 shadow-lg backdrop-blur">
 						<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 							<div className="text-sm text-gray-500">
-								{variants.length >
-								0
+								{variants.length > 0
 									? `${variants.length} variant${
-											variants.length >
-											1
-												? "s"
-												: ""
+											variants.length > 1 ? "s" : ""
 										} configured`
 									: "No variants configured"}
 							</div>
@@ -2443,20 +2084,12 @@ export default function NewProductPage() {
 								{saving ? (
 									<>
 										<span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-
-										Creating
-										Product...
+										Creating Product...
 									</>
 								) : (
 									<>
-										<Check
-											size={
-												18
-											}
-										/>
-
-										Create
-										Product
+										<Check size={18} />
+										Create Product
 									</>
 								)}
 							</button>
