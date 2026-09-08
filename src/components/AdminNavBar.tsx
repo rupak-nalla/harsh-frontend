@@ -13,6 +13,7 @@ import {
 	X,
 	Store,
 	Tag,
+	SlidersHorizontal,
 	Zap,
 } from "lucide-react";
 
@@ -46,6 +47,11 @@ const NAV_ITEMS = [
 		label: "Customers",
 		href: "/admin/customers",
 		icon: Users,
+	},
+	{
+		href: "/admin/store-customisation",
+		label: "Store Customisation",
+		icon: SlidersHorizontal,
 	},
 ];
 
