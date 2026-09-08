@@ -191,11 +191,7 @@ function normalizeVariantImages(
 
 	Object.entries(parsed as Record<string, unknown>).forEach(
 		([variantName, options]) => {
-			if (
-				!options ||
-				typeof options !== "object" ||
-				Array.isArray(options)
-			) {
+			if (!options || typeof options !== "object" || Array.isArray(options)) {
 				return;
 			}
 
@@ -255,7 +251,9 @@ function parseProductVariants(product: RawProduct): VariantView[] {
 			if (!variantValue || typeof variantValue !== "object") return;
 
 			const variant = variantValue as Record<string, unknown>;
-			const variantName = String(variant.name ?? variant.variant_name ?? "").trim();
+			const variantName = String(
+				variant.name ?? variant.variant_name ?? "",
+			).trim();
 			if (!variantName) return;
 
 			const rawOptions = variant.options ?? variant.values;
@@ -544,7 +542,7 @@ function normalizeReview(raw: Record<string, unknown>, index: number): Review {
 	);
 
 	return {
-		id: String(raw.id ?? `review-${index}`),
+		id: String(raw.id ?? raw.review_id ?? raw._id ?? `review-${index}`),
 
 		name: String(raw.name ?? raw.customer_name ?? raw.user_name ?? "Customer"),
 
@@ -856,6 +854,8 @@ function ProductOverview({
 	orders,
 	averageRating,
 	onEdit,
+	onDeleteReview,
+	deletingReviewId,
 }: {
 	product: RawProduct;
 	form: FormState;
@@ -864,6 +864,8 @@ function ProductOverview({
 	orders: Order[];
 	averageRating: number;
 	onEdit: () => void;
+	onDeleteReview: (review: Review) => void;
+	deletingReviewId: string | null;
 }) {
 	const images = [product.primary_photo_path, ...otherPhotoPaths].filter(
 		(path): path is string => Boolean(path),
@@ -1111,7 +1113,8 @@ function ProductOverview({
 											{variant.name}
 										</p>
 										<p className="mt-0.5 text-[10px] text-[#2E2E2E]/45">
-											{variant.options.length} {variant.options.length === 1 ? "option" : "options"}
+											{variant.options.length}{" "}
+											{variant.options.length === 1 ? "option" : "options"}
 										</p>
 									</div>
 								</div>
@@ -1131,7 +1134,10 @@ function ProductOverview({
 													/>
 												) : (
 													<div className="flex h-full w-full items-center justify-center">
-														<ImageIcon size={17} className="text-[#2E2E2E]/20" />
+														<ImageIcon
+															size={17}
+															className="text-[#2E2E2E]/20"
+														/>
 													</div>
 												)}
 											</div>
@@ -1141,12 +1147,16 @@ function ProductOverview({
 													{option.name}
 												</p>
 												<p className="mt-0.5 text-[10px] text-[#2E2E2E]/45">
-													{option.image ? "Variant image available" : "No variant image"}
+													{option.image
+														? "Variant image available"
+														: "No variant image"}
 												</p>
 											</div>
 
 											<div className="shrink-0 text-right">
-												<p className="text-[10px] text-[#2E2E2E]/40">Additional price</p>
+												<p className="text-[10px] text-[#2E2E2E]/40">
+													Additional price
+												</p>
 												<p className="mt-0.5 text-sm font-bold text-[#85161B]">
 													+₹{numberValue(option.price).toLocaleString("en-IN")}
 												</p>
@@ -1184,13 +1194,36 @@ function ProductOverview({
 									className="border-t border-[#F0E8E2] pt-3.5 first:border-0 first:pt-0"
 								>
 									<div className="flex items-center justify-between gap-3">
-										<p className="text-xs font-semibold text-[#2E2E2E]">
-											{review.name}
-										</p>
+										<div className="min-w-0">
+											<p className="truncate text-xs font-semibold text-[#2E2E2E]">
+												{review.name}
+											</p>
+											<span className="text-[10px] text-[#2E2E2E]/45">
+												{review.date}
+											</span>
+										</div>
 
-										<span className="text-[10px] text-[#2E2E2E]/45">
-											{review.date}
-										</span>
+										<button
+											type="button"
+											onClick={() => onDeleteReview(review)}
+											disabled={
+												deletingReviewId === review.id ||
+												review.id.startsWith("review-")
+											}
+											aria-label={`Delete review by ${review.name}`}
+											title={
+												review.id.startsWith("review-")
+													? "Review ID is unavailable"
+													: "Delete review"
+											}
+											className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+										>
+											{deletingReviewId === review.id ? (
+												<Loader2 size={14} className="animate-spin" />
+											) : (
+												<Trash2 size={14} />
+											)}
+										</button>
 									</div>
 
 									<div className="mt-1.5">
@@ -1288,8 +1321,12 @@ export default function AdminProductDetailsPage() {
 	const [otherPhotos, setOtherPhotos] = useState<File[]>([]);
 
 	const [removedPrimaryPhoto, setRemovedPrimaryPhoto] = useState(false);
-	const [removedOtherPhotoPaths, setRemovedOtherPhotoPaths] = useState<string[]>([]);
-	const [removedVariantImages, setRemovedVariantImages] = useState<RemovedVariantImage[]>([]);
+	const [removedOtherPhotoPaths, setRemovedOtherPhotoPaths] = useState<
+		string[]
+	>([]);
+	const [removedVariantImages, setRemovedVariantImages] = useState<
+		RemovedVariantImage[]
+	>([]);
 
 	const [loading, setLoading] = useState(true);
 
@@ -1303,6 +1340,11 @@ export default function AdminProductDetailsPage() {
 	const [deleting, setDeleting] = useState(false);
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 	const [deleteError, setDeleteError] = useState("");
+
+	const [deletingReviewId, setDeletingReviewId] = useState<string | null>(null);
+	const [showDeleteReviewConfirm, setShowDeleteReviewConfirm] = useState(false);
+	const [reviewToDelete, setReviewToDelete] = useState<Review | null>(null);
+	const [deleteReviewError, setDeleteReviewError] = useState("");
 
 	/* =========================================================================
 	   LOAD DATA
@@ -1625,7 +1667,11 @@ export default function AdminProductDetailsPage() {
 
 		const option = variant.options[optionIndex];
 		if (option?.existingImage) {
-			markVariantImageForRemoval(variant.name.trim(), option.name.trim(), option.existingImage);
+			markVariantImageForRemoval(
+				variant.name.trim(),
+				option.name.trim(),
+				option.existingImage,
+			);
 		}
 
 		updateVariant(variantIndex, {
@@ -1640,21 +1686,50 @@ export default function AdminProductDetailsPage() {
 	=========================================================================== */
 
 	const markOtherPhotoForRemoval = (path: string) => {
-		setRemovedOtherPhotoPaths((current) => current.includes(path) ? current : [...current, path]);
+		setRemovedOtherPhotoPaths((current) =>
+			current.includes(path) ? current : [...current, path],
+		);
 	};
 
 	const undoOtherPhotoRemoval = (path: string) => {
-		setRemovedOtherPhotoPaths((current) => current.filter((item) => item !== path));
+		setRemovedOtherPhotoPaths((current) =>
+			current.filter((item) => item !== path),
+		);
 	};
 
-	const markVariantImageForRemoval = (variant: string, option: string, path: string) => {
-		setRemovedVariantImages((current) => current.some((item) => item.variant === variant && item.option === option && item.path === path) ? current : [...current, { variant, option, path }]);
+	const markVariantImageForRemoval = (
+		variant: string,
+		option: string,
+		path: string,
+	) => {
+		setRemovedVariantImages((current) =>
+			current.some(
+				(item) =>
+					item.variant === variant &&
+					item.option === option &&
+					item.path === path,
+			)
+				? current
+				: [...current, { variant, option, path }],
+		);
 	};
 
-	const undoVariantImageRemoval = (variant: string, option: string, path: string) => {
-		setRemovedVariantImages((current) => current.filter((item) => !(item.variant === variant && item.option === option && item.path === path)));
+	const undoVariantImageRemoval = (
+		variant: string,
+		option: string,
+		path: string,
+	) => {
+		setRemovedVariantImages((current) =>
+			current.filter(
+				(item) =>
+					!(
+						item.variant === variant &&
+						item.option === option &&
+						item.path === path
+					),
+			),
+		);
 	};
-
 
 	const removeOtherPhoto = (index: number) => {
 		setOtherPhotos((current) =>
@@ -1688,7 +1763,7 @@ export default function AdminProductDetailsPage() {
 	const saveProduct = async (event: React.FormEvent) => {
 		event.preventDefault();
 
-		if (!form || !productId) return;
+		if (!form || !product || !productId) return;
 
 		if (!form.name.trim() || !form.description.trim()) {
 			setError("Product name and description are required.");
@@ -1790,7 +1865,13 @@ export default function AdminProductDetailsPage() {
 			if (primaryPhoto) {
 				body.append("primary_photo", primaryPhoto);
 			} else if (!removedPrimaryPhoto && product.primary_photo_path) {
-				body.append("primary_photo", await fetchImageAsFile(product.primary_photo_path, `product-${productId}-primary`));
+				body.append(
+					"primary_photo",
+					await fetchImageAsFile(
+						product.primary_photo_path,
+						`product-${productId}-primary`,
+					),
+				);
 			}
 
 			if (removedPrimaryPhoto && !primaryPhoto && product.primary_photo_path) {
@@ -1855,9 +1936,9 @@ export default function AdminProductDetailsPage() {
 
 					if (option.image) {
 						body.append(
-						`variant_images[${variantName}][${optionName}]`,
-						option.image,
-					);
+							`variant_images[${variantName}][${optionName}]`,
+							option.image,
+						);
 					} else if (
 						option.existingImage &&
 						!removedVariantImages.some(
@@ -1868,12 +1949,12 @@ export default function AdminProductDetailsPage() {
 						)
 					) {
 						body.append(
-						`variant_images[${variantName}][${optionName}]`,
-						await fetchImageAsFile(
-							option.existingImage,
-							`product-${productId}-${slugifyForKey(variantName)}-${slugifyForKey(optionName) || "option"}`,
-						),
-					);
+							`variant_images[${variantName}][${optionName}]`,
+							await fetchImageAsFile(
+								option.existingImage,
+								`product-${productId}-${slugifyForKey(variantName)}-${slugifyForKey(optionName) || "option"}`,
+							),
+						);
 					}
 				}
 			}
@@ -1902,9 +1983,9 @@ export default function AdminProductDetailsPage() {
 			if (!response.ok || logicalStatus >= 400) {
 				throw new Error(
 					data &&
-					typeof data === "object" &&
-					"message" in data &&
-					typeof (data as { message?: unknown }).message === "string"
+						typeof data === "object" &&
+						"message" in data &&
+						typeof (data as { message?: unknown }).message === "string"
 						? (data as { message: string }).message
 						: "Unable to update product.",
 				);
@@ -1943,27 +2024,156 @@ export default function AdminProductDetailsPage() {
 			const response = await fetch("/api/admin/products", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ mode: "delete", command_type: "admin", product_ids: [productId] }),
+				body: JSON.stringify({
+					mode: "delete",
+					command_type: "admin",
+					product_ids: [productId],
+				}),
 				credentials: "include",
 				cache: "no-store",
 			});
 
 			const data = await response.json().catch(() => ({}));
-			const logicalStatus = data && typeof data === "object" && "status" in data && typeof (data as { status?: unknown }).status === "number"
-				? (data as { status: number }).status : response.status;
-			const success = response.ok && logicalStatus >= 200 && logicalStatus < 300 && !(data && typeof data === "object" && "success" in data && (data as { success?: unknown }).success === false);
+			const logicalStatus =
+				data &&
+				typeof data === "object" &&
+				"status" in data &&
+				typeof (data as { status?: unknown }).status === "number"
+					? (data as { status: number }).status
+					: response.status;
+			const success =
+				response.ok &&
+				logicalStatus >= 200 &&
+				logicalStatus < 300 &&
+				!(
+					data &&
+					typeof data === "object" &&
+					"success" in data &&
+					(data as { success?: unknown }).success === false
+				);
 
 			if (!success) {
-				throw new Error(data && typeof data === "object" && "message" in data && typeof (data as { message?: unknown }).message === "string"
-					? (data as { message: string }).message : "Unable to delete product.");
+				throw new Error(
+					data &&
+						typeof data === "object" &&
+						"message" in data &&
+						typeof (data as { message?: unknown }).message === "string"
+						? (data as { message: string }).message
+						: "Unable to delete product.",
+				);
 			}
 
 			setShowDeleteConfirm(false);
 			router.push("/admin/products");
 		} catch (deleteRequestError) {
-			setDeleteError(deleteRequestError instanceof Error ? deleteRequestError.message : "Unable to delete product.");
+			setDeleteError(
+				deleteRequestError instanceof Error
+					? deleteRequestError.message
+					: "Unable to delete product.",
+			);
 		} finally {
 			setDeleting(false);
+		}
+	};
+
+	/* =========================================================================
+	   DELETE REVIEW
+	=========================================================================== */
+
+	const openDeleteReviewConfirm = (review: Review) => {
+		if (!review.id || review.id.startsWith("review-")) {
+			setDeleteReviewError(
+				"This review does not have a valid backend review ID.",
+			);
+			return;
+		}
+
+		setReviewToDelete(review);
+		setDeleteReviewError("");
+		setShowDeleteReviewConfirm(true);
+	};
+
+	const closeDeleteReviewConfirm = () => {
+		if (deletingReviewId) return;
+
+		setShowDeleteReviewConfirm(false);
+		setReviewToDelete(null);
+		setDeleteReviewError("");
+	};
+
+	const deleteReview = async () => {
+		if (!reviewToDelete || deletingReviewId) return;
+
+		const reviewId = reviewToDelete.id;
+
+		if (!reviewId || reviewId.startsWith("review-")) {
+			setDeleteReviewError(
+				"This review does not have a valid backend review ID.",
+			);
+			return;
+		}
+
+		setDeletingReviewId(reviewId);
+		setDeleteReviewError("");
+
+		try {
+			const body = new FormData();
+			body.append("review_id", reviewId);
+			body.append("command_type", "admin");
+
+			const response = await fetch("/api/admin/delete-review", {
+				method: "POST",
+				body,
+				credentials: "include",
+				cache: "no-store",
+			});
+
+			const data = await response.json().catch(() => ({}));
+
+			const logicalStatus =
+				data &&
+				typeof data === "object" &&
+				"status" in data &&
+				typeof (data as { status?: unknown }).status === "number"
+					? (data as { status: number }).status
+					: response.status;
+
+			const success =
+				response.ok &&
+				logicalStatus >= 200 &&
+				logicalStatus < 300 &&
+				!(
+					data &&
+					typeof data === "object" &&
+					"success" in data &&
+					(data as { success?: unknown }).success === false
+				);
+
+			if (!success) {
+				throw new Error(
+					data &&
+						typeof data === "object" &&
+						"message" in data &&
+						typeof (data as { message?: unknown }).message === "string"
+						? (data as { message: string }).message
+						: "Unable to delete review.",
+				);
+			}
+
+			setReviews((current) =>
+				current.filter((review) => review.id !== reviewId),
+			);
+			setShowDeleteReviewConfirm(false);
+			setReviewToDelete(null);
+			setDeleteReviewError("");
+		} catch (deleteError) {
+			setDeleteReviewError(
+				deleteError instanceof Error
+					? deleteError.message
+					: "Unable to delete review.",
+			);
+		} finally {
+			setDeletingReviewId(null);
 		}
 	};
 
@@ -2052,7 +2262,15 @@ export default function AdminProductDetailsPage() {
 							View storefront
 						</Link>
 
-						<button type="button" onClick={() => { setDeleteError(""); setShowDeleteConfirm(true); }} disabled={deleting} className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50">
+						<button
+							type="button"
+							onClick={() => {
+								setDeleteError("");
+								setShowDeleteConfirm(true);
+							}}
+							disabled={deleting}
+							className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+						>
 							<Trash2 size={16} />
 							Delete product
 						</button>
@@ -2078,19 +2296,114 @@ export default function AdminProductDetailsPage() {
 						orders={orders}
 						averageRating={allReviewsRating}
 						onEdit={() => setIsEditing(true)}
+						onDeleteReview={openDeleteReviewConfirm}
+						deletingReviewId={deletingReviewId}
 					/>
 
 					{showDeleteConfirm && (
 						<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
 							<div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
 								<div className="flex items-start gap-4">
-									<div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-700"><AlertCircle size={21} /></div>
-									<div><h2 className="text-lg font-semibold text-[#1F1F1F]">Delete product?</h2><p className="mt-1.5 text-sm leading-6 text-[#2E2E2E]/65">This will permanently delete <strong>{form.name || "this product"}</strong>. This action cannot be undone.</p></div>
+									<div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-700">
+										<AlertCircle size={21} />
+									</div>
+									<div>
+										<h2 className="text-lg font-semibold text-[#1F1F1F]">
+											Delete product?
+										</h2>
+										<p className="mt-1.5 text-sm leading-6 text-[#2E2E2E]/65">
+											This will permanently delete{" "}
+											<strong>{form.name || "this product"}</strong>. This
+											action cannot be undone.
+										</p>
+									</div>
 								</div>
-								{deleteError && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700">{deleteError}</div>}
+
+								{deleteError && (
+									<div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700">
+										{deleteError}
+									</div>
+								)}
+
 								<div className="mt-6 flex justify-end gap-2.5">
-									<button type="button" onClick={() => { setShowDeleteConfirm(false); setDeleteError(""); }} disabled={deleting} className="inline-flex items-center gap-2 rounded-xl border border-[#E8DED7] bg-white px-4 py-2.5 text-sm font-semibold text-[#2E2E2E] hover:bg-[#F7F2EE] disabled:opacity-50"><X size={15} />Cancel</button>
-									<button type="button" onClick={deleteProduct} disabled={deleting} className="inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#6F1217] disabled:cursor-not-allowed disabled:opacity-60">{deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}{deleting ? "Deleting..." : "Delete product"}</button>
+									<button
+										type="button"
+										onClick={() => {
+											setShowDeleteConfirm(false);
+											setDeleteError("");
+										}}
+										disabled={deleting}
+										className="inline-flex items-center gap-2 rounded-xl border border-[#E8DED7] bg-white px-4 py-2.5 text-sm font-semibold text-[#2E2E2E] hover:bg-[#F7F2EE] disabled:opacity-50"
+									>
+										<X size={15} />
+										Cancel
+									</button>
+									<button
+										type="button"
+										onClick={deleteProduct}
+										disabled={deleting}
+										className="inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#6F1217] disabled:cursor-not-allowed disabled:opacity-60"
+									>
+										{deleting ? (
+											<Loader2 size={15} className="animate-spin" />
+										) : (
+											<Trash2 size={15} />
+										)}
+										{deleting ? "Deleting..." : "Delete product"}
+									</button>
+								</div>
+							</div>
+						</div>
+					)}
+
+					{showDeleteReviewConfirm && reviewToDelete && (
+						<div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 p-4">
+							<div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+								<div className="flex items-start gap-4">
+									<div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-700">
+										<AlertCircle size={21} />
+									</div>
+									<div className="min-w-0">
+										<h2 className="text-lg font-semibold text-[#1F1F1F]">
+											Delete review?
+										</h2>
+										<p className="mt-1.5 text-sm leading-6 text-[#2E2E2E]/65">
+											This will permanently delete the review by{" "}
+											<strong>{reviewToDelete.name}</strong>. This action cannot
+											be undone.
+										</p>
+									</div>
+								</div>
+
+								{deleteReviewError && (
+									<div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700">
+										{deleteReviewError}
+									</div>
+								)}
+
+								<div className="mt-6 flex justify-end gap-2.5">
+									<button
+										type="button"
+										onClick={closeDeleteReviewConfirm}
+										disabled={Boolean(deletingReviewId)}
+										className="inline-flex items-center gap-2 rounded-xl border border-[#E8DED7] bg-white px-4 py-2.5 text-sm font-semibold text-[#2E2E2E] transition hover:bg-[#F7F2EE] disabled:cursor-not-allowed disabled:opacity-50"
+									>
+										<X size={15} />
+										Cancel
+									</button>
+									<button
+										type="button"
+										onClick={deleteReview}
+										disabled={Boolean(deletingReviewId)}
+										className="inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#6F1217] disabled:cursor-not-allowed disabled:opacity-60"
+									>
+										{deletingReviewId ? (
+											<Loader2 size={15} className="animate-spin" />
+										) : (
+											<Trash2 size={15} />
+										)}
+										{deletingReviewId ? "Deleting..." : "Delete review"}
+									</button>
 								</div>
 							</div>
 						</div>
@@ -2352,7 +2665,8 @@ export default function AdminProductDetailsPage() {
 								</p>
 
 								<div className="relative mt-2.5 aspect-square w-28 overflow-hidden rounded-xl border border-[#E8DED7] bg-[#F7F2EE]">
-									{primaryPreviewUrl || (!removedPrimaryPhoto && product.primary_photo_path) ? (
+									{primaryPreviewUrl ||
+									(!removedPrimaryPhoto && product.primary_photo_path) ? (
 										<img
 											src={
 												primaryPreviewUrl ??
@@ -2388,12 +2702,26 @@ export default function AdminProductDetailsPage() {
 									/>
 								</label>
 
-									{product.primary_photo_path && !primaryPhoto && !removedPrimaryPhoto && (
-										<button type="button" onClick={() => setRemovedPrimaryPhoto(true)} className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"><Trash2 size={13} /> Remove existing photo</button>
+								{product.primary_photo_path &&
+									!primaryPhoto &&
+									!removedPrimaryPhoto && (
+										<button
+											type="button"
+											onClick={() => setRemovedPrimaryPhoto(true)}
+											className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"
+										>
+											<Trash2 size={13} /> Remove existing photo
+										</button>
 									)}
-									{removedPrimaryPhoto && !primaryPhoto && (
-										<button type="button" onClick={() => setRemovedPrimaryPhoto(false)} className="mt-2 text-xs font-semibold text-[#85161B] hover:underline">Undo removal</button>
-									)}
+								{removedPrimaryPhoto && !primaryPhoto && (
+									<button
+										type="button"
+										onClick={() => setRemovedPrimaryPhoto(false)}
+										className="mt-2 text-xs font-semibold text-[#85161B] hover:underline"
+									>
+										Undo removal
+									</button>
+								)}
 
 								{primaryPhoto && (
 									<button
@@ -2424,15 +2752,37 @@ export default function AdminProductDetailsPage() {
 												alt="Product"
 												className="h-full w-full object-cover"
 											/>
-												<button type="button" onClick={() => markOtherPhotoForRemoval(photo)} aria-label="Remove existing photo" className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-700/90 text-white hover:bg-red-800"><X size={12} /></button>
+											<button
+												type="button"
+												onClick={() => markOtherPhotoForRemoval(photo)}
+												aria-label="Remove existing photo"
+												className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-700/90 text-white hover:bg-red-800"
+											>
+												<X size={12} />
+											</button>
 										</div>
 									))}
 
 									{removedOtherPhotoPaths.map((photo) => (
-										<div key={`removed-${photo}`} className="relative aspect-square overflow-hidden rounded-xl border border-red-200 bg-red-50">
-											<img src={imageUrl(photo)} alt="Marked for removal" className="h-full w-full object-cover opacity-35" />
-											<div className="absolute inset-0 flex items-center justify-center bg-red-900/20 p-1 text-center text-[9px] font-semibold text-white">Marked for removal</div>
-											<button type="button" onClick={() => undoOtherPhotoRemoval(photo)} className="absolute bottom-1 left-1 right-1 rounded bg-white px-1.5 py-1 text-[8px] font-semibold text-[#85161B] shadow-sm">Undo</button>
+										<div
+											key={`removed-${photo}`}
+											className="relative aspect-square overflow-hidden rounded-xl border border-red-200 bg-red-50"
+										>
+											<img
+												src={imageUrl(photo)}
+												alt="Marked for removal"
+												className="h-full w-full object-cover opacity-35"
+											/>
+											<div className="absolute inset-0 flex items-center justify-center bg-red-900/20 p-1 text-center text-[9px] font-semibold text-white">
+												Marked for removal
+											</div>
+											<button
+												type="button"
+												onClick={() => undoOtherPhotoRemoval(photo)}
+												className="absolute bottom-1 left-1 right-1 rounded bg-white px-1.5 py-1 text-[8px] font-semibold text-[#85161B] shadow-sm"
+											>
+												Undo
+											</button>
 										</div>
 									))}
 
@@ -2625,9 +2975,13 @@ export default function AdminProductDetailsPage() {
 																	type="text"
 																	value={option.name}
 																	onChange={(event) =>
-																		updateVariantOption(variantIndex, optionIndex, {
-																			name: event.target.value,
-																		})
+																		updateVariantOption(
+																			variantIndex,
+																			optionIndex,
+																			{
+																				name: event.target.value,
+																			},
+																		)
 																	}
 																	placeholder="e.g. red"
 																	className="h-10 w-full rounded-lg border border-[#E8DED7] px-3 text-sm outline-none focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
@@ -2644,9 +2998,13 @@ export default function AdminProductDetailsPage() {
 																	step="0.01"
 																	value={option.price}
 																	onChange={(event) =>
-																		updateVariantOption(variantIndex, optionIndex, {
-																			price: event.target.value,
-																		})
+																		updateVariantOption(
+																			variantIndex,
+																			optionIndex,
+																			{
+																				price: event.target.value,
+																			},
+																		)
 																	}
 																	className="h-10 w-full rounded-lg border border-[#E8DED7] px-3 text-sm outline-none focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
 																/>
@@ -2654,46 +3012,97 @@ export default function AdminProductDetailsPage() {
 														</div>
 
 														<div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
-											<div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-[#E8DED7] bg-[#F7F2EE]">
-												{option.image ? (
-													<img
-														src={URL.createObjectURL(option.image)}
-														alt={option.name || "New variant"}
-														className="h-full w-full object-cover"
-													/>
-												) : option.existingImage ? (
-												<div className="relative h-full w-full">
-													<img src={imageUrl(option.existingImage)} alt={option.name || "Variant"} className="h-full w-full object-cover" />
-													<button type="button" onClick={() => markVariantImageForRemoval(variant.name.trim(), option.name.trim(), option.existingImage!)} aria-label="Remove existing variant image" className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-700/90 text-white hover:bg-red-800"><X size={10} /></button>
-													</div>
-												) : (
-													<div className="flex h-full w-full items-center justify-center">
-														<ImageIcon size={18} className="text-[#2E2E2E]/20" />
-													</div>
-												)}
-											</div>
+															<div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-[#E8DED7] bg-[#F7F2EE]">
+																{option.image ? (
+																	<img
+																		src={URL.createObjectURL(option.image)}
+																		alt={option.name || "New variant"}
+																		className="h-full w-full object-cover"
+																	/>
+																) : option.existingImage ? (
+																	<div className="relative h-full w-full">
+																		<img
+																			src={imageUrl(option.existingImage)}
+																			alt={option.name || "Variant"}
+																			className="h-full w-full object-cover"
+																		/>
+																		<button
+																			type="button"
+																			onClick={() =>
+																				markVariantImageForRemoval(
+																					variant.name.trim(),
+																					option.name.trim(),
+																					option.existingImage!,
+																				)
+																			}
+																			aria-label="Remove existing variant image"
+																			className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-700/90 text-white hover:bg-red-800"
+																		>
+																			<X size={10} />
+																		</button>
+																	</div>
+																) : (
+																	<div className="flex h-full w-full items-center justify-center">
+																		<ImageIcon
+																			size={18}
+																			className="text-[#2E2E2E]/20"
+																		/>
+																	</div>
+																)}
+															</div>
 
 															<div className="min-w-0 flex-1">
 																<label className="block text-xs font-medium text-[#2E2E2E]/65">
-																	{option.existingImage ? "Replace option image" : "Add option image"}
+																	{option.existingImage
+																		? "Replace option image"
+																		: "Add option image"}
 																	<input
 																		type="file"
 																		accept="image/*"
 																		onChange={(event) =>
-																			updateVariantOption(variantIndex, optionIndex, {
-																				image: event.target.files?.[0] ?? null,
-																			})
+																			updateVariantOption(
+																				variantIndex,
+																				optionIndex,
+																				{
+																					image:
+																						event.target.files?.[0] ?? null,
+																				},
+																			)
 																		}
 																		className="mt-1.5 block w-full text-xs"
 																	/>
 																</label>
-												{option.existingImage && removedVariantImages.some((item) => item.variant === variant.name.trim() && item.option === option.name.trim() && item.path === option.existingImage) && (
-													<div className="mt-1.5 flex items-center gap-2"><span className="text-[10px] font-semibold text-red-700">Marked for removal</span><button type="button" onClick={() => undoVariantImageRemoval(variant.name.trim(), option.name.trim(), option.existingImage!)} className="text-[10px] font-semibold text-[#85161B] hover:underline">Undo</button></div>
-												)}
+																{option.existingImage &&
+																	removedVariantImages.some(
+																		(item) =>
+																			item.variant === variant.name.trim() &&
+																			item.option === option.name.trim() &&
+																			item.path === option.existingImage,
+																	) && (
+																		<div className="mt-1.5 flex items-center gap-2">
+																			<span className="text-[10px] font-semibold text-red-700">
+																				Marked for removal
+																			</span>
+																			<button
+																				type="button"
+																				onClick={() =>
+																					undoVariantImageRemoval(
+																						variant.name.trim(),
+																						option.name.trim(),
+																						option.existingImage!,
+																					)
+																				}
+																				className="text-[10px] font-semibold text-[#85161B] hover:underline"
+																			>
+																				Undo
+																			</button>
+																		</div>
+																	)}
 
 																{option.image && (
 																	<p className="mt-1 text-[10px] font-medium text-[#85161B]">
-																		New image selected — it will replace the current image.
+																		New image selected — it will replace the
+																		current image.
 																	</p>
 																)}
 															</div>
@@ -2701,7 +3110,12 @@ export default function AdminProductDetailsPage() {
 															{variant.options.length > 1 && (
 																<button
 																	type="button"
-																	onClick={() => removeVariantOption(variantIndex, optionIndex)}
+																	onClick={() =>
+																		removeVariantOption(
+																			variantIndex,
+																			optionIndex,
+																		)
+																	}
 																	className="inline-flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg border border-red-200 px-2.5 text-xs font-semibold text-red-600 hover:bg-red-50"
 																>
 																	<X size={13} />
@@ -2727,7 +3141,8 @@ export default function AdminProductDetailsPage() {
 							)}
 
 							<p className="mt-4 rounded-lg bg-[#85161B]/5 px-3 py-2.5 text-[10px] leading-4 text-[#85161B]">
-								If you use an image for one option of a variant, every option in that variant must have an image.
+								If you use an image for one option of a variant, every option in
+								that variant must have an image.
 							</p>
 						</div>
 

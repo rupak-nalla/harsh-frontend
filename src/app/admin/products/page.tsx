@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import Link from "next/link";
 
@@ -17,11 +17,6 @@ import {
 	ShoppingBag,
 	Store,
 	LogOut,
-	Trash2,
-	Check,
-	X,
-	Square,
-	CheckSquare,
 } from "lucide-react";
 
 import { useRouter } from "next/navigation";
@@ -197,17 +192,7 @@ function getDiscountPercentage(
    PRODUCT CARD
 ============================================================================ */
 
-function ProductCard({
-	product,
-	selected,
-	selectMode,
-	onToggleSelect,
-}: {
-	product: Product;
-	selected: boolean;
-	selectMode: boolean;
-	onToggleSelect: (productId: number) => void;
-}) {
+function ProductCard({ product }: { product: Product }) {
 	const discount = getDiscountPercentage(
 		product.marketPrice,
 		product.sellingPrice,
@@ -227,48 +212,9 @@ function ProductCard({
 				duration-200
 				hover:-translate-y-1
 				hover:shadow-[0_10px_30px_rgba(80,40,20,0.09)]
-				${selected ? "border-[#85161B] ring-2 ring-[#85161B]/15" : "border-[#E8DED7]"}
+				border-[#E8DED7]
 			`}
 		>
-			{/* ================================================================
-			    SELECTION CHECKBOX
-			================================================================ */}
-
-			{selectMode && (
-				<button
-					type="button"
-					onClick={() => onToggleSelect(product.id)}
-					aria-label={
-						selected ? `Deselect ${product.name}` : `Select ${product.name}`
-					}
-					className="
-						absolute
-						left-3
-						top-3
-						z-20
-						flex
-						h-9
-						w-9
-						items-center
-						justify-center
-						rounded-xl
-						border
-						border-white
-						bg-white
-						text-[#85161B]
-						shadow-md
-						transition
-						hover:scale-105
-					"
-				>
-					{selected ? (
-						<CheckSquare size={21} strokeWidth={2.2} />
-					) : (
-						<Square size={21} strokeWidth={2} />
-					)}
-				</button>
-			)}
-
 			{/* ================================================================
 			    IMAGE
 			================================================================ */}
@@ -325,7 +271,7 @@ function ProductCard({
 									? "bg-green-50/95 text-green-700"
 									: "bg-red-50/95 text-red-700"
 							}
-							${selectMode ? "ml-10" : ""}
+							
 						`}
 					>
 						{product.inStock ? "In stock" : "Out of stock"}
@@ -478,47 +424,9 @@ function ProductCard({
 				    VIEW PRODUCT
 				============================================================ */}
 
-				{selectMode ? (
-					<button
-						type="button"
-						onClick={() => onToggleSelect(product.id)}
-						className={`
-							mt-4
-							flex
-							w-full
-							items-center
-							justify-center
-							gap-2
-							rounded-xl
-							border
-							px-4
-							py-2.5
-							text-sm
-							font-semibold
-							transition
-							${
-								selected
-									? "border-[#85161B] bg-[#85161B] text-white"
-									: "border-[#85161B]/20 text-[#85161B] hover:bg-[#85161B] hover:text-white"
-							}
-						`}
-					>
-						{selected ? (
-							<>
-								<Check size={16} />
-								Selected
-							</>
-						) : (
-							<>
-								<Square size={16} />
-								Select Product
-							</>
-						)}
-					</button>
-				) : (
-					<Link
-						href={`/admin/products/${product.id}`}
-						className="
+				<Link
+					href={`/admin/products/${product.id}`}
+					className="
 							mt-4
 							flex
 							w-full
@@ -537,11 +445,10 @@ function ProductCard({
 							hover:bg-[#85161B]
 							hover:text-white
 						"
-					>
-						View Product
-						<ExternalLink size={15} />
-					</Link>
-				)}
+				>
+					View Product
+					<ExternalLink size={15} />
+				</Link>
 			</div>
 		</div>
 	);
@@ -559,16 +466,6 @@ export default function AdminProductsPage() {
 	const [loading, setLoading] = useState(true);
 
 	const [error, setError] = useState("");
-
-	/* --------------------------------------------------------------------------
-	   SELECT MODE
-	-------------------------------------------------------------------------- */
-
-	const [selectMode, setSelectMode] = useState(false);
-
-	const [selectedIds, setSelectedIds] = useState<number[]>([]);
-
-	const [deleting, setDeleting] = useState(false);
 
 	/* ==========================================================================
 	   FETCH PRODUCTS
@@ -636,16 +533,6 @@ export default function AdminProductsPage() {
 			console.log("NORMALIZED PRODUCTS:", normalizedProducts);
 
 			setProducts(normalizedProducts);
-
-			/*
-			 * Remove any selected IDs that
-			 * no longer exist.
-			 */
-			setSelectedIds((previous) =>
-				previous.filter((id) =>
-					normalizedProducts.some((product) => product.id === id),
-				),
-			);
 		} catch (err) {
 			console.error("Fetch admin products failed:", err);
 
@@ -709,225 +596,6 @@ export default function AdminProductsPage() {
 	useEffect(() => {
 		fetchProducts();
 	}, []);
-
-	/* ==========================================================================
-	   SELECTION
-	========================================================================== */
-
-	const toggleProductSelection = (productId: number) => {
-		if (deleting) return;
-
-		setSelectedIds((previous) =>
-			previous.includes(productId)
-				? previous.filter((id) => id !== productId)
-				: [...previous, productId],
-		);
-	};
-
-	/* --------------------------------------------------------------------------
-	   SELECT ALL
-	-------------------------------------------------------------------------- */
-
-	const allSelected = useMemo(() => {
-		return products.length > 0 && selectedIds.length === products.length;
-	}, [products.length, selectedIds.length]);
-
-	const toggleSelectAll = () => {
-		if (deleting) return;
-
-		if (allSelected) {
-			setSelectedIds([]);
-		} else {
-			setSelectedIds(products.map((product) => product.id));
-		}
-	};
-
-	/* --------------------------------------------------------------------------
-	   EXIT SELECT MODE
-	-------------------------------------------------------------------------- */
-
-	const exitSelectMode = () => {
-		if (deleting) return;
-
-		setSelectMode(false);
-		setSelectedIds([]);
-	};
-
-	/* ==========================================================================
-	   DELETE SELECTED PRODUCTS
-	========================================================================== */
-
-	const handleDeleteSelected = async () => {
-		if (deleting || selectedIds.length === 0) {
-			return;
-		}
-
-		const idsToDelete = [...selectedIds];
-
-		const confirmed = window.confirm(
-			`Are you sure you want to delete ${idsToDelete.length} selected product${
-				idsToDelete.length === 1 ? "" : "s"
-			}?\n\nThis action cannot be undone.`,
-		);
-
-		if (!confirmed) {
-			return;
-		}
-
-		setDeleting(true);
-		setError("");
-
-		try {
-			/*
-			 * One request from frontend to our proxy.
-			 *
-			 * The proxy will then forward each
-			 * product deletion one by one.
-			 */
-
-			const response = await fetch("/api/admin/products", {
-				method: "POST",
-				credentials: "include",
-				headers: {
-					"Content-Type": "application/json",
-					Accept: "application/json",
-				},
-				cache: "no-store",
-				body: JSON.stringify({
-					mode: "delete",
-					product_ids: idsToDelete,
-					command_type: "admin",
-				}),
-			});
-
-			const data = await response.json().catch(() => null);
-
-			console.log("DELETE PRODUCTS RESPONSE:", data);
-
-			/*
-			 * Our proxy returns 200 when everything
-			 * succeeded.
-			 *
-			 * 207 means some succeeded and
-			 * some failed.
-			 */
-
-			if (!response.ok && response.status !== 207) {
-				throw new Error(
-					data &&
-						typeof data === "object" &&
-						"message" in data &&
-						typeof (
-							data as {
-								message?: unknown;
-							}
-						).message === "string"
-						? (
-								data as {
-									message: string;
-								}
-							).message
-						: "Unable to delete products.",
-				);
-			}
-
-			const deletedIds =
-				data &&
-				typeof data === "object" &&
-				"deleted_ids" in data &&
-				Array.isArray(
-					(
-						data as {
-							deleted_ids?: unknown;
-						}
-					).deleted_ids,
-				)
-					? (
-							data as {
-								deleted_ids: number[];
-							}
-						).deleted_ids
-					: [];
-
-			const failed =
-				data &&
-				typeof data === "object" &&
-				"failed" in data &&
-				Array.isArray(
-					(
-						data as {
-							failed?: unknown;
-						}
-					).failed,
-				)
-					? (
-							data as {
-								failed: {
-									product_id: number;
-									message: string;
-								}[];
-							}
-						).failed
-					: [];
-
-			/*
-			 * Remove successfully deleted products
-			 * immediately from the UI.
-			 */
-			if (deletedIds.length > 0) {
-				setProducts((previous) =>
-					previous.filter((product) => !deletedIds.includes(product.id)),
-				);
-			}
-
-			/*
-			 * Keep failed products selected so
-			 * the admin can try again.
-			 */
-			setSelectedIds(failed.map((item) => item.product_id));
-
-			if (failed.length === 0) {
-				setSelectMode(false);
-				setSelectedIds([]);
-
-				/*
-				 * Refresh once so the UI is
-				 * guaranteed to match backend.
-				 */
-				await fetchProducts();
-
-				alert(
-					`${deletedIds.length} product${
-						deletedIds.length === 1 ? "" : "s"
-					} deleted successfully.`,
-				);
-			} else {
-				const failedMessage = failed
-					.map((item) => `Product #${item.product_id}: ${item.message}`)
-					.join("\n");
-
-				await fetchProducts();
-
-				alert(
-					`Deleted ${deletedIds.length} product${
-						deletedIds.length === 1 ? "" : "s"
-					}.\n\nFailed:\n${failedMessage}`,
-				);
-			}
-		} catch (error) {
-			console.error("Delete products failed:", error);
-
-			setError(
-				error instanceof Error ? error.message : "Unable to delete products.",
-			);
-
-			alert(
-				error instanceof Error ? error.message : "Unable to delete products.",
-			);
-		} finally {
-			setDeleting(false);
-		}
-	};
 
 	/* ==========================================================================
 	   PAGE
@@ -1173,11 +841,11 @@ export default function AdminProductsPage() {
 						<button
 							type="button"
 							onClick={() => {
-								if (!loading && !deleting) {
+								if (!loading) {
 									fetchProducts();
 								}
 							}}
-							disabled={loading || deleting}
+							disabled={loading}
 							className="
 								inline-flex
 								items-center
@@ -1202,160 +870,6 @@ export default function AdminProductsPage() {
 							<RefreshCw size={16} className={loading ? "animate-spin" : ""} />
 							Refresh
 						</button>
-
-						{/* SELECT */}
-
-						{products.length > 0 && !selectMode && (
-							<button
-								type="button"
-								onClick={() => {
-									setSelectMode(true);
-									setSelectedIds([]);
-								}}
-								className="
-										inline-flex
-										items-center
-										justify-center
-										gap-2
-										rounded-xl
-										border
-										border-[#85161B]/20
-										bg-white
-										px-4
-										py-3
-										text-sm
-										font-semibold
-										text-[#85161B]
-										transition
-										hover:border-[#85161B]
-										hover:bg-[#85161B]
-										hover:text-white
-									"
-							>
-								<Square size={16} />
-								Select
-							</button>
-						)}
-
-						{/* SELECT MODE ACTIONS */}
-
-						{selectMode && (
-							<>
-								{/* SELECT ALL */}
-
-								<button
-									type="button"
-									onClick={toggleSelectAll}
-									disabled={deleting || products.length === 0}
-									className="
-										inline-flex
-										items-center
-										justify-center
-										gap-2
-										rounded-xl
-										border
-										border-[#E8DED7]
-										bg-white
-										px-4
-										py-3
-										text-sm
-										font-semibold
-										text-[#2E2E2E]
-										transition
-										hover:border-[#85161B]/30
-										hover:text-[#85161B]
-										disabled:opacity-50
-									"
-								>
-									{allSelected ? (
-										<CheckSquare size={16} />
-									) : (
-										<Square size={16} />
-									)}
-
-									{allSelected ? "Deselect All" : "Select All"}
-								</button>
-
-								{/* DELETE */}
-
-								{selectedIds.length > 0 && (
-									<button
-										type="button"
-										onClick={handleDeleteSelected}
-										disabled={deleting}
-										className="
-											inline-flex
-											items-center
-											justify-center
-											gap-2
-											rounded-xl
-											bg-[#85161B]
-											px-4
-											py-3
-											text-sm
-											font-semibold
-											text-white
-											transition
-											hover:bg-[#721318]
-											hover:shadow-lg
-											disabled:cursor-not-allowed
-											disabled:opacity-50
-										"
-									>
-										{deleting ? (
-											<span
-												className="
-													h-4
-													w-4
-													animate-spin
-													rounded-full
-													border-2
-													border-white/30
-													border-t-white
-												"
-											/>
-										) : (
-											<Trash2 size={16} />
-										)}
-
-										{deleting
-											? "Deleting..."
-											: `Delete Selected (${selectedIds.length})`}
-									</button>
-								)}
-
-								{/* CANCEL */}
-
-								<button
-									type="button"
-									onClick={exitSelectMode}
-									disabled={deleting}
-									className="
-										inline-flex
-										items-center
-										justify-center
-										gap-2
-										rounded-xl
-										border
-										border-[#E8DED7]
-										bg-white
-										px-3.5
-										py-3
-										text-sm
-										font-semibold
-										text-[#2E2E2E]
-										transition
-										hover:border-red-200
-										hover:text-red-600
-										disabled:opacity-50
-									"
-								>
-									<X size={16} />
-
-									<span className="hidden sm:inline">Cancel</span>
-								</button>
-							</>
-						)}
 
 						{/* ADD PRODUCT */}
 
@@ -1384,72 +898,6 @@ export default function AdminProductsPage() {
 						</Link>
 					</div>
 				</div>
-
-				{/* ==============================================================
-				    SELECTION INFO
-				============================================================== */}
-
-				{selectMode && (
-					<div
-						className="
-							mb-6
-							flex
-							flex-col
-							gap-3
-							rounded-2xl
-							border
-							border-[#85161B]/15
-							bg-[#85161B]/5
-							px-5
-							py-4
-							sm:flex-row
-							sm:items-center
-							sm:justify-between
-						"
-					>
-						<div className="flex items-center gap-3">
-							<div
-								className="
-		flex
-		h-10
-		w-10
-		shrink-0
-		items-center
-		justify-center
-		rounded-xl
-		bg-[#85161B]
-		text-white
-	"
-							>
-								{selectedIds.length > 0 ? (
-									<CheckSquare size={19} />
-								) : (
-									<Square size={19} />
-								)}
-							</div>
-
-							<div>
-								<p className="text-sm font-semibold text-[#2E2E2E]">
-									{selectedIds.length > 0
-										? `${selectedIds.length} product${
-												selectedIds.length === 1 ? "" : "s"
-											} selected`
-										: "Select products to delete"}
-								</p>
-
-								<p className="text-xs text-[#2E2E2E]/50">
-									Choose the products you want to remove from your store.
-								</p>
-							</div>
-						</div>
-
-						{selectedIds.length > 0 && (
-							<span className="text-xs font-semibold text-[#85161B]">
-								{selectedIds.length} of {products.length} selected
-							</span>
-						)}
-					</div>
-				)}
 
 				{/* ==============================================================
 				    SUMMARY
@@ -1666,13 +1114,7 @@ export default function AdminProductsPage() {
 							"
 					>
 						{products.map((product) => (
-							<ProductCard
-								key={product.id}
-								product={product}
-								selected={selectedIds.includes(product.id)}
-								selectMode={selectMode}
-								onToggleSelect={toggleProductSelection}
-							/>
+							<ProductCard key={product.id} product={product} />
 						))}
 					</div>
 				)}
