@@ -2,102 +2,145 @@ import { NextRequest, NextResponse } from "next/server";
 
 const API_URL = "https://printinghouseujjain.in";
 
-/*
- * ADMIN — LIST ALL PRODUCTS
- *
- * Backend expects:
- *
- * POST /api/products
- * command_type=<value>
- *
- * NOTE:
- *
- * The spec only said "command_type" for this endpoint without
- * confirming what value it expects. Defaulting to "admin" to
- * match the other admin endpoints (users, occasions) — override
- * with ?command_type=whatever if the backend actually wants
- * something else, e.g. "all" or "admin_list".
- *
- * This reuses the same backend route (/api/products) as the
- * customer-facing single-product proxy, just with a different
- * command_type instead of a product_id, so it returns the full
- * admin listing rather than one product.
- */
+/* ============================================================================
+   HELPERS
+============================================================================ */
+
+async function parseResponse(response: Response): Promise<unknown> {
+	const text = await response.text();
+
+	if (!text) {
+		return {};
+	}
+
+	try {
+		return JSON.parse(text);
+	} catch {
+		return {
+			message: text,
+		};
+	}
+}
+
+function getLogicalStatus(data: unknown, fallbackStatus: number): number {
+	if (
+		data &&
+		typeof data === "object" &&
+		"status" in data &&
+		typeof (data as { status?: unknown }).status === "number"
+	) {
+		const status = (data as { status: number }).status;
+
+		if (status >= 100 && status <= 599) {
+			return status;
+		}
+	}
+
+	if (
+		data &&
+		typeof data === "object" &&
+		"success" in data &&
+		(data as { success?: unknown }).success === false
+	) {
+		return fallbackStatus >= 400 ? fallbackStatus : 400;
+	}
+
+	return fallbackStatus;
+}
+
+function getMessage(data: unknown): string {
+	if (
+		data &&
+		typeof data === "object" &&
+		"message" in data &&
+		typeof (data as { message?: unknown }).message === "string"
+	) {
+		return (data as { message: string }).message;
+	}
+
+	return "Request failed.";
+}
+
+/* ============================================================================
+   GET
+============================================================================ */
 
 export async function GET(request: NextRequest) {
 	try {
+		const productId = request.nextUrl.searchParams.get("product_id");
+
+		/*
+		 * If product_id is provided:
+		 * Send it to the backend as FormData.
+		 */
+		if (productId) {
+			const formData = new FormData();
+
+			formData.append("product_id", productId);
+
+			const headers: HeadersInit = {
+				Accept: "application/json",
+			};
+
+			/*
+			 * Forward the browser cookie to the backend.
+			 * This is useful if the backend uses authentication cookies.
+			 */
+			const cookie = request.headers.get("cookie");
+
+			if (cookie) {
+				headers.Cookie = cookie;
+			}
+
+			const response = await fetch(`${API_URL}/api/products`, {
+				method: "POST",
+				body: formData,
+				cache: "no-store",
+				headers,
+			});
+
+			const data = await parseResponse(response);
+
+			const status = getLogicalStatus(data, response.status);
+
+			return NextResponse.json(data, {
+				status,
+			});
+		}
+
+		/*
+		 * No product_id → fetch all products.
+		 */
+		const headers: HeadersInit = {
+			Accept: "application/json",
+		};
+
 		const cookie = request.headers.get("cookie");
 
-		const commandType =
-			request.nextUrl.searchParams.get("command_type") || "admin";
-
-		/* =========================================================
-           BUILD BACKEND REQUEST
-        ========================================================= */
-
-		const backendFormData = new FormData();
-
-		backendFormData.append("command_type", commandType);
-
-		console.log("=================================");
-		console.log("ADMIN PRODUCTS PROXY");
-		console.log("Command Type:", commandType);
-		console.log("Has Cookie:", Boolean(cookie));
-		console.log("=================================");
+		if (cookie) {
+			headers.Cookie = cookie;
+		}
 
 		const response = await fetch(`${API_URL}/api/products`, {
-			method: "POST",
-			headers: {
-				Accept: "application/json",
-				...(cookie ? { Cookie: cookie } : {}),
-			},
-			body: backendFormData,
+			method: "GET",
 			cache: "no-store",
+			headers,
 		});
 
-		/* =========================================================
-           READ BACKEND RESPONSE
-        ========================================================= */
+		const data = await parseResponse(response);
 
-		const text = await response.text();
+		const status = getLogicalStatus(data, response.status);
 
-		let data: unknown;
-
-		try {
-			data = text ? JSON.parse(text) : {};
-		} catch {
-			console.error("INVALID ADMIN PRODUCTS RESPONSE:", text);
-
-			data = {
-				message: text || "Invalid response from products server.",
-			};
-		}
-
-		console.log("Backend Admin Products Status:", response.status);
-		console.log("Backend Admin Products Response:", data);
-
-		/* =========================================================
-           RETURN RESPONSE TO FRONTEND
-        ========================================================= */
-
-		const nextResponse = NextResponse.json(data, {
-			status: response.status,
+		return NextResponse.json(data, {
+			status,
 		});
-
-		const setCookie = response.headers.get("set-cookie");
-
-		if (setCookie) {
-			nextResponse.headers.set("set-cookie", setCookie);
-		}
-
-		return nextResponse;
 	} catch (error) {
-		console.error("Admin products proxy error:", error);
+		console.error("Products GET proxy error:", error);
 
 		return NextResponse.json(
 			{
 				status: 500,
-				message: "Unable to connect to products server.",
+				message: "Failed to fetch products.",
 			},
 			{
 				status: 500,
@@ -106,138 +149,271 @@ export async function GET(request: NextRequest) {
 	}
 }
 
-/*
- * ADMIN — CREATE/EDIT PRODUCTS
- *
- * Backend expects:
- *
- * POST /api/products
- * command_type=admin
- * mode=new|edit
- * name=...
- * description=...
- * primary_photo=... (file)
- * other_photos[]=... (files)
- * market_price=...
- * selling_price=...
- * reseller_price=...
- * category_ids[]=...
- * occasion_ids[]=...
- * customize_reqs[]=...
- * keywords=...
- * delivery=...
- * id=... (for edit mode)
- */
+/* ============================================================================
+   POST
+============================================================================ */
 
 export async function POST(request: NextRequest) {
 	try {
+		const body = await request.json();
+
+		/*
+		 * Expected request from admin UI:
+		 *
+		 * {
+		 *   mode: "delete",
+		 *   product_ids: [1, 2, 3],
+		 *   command_type: "admin"
+		 * }
+		 */
+
+		if (!body || typeof body !== "object") {
+			return NextResponse.json(
+				{
+					status: 400,
+					message: "Invalid request body.",
+				},
+				{
+					status: 400,
+				},
+			);
+		}
+
+		const mode = body.mode;
+
+		const commandType = body.command_type;
+
+		const productIds = body.product_ids;
+
+		/* ----------------------------------------------------------------------
+		   VALIDATE MODE
+		---------------------------------------------------------------------- */
+
+		if (mode !== "delete") {
+			return NextResponse.json(
+				{
+					status: 400,
+					message: 'Invalid mode. Expected "delete".',
+				},
+				{
+					status: 400,
+				},
+			);
+		}
+
+		/* ----------------------------------------------------------------------
+		   VALIDATE COMMAND TYPE
+		---------------------------------------------------------------------- */
+
+		if (commandType !== "admin") {
+			return NextResponse.json(
+				{
+					status: 400,
+					message: 'Invalid command_type. Expected "admin".',
+				},
+				{
+					status: 400,
+				},
+			);
+		}
+
+		/* ----------------------------------------------------------------------
+		   VALIDATE PRODUCT IDS
+		---------------------------------------------------------------------- */
+
+		if (!Array.isArray(productIds) || productIds.length === 0) {
+			return NextResponse.json(
+				{
+					status: 400,
+					message: "At least one product ID is required.",
+				},
+				{
+					status: 400,
+				},
+			);
+		}
+
+		/*
+		 * Normalize IDs.
+		 *
+		 * This also removes duplicates.
+		 */
+		const normalizedProductIds = [
+			...new Set(
+				productIds
+					.map((id: unknown) => {
+						const numericId = Number(id);
+
+						return Number.isInteger(numericId) && numericId > 0
+							? numericId
+							: null;
+					})
+					.filter((id): id is number => id !== null),
+			),
+		];
+
+		if (normalizedProductIds.length === 0) {
+			return NextResponse.json(
+				{
+					status: 400,
+					message: "No valid product IDs were provided.",
+				},
+				{
+					status: 400,
+				},
+			);
+		}
+
+		/* ----------------------------------------------------------------------
+		   FORWARD AUTH COOKIE
+		---------------------------------------------------------------------- */
+
 		const cookie = request.headers.get("cookie");
-		const contentType = request.headers.get("content-type");
 
-		/* =========================================================
-           READ INCOMING REQUEST
-        ========================================================= */
+		/* ----------------------------------------------------------------------
+		   DELETE ONE BY ONE
+		---------------------------------------------------------------------- */
 
-		let backendFormData: FormData;
+		const deletedIds: number[] = [];
+		const failed: {
+			product_id: number;
+			status: number;
+			message: string;
+			response: unknown;
+		}[] = [];
 
-		if (contentType?.includes("multipart/form-data")) {
-			backendFormData = await request.formData();
-			backendFormData.set("command_type", "admin");
-		} else if (contentType?.includes("application/x-www-form-urlencoded")) {
-			const text = await request.text();
-			backendFormData = new FormData();
+		/*
+		 * IMPORTANT:
+		 *
+		 * Do NOT use Promise.all here.
+		 *
+		 * The backend should receive:
+		 *
+		 * Request 1 → product 1
+		 * Request 2 → product 2
+		 * Request 3 → product 3
+		 *
+		 * one after another.
+		 */
 
-			const params = new URLSearchParams(text);
-			for (const [key, value] of params) {
-				backendFormData.append(key, value);
-			}
+		for (const productId of normalizedProductIds) {
+			try {
+				const formData = new FormData();
 
-			backendFormData.set("command_type", "admin");
-		} else {
-			const body = await request.json();
+				formData.append("mode", "delete");
 
-			backendFormData = new FormData();
+				formData.append("product_id", String(productId));
 
-			for (const [key, value] of Object.entries(body)) {
-				if (value instanceof File) {
-					backendFormData.append(key, value);
-				} else if (Array.isArray(value)) {
-					for (const item of value) {
-						backendFormData.append(`${key}[]`, item);
-					}
-				} else if (value !== null && value !== undefined) {
-					backendFormData.append(key, String(value));
+				formData.append("command_type", "admin");
+
+				const headers: HeadersInit = {
+					Accept: "application/json",
+				};
+
+				if (cookie) {
+					headers.Cookie = cookie;
 				}
+
+				console.log(`Deleting product ${productId}...`);
+
+				const response = await fetch(`${API_URL}/api/products`, {
+					method: "POST",
+					body: formData,
+					headers,
+					cache: "no-store",
+				});
+
+				const data = await parseResponse(response);
+
+				const status = getLogicalStatus(data, response.status);
+
+				const succeeded = status >= 200 && status < 300;
+
+				if (succeeded) {
+					deletedIds.push(productId);
+
+					console.log(`Product ${productId} deleted successfully.`);
+				} else {
+					failed.push({
+						product_id: productId,
+						status,
+						message: getMessage(data),
+						response: data,
+					});
+
+					console.error(`Failed to delete product ${productId}:`, data);
+				}
+			} catch (error) {
+				console.error(`Delete product ${productId} failed:`, error);
+
+				failed.push({
+					product_id: productId,
+					status: 500,
+					message: error instanceof Error ? error.message : "Unknown error.",
+					response: null,
+				});
 			}
-
-			backendFormData.set("command_type", "admin");
 		}
 
-		const mode = backendFormData.get("mode");
+		/* ----------------------------------------------------------------------
+		   FINAL RESPONSE
+		---------------------------------------------------------------------- */
 
-		console.log("=================================");
-		console.log("ADMIN PRODUCTS PROXY (POST)");
-		console.log("Mode:", mode);
-		console.log("Has Cookie:", Boolean(cookie));
-		console.log("=================================");
+		/*
+		 * Everything succeeded.
+		 */
+		if (failed.length === 0) {
+			return NextResponse.json(
+				{
+					status: 200,
+					message: "Products deleted successfully.",
+					deleted_ids: deletedIds,
+					failed: [],
+				},
+				{
+					status: 200,
+				},
+			);
+		}
 
-		/* =========================================================
-           FORWARD TO BACKEND
-        ========================================================= */
+		/*
+		 * Some products succeeded and some failed.
+		 */
+		if (deletedIds.length > 0) {
+			return NextResponse.json(
+				{
+					status: 207,
+					message: "Some products were deleted, but some deletions failed.",
+					deleted_ids: deletedIds,
+					failed,
+				},
+				{
+					status: 207,
+				},
+			);
+		}
 
-		const response = await fetch(`${API_URL}/api/products`, {
-			method: "POST",
-			headers: {
-				Accept: "application/json",
-				...(cookie ? { Cookie: cookie } : {}),
+		/*
+		 * Nothing was deleted.
+		 */
+		return NextResponse.json(
+			{
+				status: 400,
+				message: "Unable to delete the selected products.",
+				deleted_ids: [],
+				failed,
 			},
-			body: backendFormData,
-			cache: "no-store",
-		});
-
-		/* =========================================================
-           READ BACKEND RESPONSE
-        ========================================================= */
-
-		const text = await response.text();
-
-		let data: unknown;
-
-		try {
-			data = text ? JSON.parse(text) : {};
-		} catch {
-			console.error("INVALID ADMIN PRODUCTS RESPONSE:", text);
-
-			data = {
-				message: text || "Invalid response from products server.",
-			};
-		}
-
-		console.log("Backend Admin Products Status:", response.status);
-		console.log("Backend Admin Products Response:", data);
-
-		/* =========================================================
-           RETURN RESPONSE TO FRONTEND
-        ========================================================= */
-
-		const nextResponse = NextResponse.json(data, {
-			status: response.status,
-		});
-
-		const setCookie = response.headers.get("set-cookie");
-
-		if (setCookie) {
-			nextResponse.headers.set("set-cookie", setCookie);
-		}
-
-		return nextResponse;
+			{
+				status: 400,
+			},
+		);
 	} catch (error) {
-		console.error("Admin products proxy error:", error);
+		console.error("Products POST proxy error:", error);
 
 		return NextResponse.json(
 			{
 				status: 500,
-				message: "Unable to process products request.",
+				message: "Failed to process product request.",
 			},
 			{
 				status: 500,

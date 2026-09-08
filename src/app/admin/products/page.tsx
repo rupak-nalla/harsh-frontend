@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+
 import Link from "next/link";
+
 import {
 	Package,
 	Plus,
@@ -13,10 +15,13 @@ import {
 	Image as ImageIcon,
 	PenLine,
 	ShoppingBag,
-	
-	
 	Store,
 	LogOut,
+	Trash2,
+	Check,
+	X,
+	Square,
+	CheckSquare,
 } from "lucide-react";
 
 import { useRouter } from "next/navigation";
@@ -56,21 +61,16 @@ type Product = {
 	id: number;
 	name: string;
 	description: string;
-
 	primaryPhoto: string | null;
 	otherPhotos: string[];
-
 	marketPrice: number;
 	sellingPrice: number;
 	resellerPrice: number;
-
 	categoryIds: number[];
 	occasionIds: number[];
-
 	inStock: boolean;
 	sold: number;
 	delivery: number;
-
 	customizeRequirements: string[];
 };
 
@@ -88,10 +88,7 @@ function toNumber(value: unknown, fallback = 0): number {
    Parse JSON array safely
 -------------------------------------------------------------------------- */
 
-function parseJsonArray<T>(
-	value: unknown,
-	fallback: T[] = [],
-): T[] {
+function parseJsonArray<T>(value: unknown, fallback: T[] = []): T[] {
 	if (Array.isArray(value)) {
 		return value;
 	}
@@ -103,9 +100,7 @@ function parseJsonArray<T>(
 	try {
 		const parsed = JSON.parse(value);
 
-		return Array.isArray(parsed)
-			? parsed
-			: fallback;
+		return Array.isArray(parsed) ? parsed : fallback;
 	} catch {
 		return fallback;
 	}
@@ -115,9 +110,7 @@ function parseJsonArray<T>(
    Clean image path
 -------------------------------------------------------------------------- */
 
-function getImageUrl(
-	path: string | null | undefined,
-): string | null {
+function getImageUrl(path: string | null | undefined): string | null {
 	if (!path || typeof path !== "string") {
 		return null;
 	}
@@ -133,17 +126,9 @@ function getImageUrl(
 
 /* --------------------------------------------------------------------------
    Parse customization requirements
-
-   Example:
-
-   "frontname:text:10:Name To be Printed on Front Side"
-
-   becomes one requirement.
 -------------------------------------------------------------------------- */
 
-function parseCustomizeRequirements(
-	value: string,
-): string[] {
+function parseCustomizeRequirements(value: string): string[] {
 	return parseJsonArray<string>(value);
 }
 
@@ -151,77 +136,43 @@ function parseCustomizeRequirements(
    NORMALIZE PRODUCT
 ============================================================================ */
 
-function normalizeProduct(
-	raw: RawProduct,
-): Product {
-	const otherPhotos = parseJsonArray<string>(
-		raw.other_photos_paths,
-	);
+function normalizeProduct(raw: RawProduct): Product {
+	const otherPhotos = parseJsonArray<string>(raw.other_photos_paths);
 
-	const categoryIds = parseJsonArray<number>(
-		raw.category_ids,
-	);
+	const categoryIds = parseJsonArray<number>(raw.category_ids);
 
-	const occasionIds = parseJsonArray<number>(
-		raw.occasion_ids,
-	);
+	const occasionIds = parseJsonArray<number>(raw.occasion_ids);
 
-	const customizeRequirements =
-		parseCustomizeRequirements(
-			raw.customize_reqs,
-		);
+	const customizeRequirements = parseCustomizeRequirements(raw.customize_reqs);
 
 	return {
 		id: raw.id,
 
-		name:
-			raw.name ||
-			"Untitled Product",
+		name: raw.name || "Untitled Product",
 
-		description:
-			raw.description ||
-			"",
+		description: raw.description || "",
 
-		primaryPhoto:
-			getImageUrl(
-				raw.primary_photo_path,
-			),
+		primaryPhoto: getImageUrl(raw.primary_photo_path),
 
-		otherPhotos:
-			otherPhotos
-				.map((photo) =>
-					getImageUrl(photo),
-				)
-				.filter(
-					(
-						photo,
-					): photo is string =>
-						Boolean(photo),
-				),
+		otherPhotos: otherPhotos
+			.map((photo) => getImageUrl(photo))
+			.filter((photo): photo is string => Boolean(photo)),
 
-		marketPrice:
-			toNumber(raw.market_price),
+		marketPrice: toNumber(raw.market_price),
 
-		sellingPrice:
-			toNumber(raw.selling_price),
+		sellingPrice: toNumber(raw.selling_price),
 
-		resellerPrice:
-			toNumber(raw.reseller_price),
+		resellerPrice: toNumber(raw.reseller_price),
 
 		categoryIds,
 
 		occasionIds,
 
-		inStock:
-			raw.in_stock
-				?.toLowerCase()
-				.trim() === "available",
+		inStock: raw.in_stock?.toLowerCase().trim() === "available",
 
-		sold:
-			toNumber(raw.sold),
+		sold: toNumber(raw.sold),
 
-		delivery:
-			toNumber(raw.delivery),
+		delivery: toNumber(raw.delivery),
 
 		customizeRequirements,
 	};
@@ -235,18 +186,11 @@ function getDiscountPercentage(
 	marketPrice: number,
 	sellingPrice: number,
 ): number {
-	if (
-		marketPrice <= 0 ||
-		sellingPrice >= marketPrice
-	) {
+	if (marketPrice <= 0 || sellingPrice >= marketPrice) {
 		return 0;
 	}
 
-	return Math.round(
-		((marketPrice - sellingPrice) /
-			marketPrice) *
-			100,
-	);
+	return Math.round(((marketPrice - sellingPrice) / marketPrice) * 100);
 }
 
 /* ============================================================================
@@ -255,8 +199,14 @@ function getDiscountPercentage(
 
 function ProductCard({
 	product,
+	selected,
+	selectMode,
+	onToggleSelect,
 }: {
 	product: Product;
+	selected: boolean;
+	selectMode: boolean;
+	onToggleSelect: (productId: number) => void;
 }) {
 	const discount = getDiscountPercentage(
 		product.marketPrice,
@@ -265,20 +215,60 @@ function ProductCard({
 
 	return (
 		<div
-			className="
+			className={`
 				group
+				relative
 				overflow-hidden
 				rounded-2xl
 				border
-				border-[#E8DED7]
 				bg-white
 				shadow-[0_4px_20px_rgba(80,40,20,0.04)]
 				transition-all
 				duration-200
 				hover:-translate-y-1
 				hover:shadow-[0_10px_30px_rgba(80,40,20,0.09)]
-			"
+				${selected ? "border-[#85161B] ring-2 ring-[#85161B]/15" : "border-[#E8DED7]"}
+			`}
 		>
+			{/* ================================================================
+			    SELECTION CHECKBOX
+			================================================================ */}
+
+			{selectMode && (
+				<button
+					type="button"
+					onClick={() => onToggleSelect(product.id)}
+					aria-label={
+						selected ? `Deselect ${product.name}` : `Select ${product.name}`
+					}
+					className="
+						absolute
+						left-3
+						top-3
+						z-20
+						flex
+						h-9
+						w-9
+						items-center
+						justify-center
+						rounded-xl
+						border
+						border-white
+						bg-white
+						text-[#85161B]
+						shadow-md
+						transition
+						hover:scale-105
+					"
+				>
+					{selected ? (
+						<CheckSquare size={21} strokeWidth={2.2} />
+					) : (
+						<Square size={21} strokeWidth={2} />
+					)}
+				</button>
+			)}
+
 			{/* ================================================================
 			    IMAGE
 			================================================================ */}
@@ -297,8 +287,7 @@ function ProductCard({
 							group-hover:scale-105
 						"
 						onError={(event) => {
-							event.currentTarget.style.display =
-								"none";
+							event.currentTarget.style.display = "none";
 						}}
 					/>
 				) : (
@@ -312,14 +301,9 @@ function ProductCard({
 						"
 					>
 						<div className="flex flex-col items-center gap-2 text-[#2E2E2E]/30">
-							<Package
-								size={42}
-								strokeWidth={1.4}
-							/>
+							<Package size={42} strokeWidth={1.4} />
 
-							<span className="text-xs">
-								No image
-							</span>
+							<span className="text-xs">No image</span>
 						</div>
 					</div>
 				)}
@@ -341,11 +325,10 @@ function ProductCard({
 									? "bg-green-50/95 text-green-700"
 									: "bg-red-50/95 text-red-700"
 							}
+							${selectMode ? "ml-10" : ""}
 						`}
 					>
-						{product.inStock
-							? "In stock"
-							: "Out of stock"}
+						{product.inStock ? "In stock" : "Out of stock"}
 					</span>
 				</div>
 
@@ -385,10 +368,7 @@ function ProductCard({
 
 					{product.categoryIds.length > 0 && (
 						<span className="text-xs text-[#2E2E2E]/40">
-							Cat.{" "}
-							{product.categoryIds.join(
-								", ",
-							)}
+							Cat. {product.categoryIds.join(", ")}
 						</span>
 					)}
 				</div>
@@ -417,28 +397,20 @@ function ProductCard({
 						<div className="flex items-center text-lg font-bold text-[#85161B]">
 							<IndianRupee size={15} />
 
-							{product.sellingPrice.toLocaleString(
-								"en-IN",
-							)}
+							{product.sellingPrice.toLocaleString("en-IN")}
 						</div>
 
-						{product.marketPrice >
-							product.sellingPrice && (
+						{product.marketPrice > product.sellingPrice && (
 							<div className="flex items-center text-xs text-[#2E2E2E]/40 line-through">
 								<IndianRupee size={11} />
 
-								{product.marketPrice.toLocaleString(
-									"en-IN",
-								)}
+								{product.marketPrice.toLocaleString("en-IN")}
 							</div>
 						)}
 					</div>
 
 					<p className="mt-1 text-[11px] text-[#2E2E2E]/40">
-						Reseller: ₹
-						{product.resellerPrice.toLocaleString(
-							"en-IN",
-						)}
+						Reseller: ₹{product.resellerPrice.toLocaleString("en-IN")}
 					</p>
 				</div>
 
@@ -475,9 +447,7 @@ function ProductCard({
 						</div>
 
 						<p className="mt-1 text-xs font-semibold text-[#2E2E2E]">
-							{product.delivery > 0
-								? `₹${product.delivery}`
-								: "Free"}
+							{product.delivery > 0 ? `₹${product.delivery}` : "Free"}
 						</p>
 					</div>
 				</div>
@@ -487,41 +457,19 @@ function ProductCard({
 				============================================================ */}
 
 				<div className="mt-3 flex items-center gap-3 text-xs text-[#2E2E2E]/45">
-					{/* OTHER PHOTOS */}
-
-					{product.otherPhotos.length >
-						0 && (
+					{product.otherPhotos.length > 0 && (
 						<div className="flex items-center gap-1">
 							<ImageIcon size={13} />
 
-							<span>
-								+
-								{
-									product
-										.otherPhotos
-										.length
-								}{" "}
-								photos
-							</span>
+							<span>+{product.otherPhotos.length} photos</span>
 						</div>
 					)}
 
-					{/* CUSTOMIZATION */}
-
-					{product
-						.customizeRequirements
-						.length > 0 && (
+					{product.customizeRequirements.length > 0 && (
 						<div className="flex items-center gap-1">
 							<PenLine size={13} />
 
-							<span>
-								{
-									product
-										.customizeRequirements
-										.length
-								}{" "}
-								custom fields
-							</span>
+							<span>{product.customizeRequirements.length} custom fields</span>
 						</div>
 					)}
 				</div>
@@ -530,32 +478,70 @@ function ProductCard({
 				    VIEW PRODUCT
 				============================================================ */}
 
-				<Link
-					href={`/admin/products/${product.id}`}
-					className="
-						mt-4
-						flex
-						w-full
-						items-center
-						justify-center
-						gap-2
-						rounded-xl
-						border
-						border-[#85161B]/20
-						px-4
-						py-2.5
-						text-sm
-						font-semibold
-						text-[#85161B]
-						transition
-						hover:bg-[#85161B]
-						hover:text-white
-					"
-				>
-					View Product
-
-					<ExternalLink size={15} />
-				</Link>
+				{selectMode ? (
+					<button
+						type="button"
+						onClick={() => onToggleSelect(product.id)}
+						className={`
+							mt-4
+							flex
+							w-full
+							items-center
+							justify-center
+							gap-2
+							rounded-xl
+							border
+							px-4
+							py-2.5
+							text-sm
+							font-semibold
+							transition
+							${
+								selected
+									? "border-[#85161B] bg-[#85161B] text-white"
+									: "border-[#85161B]/20 text-[#85161B] hover:bg-[#85161B] hover:text-white"
+							}
+						`}
+					>
+						{selected ? (
+							<>
+								<Check size={16} />
+								Selected
+							</>
+						) : (
+							<>
+								<Square size={16} />
+								Select Product
+							</>
+						)}
+					</button>
+				) : (
+					<Link
+						href={`/admin/products/${product.id}`}
+						className="
+							mt-4
+							flex
+							w-full
+							items-center
+							justify-center
+							gap-2
+							rounded-xl
+							border
+							border-[#85161B]/20
+							px-4
+							py-2.5
+							text-sm
+							font-semibold
+							text-[#85161B]
+							transition
+							hover:bg-[#85161B]
+							hover:text-white
+						"
+					>
+						View Product
+						<ExternalLink size={15} />
+					</Link>
+				)}
 			</div>
 		</div>
 	);
@@ -566,21 +552,23 @@ function ProductCard({
 ============================================================================ */
 
 export default function AdminProductsPage() {
-	const [products, setProducts] =
-		useState<Product[]>([]);
-    const router = useRouter();
-	/*
-	 * IMPORTANT:
-	 *
-	 * Start with true so the initial server/client
-	 * render is deterministic.
-	 */
+	const [products, setProducts] = useState<Product[]>([]);
 
-	const [loading, setLoading] =
-		useState(true);
+	const router = useRouter();
 
-	const [error, setError] =
-		useState("");
+	const [loading, setLoading] = useState(true);
+
+	const [error, setError] = useState("");
+
+	/* --------------------------------------------------------------------------
+	   SELECT MODE
+	-------------------------------------------------------------------------- */
+
+	const [selectMode, setSelectMode] = useState(false);
+
+	const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
+	const [deleting, setDeleting] = useState(false);
 
 	/* ==========================================================================
 	   FETCH PRODUCTS
@@ -591,153 +579,355 @@ export default function AdminProductsPage() {
 		setError("");
 
 		try {
-			const response = await fetch(
-				"/api/admin/products",
-				{
-					method: "GET",
-					credentials: "include",
-					cache: "no-store",
-				},
-			);
+			const response = await fetch("/api/admin/products", {
+				method: "GET",
+				credentials: "include",
+				cache: "no-store",
+			});
 
-			const data = await response
-				.json()
-				.catch(() => null);
+			const data = await response.json().catch(() => null);
 
-			console.log(
-				"ADMIN PRODUCTS RESPONSE:",
-				data,
-			);
+			console.log("ADMIN PRODUCTS RESPONSE:", data);
 
 			if (!response.ok) {
 				throw new Error(
 					data &&
-					typeof data === "object" &&
-					"message" in data &&
-					typeof data.message === "string"
-						? data.message
+						typeof data === "object" &&
+						"message" in data &&
+						typeof (
+							data as {
+								message?: unknown;
+							}
+						).message === "string"
+						? (
+								data as {
+									message: string;
+								}
+							).message
 						: "Unable to load products.",
 				);
 			}
-
-			/*
-			 * YOUR API RETURNS:
-			 *
-			 * {
-			 *   status: 200,
-			 *   message: "Success.",
-			 *   products: [...]
-			 * }
-			 */
 
 			if (
 				!data ||
 				typeof data !== "object" ||
 				!("products" in data) ||
 				!Array.isArray(
-					(data as {
-						products?: unknown;
-					}).products,
+					(
+						data as {
+							products?: unknown;
+						}
+					).products,
 				)
 			) {
-				throw new Error(
-					"Invalid products response from server.",
-				);
+				throw new Error("Invalid products response from server.");
 			}
 
-			const rawProducts =
-				(data as {
+			const rawProducts = (
+				data as {
 					products: RawProduct[];
-				}).products;
+				}
+			).products;
 
-			console.log(
-				"RAW ADMIN PRODUCTS:",
-				rawProducts,
-			);
+			console.log("RAW ADMIN PRODUCTS:", rawProducts);
 
-			const normalizedProducts =
-				rawProducts.map(
-					normalizeProduct,
-				);
+			const normalizedProducts = rawProducts.map(normalizeProduct);
 
-			console.log(
-				"NORMALIZED PRODUCTS:",
-				normalizedProducts,
-			);
+			console.log("NORMALIZED PRODUCTS:", normalizedProducts);
 
-			setProducts(
-				normalizedProducts,
+			setProducts(normalizedProducts);
+
+			/*
+			 * Remove any selected IDs that
+			 * no longer exist.
+			 */
+			setSelectedIds((previous) =>
+				previous.filter((id) =>
+					normalizedProducts.some((product) => product.id === id),
+				),
 			);
 		} catch (err) {
-			console.error(
-				"Fetch admin products failed:",
-				err,
-			);
+			console.error("Fetch admin products failed:", err);
 
-			setError(
-				err instanceof Error
-					? err.message
-					: "Unable to load products.",
-			);
+			setError(err instanceof Error ? err.message : "Unable to load products.");
 		} finally {
 			setLoading(false);
 		}
 	};
 
 	/* ==========================================================================
+	   LOGOUT
+	========================================================================== */
+
+	const [loggingOut, setLoggingOut] = useState(false);
+
+	const handleLogout = async () => {
+		if (loggingOut) return;
+
+		setLoggingOut(true);
+
+		try {
+			const response = await fetch("/api/admin/logout?command_type=admin", {
+				method: "POST",
+				credentials: "include",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				cache: "no-store",
+			});
+
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+
+				throw new Error(
+					(
+						data as {
+							message?: string;
+						}
+					)?.message || "Unable to logout.",
+				);
+			}
+
+			router.replace("/login");
+		} catch (error) {
+			console.error("Admin logout failed:", error);
+
+			alert(
+				error instanceof Error
+					? error.message
+					: "Unable to logout. Please try again.",
+			);
+
+			setLoggingOut(false);
+		}
+	};
+
+	/* ==========================================================================
 	   INITIAL FETCH
 	========================================================================== */
-    const [loggingOut, setLoggingOut] =
-            useState(false);
-    
-        const handleLogout = async () => {
-					if (loggingOut) return;
 
-					setLoggingOut(true);
-
-					try {
-						const response = await fetch(
-							"/api/admin/logout?command_type=admin",
-							{
-								method: "POST",
-								credentials: "include",
-								headers: {
-									"Content-Type": "application/json",
-								},
-								cache: "no-store",
-							},
-						);
-
-						if (!response.ok) {
-							const data = await response.json().catch(() => ({}));
-
-							throw new Error(
-								(data as { message?: string })?.message || "Unable to logout.",
-							);
-						}
-
-						/*
-						 * Change this route if your admin login page
-						 * uses a different URL.
-						 */
-
-						router.replace("/login");
-						// router.refresh();
-					} catch (error) {
-						console.error("Admin logout failed:", error);
-
-						alert(
-							error instanceof Error
-								? error.message
-								: "Unable to logout. Please try again.",
-						);
-
-						setLoggingOut(false);
-					}
-				};
 	useEffect(() => {
 		fetchProducts();
 	}, []);
+
+	/* ==========================================================================
+	   SELECTION
+	========================================================================== */
+
+	const toggleProductSelection = (productId: number) => {
+		if (deleting) return;
+
+		setSelectedIds((previous) =>
+			previous.includes(productId)
+				? previous.filter((id) => id !== productId)
+				: [...previous, productId],
+		);
+	};
+
+	/* --------------------------------------------------------------------------
+	   SELECT ALL
+	-------------------------------------------------------------------------- */
+
+	const allSelected = useMemo(() => {
+		return products.length > 0 && selectedIds.length === products.length;
+	}, [products.length, selectedIds.length]);
+
+	const toggleSelectAll = () => {
+		if (deleting) return;
+
+		if (allSelected) {
+			setSelectedIds([]);
+		} else {
+			setSelectedIds(products.map((product) => product.id));
+		}
+	};
+
+	/* --------------------------------------------------------------------------
+	   EXIT SELECT MODE
+	-------------------------------------------------------------------------- */
+
+	const exitSelectMode = () => {
+		if (deleting) return;
+
+		setSelectMode(false);
+		setSelectedIds([]);
+	};
+
+	/* ==========================================================================
+	   DELETE SELECTED PRODUCTS
+	========================================================================== */
+
+	const handleDeleteSelected = async () => {
+		if (deleting || selectedIds.length === 0) {
+			return;
+		}
+
+		const idsToDelete = [...selectedIds];
+
+		const confirmed = window.confirm(
+			`Are you sure you want to delete ${idsToDelete.length} selected product${
+				idsToDelete.length === 1 ? "" : "s"
+			}?\n\nThis action cannot be undone.`,
+		);
+
+		if (!confirmed) {
+			return;
+		}
+
+		setDeleting(true);
+		setError("");
+
+		try {
+			/*
+			 * One request from frontend to our proxy.
+			 *
+			 * The proxy will then forward each
+			 * product deletion one by one.
+			 */
+
+			const response = await fetch("/api/admin/products", {
+				method: "POST",
+				credentials: "include",
+				headers: {
+					"Content-Type": "application/json",
+					Accept: "application/json",
+				},
+				cache: "no-store",
+				body: JSON.stringify({
+					mode: "delete",
+					product_ids: idsToDelete,
+					command_type: "admin",
+				}),
+			});
+
+			const data = await response.json().catch(() => null);
+
+			console.log("DELETE PRODUCTS RESPONSE:", data);
+
+			/*
+			 * Our proxy returns 200 when everything
+			 * succeeded.
+			 *
+			 * 207 means some succeeded and
+			 * some failed.
+			 */
+
+			if (!response.ok && response.status !== 207) {
+				throw new Error(
+					data &&
+						typeof data === "object" &&
+						"message" in data &&
+						typeof (
+							data as {
+								message?: unknown;
+							}
+						).message === "string"
+						? (
+								data as {
+									message: string;
+								}
+							).message
+						: "Unable to delete products.",
+				);
+			}
+
+			const deletedIds =
+				data &&
+				typeof data === "object" &&
+				"deleted_ids" in data &&
+				Array.isArray(
+					(
+						data as {
+							deleted_ids?: unknown;
+						}
+					).deleted_ids,
+				)
+					? (
+							data as {
+								deleted_ids: number[];
+							}
+						).deleted_ids
+					: [];
+
+			const failed =
+				data &&
+				typeof data === "object" &&
+				"failed" in data &&
+				Array.isArray(
+					(
+						data as {
+							failed?: unknown;
+						}
+					).failed,
+				)
+					? (
+							data as {
+								failed: {
+									product_id: number;
+									message: string;
+								}[];
+							}
+						).failed
+					: [];
+
+			/*
+			 * Remove successfully deleted products
+			 * immediately from the UI.
+			 */
+			if (deletedIds.length > 0) {
+				setProducts((previous) =>
+					previous.filter((product) => !deletedIds.includes(product.id)),
+				);
+			}
+
+			/*
+			 * Keep failed products selected so
+			 * the admin can try again.
+			 */
+			setSelectedIds(failed.map((item) => item.product_id));
+
+			if (failed.length === 0) {
+				setSelectMode(false);
+				setSelectedIds([]);
+
+				/*
+				 * Refresh once so the UI is
+				 * guaranteed to match backend.
+				 */
+				await fetchProducts();
+
+				alert(
+					`${deletedIds.length} product${
+						deletedIds.length === 1 ? "" : "s"
+					} deleted successfully.`,
+				);
+			} else {
+				const failedMessage = failed
+					.map((item) => `Product #${item.product_id}: ${item.message}`)
+					.join("\n");
+
+				await fetchProducts();
+
+				alert(
+					`Deleted ${deletedIds.length} product${
+						deletedIds.length === 1 ? "" : "s"
+					}.\n\nFailed:\n${failedMessage}`,
+				);
+			}
+		} catch (error) {
+			console.error("Delete products failed:", error);
+
+			setError(
+				error instanceof Error ? error.message : "Unable to delete products.",
+			);
+
+			alert(
+				error instanceof Error ? error.message : "Unable to delete products.",
+			);
+		} finally {
+			setDeleting(false);
+		}
+	};
 
 	/* ==========================================================================
 	   PAGE
@@ -745,8 +935,12 @@ export default function AdminProductsPage() {
 
 	return (
 		<div className="min-h-screen bg-[#FBF9F7]">
-				<header
-					className="
+			{/* ==================================================================
+			    HEADER
+			================================================================== */}
+
+			<header
+				className="
 					sticky
 					top-0
 					z-30
@@ -756,9 +950,9 @@ export default function AdminProductsPage() {
 					bg-[#FBF9F7]/95
 					backdrop-blur-md
 				"
-				>
-					<div
-						className="
+			>
+				<div
+					className="
 						flex
 						h-full
 						items-center
@@ -767,12 +961,12 @@ export default function AdminProductsPage() {
 						sm:px-6
 						lg:px-8
 					"
-					>
-						{/* BRAND */}
+				>
+					{/* BRAND */}
 
-						<Link href="/admin" className="group flex items-center gap-3">
-							<div
-								className="
+					<Link href="/admin" className="group flex items-center gap-3">
+						<div
+							className="
 								flex
 								h-10
 								w-10
@@ -784,53 +978,53 @@ export default function AdminProductsPage() {
 								transition
 								group-hover:scale-[1.02]
 							"
-							>
-								<img
-									src="https://printinghouseujjain.in/assets/logo.png"
-									alt="Printing House"
-									className="
-											h-10
-											w-10
-											shrink-0
-											object-contain
-										"
-								/>
-							</div>
+						>
+							<img
+								src="https://printinghouseujjain.in/assets/logo.png"
+								alt="Printing House"
+								className="
+									h-10
+									w-10
+									shrink-0
+									object-contain
+								"
+							/>
+						</div>
 
-							<div className="hidden sm:block">
-								<p
-									className="
+						<div className="hidden sm:block">
+							<p
+								className="
 									text-[10px]
 									font-bold
 									uppercase
 									tracking-[0.22em]
 									text-[#85161B]
 								"
-								>
-									Printing House
-								</p>
+							>
+								Printing House
+							</p>
 
-								<p
-									className="
+							<p
+								className="
 									mt-0.5
 									text-sm
 									font-semibold
 									text-[#2E2E2E]
 								"
-								>
-									Admin Dashboard
-								</p>
-							</div>
-						</Link>
+							>
+								Admin Dashboard
+							</p>
+						</div>
+					</Link>
 
-						{/* RIGHT NAV */}
+					{/* RIGHT NAV */}
 
-						<div className="flex items-center gap-2 sm:gap-3">
-							{/* STOREFRONT */}
+					<div className="flex items-center gap-2 sm:gap-3">
+						{/* STOREFRONT */}
 
-							<Link
-								href="/"
-								className="
+						<Link
+							href="/"
+							className="
 								hidden
 								items-center
 								gap-2
@@ -848,16 +1042,16 @@ export default function AdminProductsPage() {
 								hover:text-[#85161B]
 								sm:flex
 							"
-							>
-								<Store size={16} strokeWidth={1.8} />
+						>
+							<Store size={16} strokeWidth={1.8} />
 
-								<span>Storefront</span>
-							</Link>
+							<span>Storefront</span>
+						</Link>
 
-							{/* ADMIN PROFILE */}
+						{/* ADMIN PROFILE */}
 
-							<div
-								className="
+						<div
+							className="
 								flex
 								items-center
 								gap-2.5
@@ -868,9 +1062,9 @@ export default function AdminProductsPage() {
 								px-2.5
 								py-2
 							"
-							>
-								<div
-									className="
+						>
+							<div
+								className="
 									flex
 									h-8
 									w-8
@@ -882,24 +1076,24 @@ export default function AdminProductsPage() {
 									font-semibold
 									text-white
 								"
-								>
-									A
-								</div>
-
-								<div className="hidden text-left md:block">
-									<p className="text-xs font-semibold text-[#2E2E2E]">Admin</p>
-
-									<p className="text-[10px] text-[#2E2E2E]/45">Administrator</p>
-								</div>
+							>
+								A
 							</div>
 
-							{/* LOGOUT */}
+							<div className="hidden text-left md:block">
+								<p className="text-xs font-semibold text-[#2E2E2E]">Admin</p>
 
-							<button
-								type="button"
-								onClick={handleLogout}
-								disabled={loggingOut}
-								className="
+								<p className="text-[10px] text-[#2E2E2E]/45">Administrator</p>
+							</div>
+						</div>
+
+						{/* LOGOUT */}
+
+						<button
+							type="button"
+							onClick={handleLogout}
+							disabled={loggingOut}
+							className="
 								inline-flex
 								items-center
 								gap-2
@@ -920,10 +1114,10 @@ export default function AdminProductsPage() {
 								disabled:opacity-60
 								sm:px-4
 							"
-							>
-								{loggingOut ? (
-									<span
-										className="
+						>
+							{loggingOut ? (
+								<span
+									className="
 										h-4
 										w-4
 										animate-spin
@@ -931,25 +1125,29 @@ export default function AdminProductsPage() {
 										border-2
 										border-[#85161B]/25
 										border-t-[#85161B]
-										group-hover:border-white/30
-										group-hover:border-t-white
 									"
-									/>
-								) : (
-									<LogOut size={16} strokeWidth={1.9} />
-								)}
+								/>
+							) : (
+								<LogOut size={16} strokeWidth={1.9} />
+							)}
 
-								<span className="hidden sm:inline">
-									{loggingOut ? "Logging out..." : "Logout"}
-								</span>
-							</button>
-						</div>
+							<span className="hidden sm:inline">
+								{loggingOut ? "Logging out..." : "Logout"}
+							</span>
+						</button>
 					</div>
-				</header>
+				</div>
+			</header>
+
+			{/* ==================================================================
+			    MAIN
+			================================================================== */}
+
 			<div className="mx-auto max-w-7xl px-5 py-8 sm:px-6 lg:px-8 lg:py-10">
-				{/* =============================================================
-				    HEADER
-				============================================================= */}
+				{/* ==============================================================
+				    PAGE HEADER
+				============================================================== */}
+
 				<div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
 					<div>
 						<p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#85161B]">
@@ -965,20 +1163,22 @@ export default function AdminProductsPage() {
 						</p>
 					</div>
 
-					{/* ACTIONS */}
+					{/* ==========================================================
+					    ACTIONS
+					========================================================== */}
 
-					<div className="flex items-center gap-3">
+					<div className="flex flex-wrap items-center gap-3">
 						{/* REFRESH */}
 
 						<button
 							type="button"
 							onClick={() => {
-								if (!loading) {
+								if (!loading && !deleting) {
 									fetchProducts();
 								}
 							}}
-							aria-disabled={loading}
-							className={`
+							disabled={loading || deleting}
+							className="
 								inline-flex
 								items-center
 								justify-center
@@ -995,12 +1195,167 @@ export default function AdminProductsPage() {
 								transition
 								hover:border-[#85161B]/30
 								hover:text-[#85161B]
-								${loading ? "pointer-events-none opacity-50" : ""}
-							`}
+								disabled:pointer-events-none
+								disabled:opacity-50
+							"
 						>
 							<RefreshCw size={16} className={loading ? "animate-spin" : ""} />
 							Refresh
 						</button>
+
+						{/* SELECT */}
+
+						{products.length > 0 && !selectMode && (
+							<button
+								type="button"
+								onClick={() => {
+									setSelectMode(true);
+									setSelectedIds([]);
+								}}
+								className="
+										inline-flex
+										items-center
+										justify-center
+										gap-2
+										rounded-xl
+										border
+										border-[#85161B]/20
+										bg-white
+										px-4
+										py-3
+										text-sm
+										font-semibold
+										text-[#85161B]
+										transition
+										hover:border-[#85161B]
+										hover:bg-[#85161B]
+										hover:text-white
+									"
+							>
+								<Square size={16} />
+								Select
+							</button>
+						)}
+
+						{/* SELECT MODE ACTIONS */}
+
+						{selectMode && (
+							<>
+								{/* SELECT ALL */}
+
+								<button
+									type="button"
+									onClick={toggleSelectAll}
+									disabled={deleting || products.length === 0}
+									className="
+										inline-flex
+										items-center
+										justify-center
+										gap-2
+										rounded-xl
+										border
+										border-[#E8DED7]
+										bg-white
+										px-4
+										py-3
+										text-sm
+										font-semibold
+										text-[#2E2E2E]
+										transition
+										hover:border-[#85161B]/30
+										hover:text-[#85161B]
+										disabled:opacity-50
+									"
+								>
+									{allSelected ? (
+										<CheckSquare size={16} />
+									) : (
+										<Square size={16} />
+									)}
+
+									{allSelected ? "Deselect All" : "Select All"}
+								</button>
+
+								{/* DELETE */}
+
+								{selectedIds.length > 0 && (
+									<button
+										type="button"
+										onClick={handleDeleteSelected}
+										disabled={deleting}
+										className="
+											inline-flex
+											items-center
+											justify-center
+											gap-2
+											rounded-xl
+											bg-[#85161B]
+											px-4
+											py-3
+											text-sm
+											font-semibold
+											text-white
+											transition
+											hover:bg-[#721318]
+											hover:shadow-lg
+											disabled:cursor-not-allowed
+											disabled:opacity-50
+										"
+									>
+										{deleting ? (
+											<span
+												className="
+													h-4
+													w-4
+													animate-spin
+													rounded-full
+													border-2
+													border-white/30
+													border-t-white
+												"
+											/>
+										) : (
+											<Trash2 size={16} />
+										)}
+
+										{deleting
+											? "Deleting..."
+											: `Delete Selected (${selectedIds.length})`}
+									</button>
+								)}
+
+								{/* CANCEL */}
+
+								<button
+									type="button"
+									onClick={exitSelectMode}
+									disabled={deleting}
+									className="
+										inline-flex
+										items-center
+										justify-center
+										gap-2
+										rounded-xl
+										border
+										border-[#E8DED7]
+										bg-white
+										px-3.5
+										py-3
+										text-sm
+										font-semibold
+										text-[#2E2E2E]
+										transition
+										hover:border-red-200
+										hover:text-red-600
+										disabled:opacity-50
+									"
+								>
+									<X size={16} />
+
+									<span className="hidden sm:inline">Cancel</span>
+								</button>
+							</>
+						)}
 
 						{/* ADD PRODUCT */}
 
@@ -1030,37 +1385,103 @@ export default function AdminProductsPage() {
 					</div>
 				</div>
 
-				{/* =============================================================
-				    SUMMARY
-				============================================================= */}
+				{/* ==============================================================
+				    SELECTION INFO
+				============================================================== */}
 
-				{!loading && !error && (
+				{selectMode && (
 					<div
 						className="
 							mb-6
 							flex
-							items-center
-							justify-between
+							flex-col
+							gap-3
 							rounded-2xl
 							border
-							border-[#E8DED7]
-							bg-white
+							border-[#85161B]/15
+							bg-[#85161B]/5
 							px-5
 							py-4
+							sm:flex-row
+							sm:items-center
+							sm:justify-between
 						"
 					>
 						<div className="flex items-center gap-3">
 							<div
 								className="
-									flex
-									h-10
-									w-10
-									items-center
-									justify-center
-									rounded-xl
-									bg-[#F7D6BF]/45
-									text-[#85161B]
-								"
+		flex
+		h-10
+		w-10
+		shrink-0
+		items-center
+		justify-center
+		rounded-xl
+		bg-[#85161B]
+		text-white
+	"
+							>
+								{selectedIds.length > 0 ? (
+									<CheckSquare size={19} />
+								) : (
+									<Square size={19} />
+								)}
+							</div>
+
+							<div>
+								<p className="text-sm font-semibold text-[#2E2E2E]">
+									{selectedIds.length > 0
+										? `${selectedIds.length} product${
+												selectedIds.length === 1 ? "" : "s"
+											} selected`
+										: "Select products to delete"}
+								</p>
+
+								<p className="text-xs text-[#2E2E2E]/50">
+									Choose the products you want to remove from your store.
+								</p>
+							</div>
+						</div>
+
+						{selectedIds.length > 0 && (
+							<span className="text-xs font-semibold text-[#85161B]">
+								{selectedIds.length} of {products.length} selected
+							</span>
+						)}
+					</div>
+				)}
+
+				{/* ==============================================================
+				    SUMMARY
+				============================================================== */}
+
+				{!loading && !error && (
+					<div
+						className="
+								mb-6
+								flex
+								items-center
+								justify-between
+								rounded-2xl
+								border
+								border-[#E8DED7]
+								bg-white
+								px-5
+								py-4
+							"
+					>
+						<div className="flex items-center gap-3">
+							<div
+								className="
+										flex
+										h-10
+										w-10
+										items-center
+										justify-center
+										rounded-xl
+										bg-[#F7D6BF]/45
+										text-[#85161B]
+									"
 							>
 								<Package size={19} />
 							</div>
@@ -1082,9 +1503,76 @@ export default function AdminProductsPage() {
 					</div>
 				)}
 
-				{/* =============================================================
+				{/* ==============================================================
+				    ERROR
+				============================================================== */}
+
+				{!loading && error && (
+					<div className="flex min-h-[400px] items-center justify-center">
+						<div
+							className="
+									w-full
+									max-w-md
+									rounded-2xl
+									border
+									border-red-100
+									bg-white
+									p-8
+									text-center
+									shadow-sm
+								"
+						>
+							<div
+								className="
+										mx-auto
+										flex
+										h-12
+										w-12
+										items-center
+										justify-center
+										rounded-full
+										bg-red-50
+										text-red-500
+									"
+							>
+								<AlertCircle size={23} />
+							</div>
+
+							<h2 className="mt-4 text-lg font-semibold text-[#2E2E2E]">
+								Unable to load products
+							</h2>
+
+							<p className="mt-2 text-sm text-[#2E2E2E]/55">{error}</p>
+
+							<button
+								type="button"
+								onClick={() => {
+									if (!loading) {
+										fetchProducts();
+									}
+								}}
+								className="
+										mt-5
+										rounded-xl
+										bg-[#85161B]
+										px-5
+										py-2.5
+										text-sm
+										font-semibold
+										text-white
+										transition
+										hover:bg-[#721318]
+									"
+							>
+								Try Again
+							</button>
+						</div>
+					</div>
+				)}
+
+				{/* ==============================================================
 				    LOADING
-				============================================================= */}
+				============================================================== */}
 
 				{loading && (
 					<div className="flex min-h-[400px] items-center justify-center">
@@ -1106,76 +1594,9 @@ export default function AdminProductsPage() {
 					</div>
 				)}
 
-				{/* =============================================================
-				    ERROR
-				============================================================= */}
-
-				{!loading && error && (
-					<div className="flex min-h-[400px] items-center justify-center">
-						<div
-							className="
-								w-full
-								max-w-md
-								rounded-2xl
-								border
-								border-red-100
-								bg-white
-								p-8
-								text-center
-								shadow-sm
-							"
-						>
-							<div
-								className="
-									mx-auto
-									flex
-									h-12
-									w-12
-									items-center
-									justify-center
-									rounded-full
-									bg-red-50
-									text-red-500
-								"
-							>
-								<AlertCircle size={23} />
-							</div>
-
-							<h2 className="mt-4 text-lg font-semibold text-[#2E2E2E]">
-								Unable to load products
-							</h2>
-
-							<p className="mt-2 text-sm text-[#2E2E2E]/55">{error}</p>
-
-							<button
-								type="button"
-								onClick={() => {
-									if (!loading) {
-										fetchProducts();
-									}
-								}}
-								className="
-									mt-5
-									rounded-xl
-									bg-[#85161B]
-									px-5
-									py-2.5
-									text-sm
-									font-semibold
-									text-white
-									transition
-									hover:bg-[#721318]
-								"
-							>
-								Try Again
-							</button>
-						</div>
-					</div>
-				)}
-
-				{/* =============================================================
+				{/* ==============================================================
 				    EMPTY STATE
-				============================================================= */}
+				============================================================== */}
 
 				{!loading && !error && products.length === 0 && (
 					<div className="flex min-h-[400px] items-center justify-center">
@@ -1229,9 +1650,9 @@ export default function AdminProductsPage() {
 					</div>
 				)}
 
-				{/* =============================================================
+				{/* ==============================================================
 				    PRODUCTS GRID
-				============================================================= */}
+				============================================================== */}
 
 				{!loading && !error && products.length > 0 && (
 					<div
@@ -1245,14 +1666,20 @@ export default function AdminProductsPage() {
 							"
 					>
 						{products.map((product) => (
-							<ProductCard key={product.id} product={product} />
+							<ProductCard
+								key={product.id}
+								product={product}
+								selected={selectedIds.includes(product.id)}
+								selectMode={selectMode}
+								onToggleSelect={toggleProductSelection}
+							/>
 						))}
 					</div>
 				)}
 
-				{/* =============================================================
+				{/* ==============================================================
 				    FOOTER
-				============================================================= */}
+				============================================================== */}
 
 				{!loading && !error && products.length > 0 && (
 					<div className="mt-10 text-center">
