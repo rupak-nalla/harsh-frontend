@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
 	AlertCircle,
 	ArrowLeft,
 	ArrowRight,
 	Image as ImageIcon,
+	Layers3,
 	Loader2,
 	Package,
 	PenLine,
@@ -52,6 +53,9 @@ type RawProduct = {
 	keywords?: string;
 	delivery?: string | number;
 	created_at?: string;
+	varients?: unknown;
+	variants?: unknown;
+	variant_images?: unknown;
 };
 type RawOrder = {
 	order_id?: string | number;
@@ -88,6 +92,26 @@ type CustomizationRequirement = {
 	example: string;
 };
 
+type VariantOptionEdit = {
+	id: string;
+	name: string;
+	price: string;
+	existingImage: string | null;
+	image: File | null;
+};
+
+type VariantEdit = {
+	id: string;
+	name: string;
+	options: VariantOptionEdit[];
+};
+
+type RemovedVariantImage = {
+	variant: string;
+	option: string;
+	path: string;
+};
+
 type FormState = {
 	name: string;
 	description: string;
@@ -100,6 +124,7 @@ type FormState = {
 	categoryIds: number[];
 	occasionIds: number[];
 	customizeReqs: CustomizationRequirement[];
+	variants: VariantEdit[];
 };
 
 /* ============================================================================
@@ -128,6 +153,210 @@ function numberValue(value: unknown) {
 	const number = Number(value ?? 0);
 
 	return Number.isFinite(number) ? number : 0;
+}
+
+function parseJsonValue(value: unknown): unknown {
+	if (typeof value !== "string") {
+		return value;
+	}
+
+	try {
+		return JSON.parse(value);
+	} catch {
+		return value;
+	}
+}
+
+type VariantOptionView = {
+	name: string;
+	price: string;
+	image: string | null;
+};
+
+type VariantView = {
+	name: string;
+	options: VariantOptionView[];
+};
+
+function normalizeVariantImages(
+	value: unknown,
+): Record<string, Record<string, string>> {
+	const parsed = parseJsonValue(value);
+
+	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+		return {};
+	}
+
+	const result: Record<string, Record<string, string>> = {};
+
+	Object.entries(parsed as Record<string, unknown>).forEach(
+		([variantName, options]) => {
+			if (
+				!options ||
+				typeof options !== "object" ||
+				Array.isArray(options)
+			) {
+				return;
+			}
+
+			const optionImages: Record<string, string> = {};
+
+			Object.entries(options as Record<string, unknown>).forEach(
+				([optionName, image]) => {
+					if (typeof image === "string" && image.trim()) {
+						optionImages[optionName] = image.trim();
+					}
+				},
+			);
+
+			result[variantName] = optionImages;
+		},
+	);
+
+	return result;
+}
+
+function getVariantImage(
+	variantImages: Record<string, Record<string, string>>,
+	variantName: string,
+	optionName: string,
+) {
+	const direct = variantImages[variantName]?.[optionName];
+	if (direct) return direct;
+
+	const variantKey = Object.keys(variantImages).find(
+		(key) => key.toLowerCase() === variantName.toLowerCase(),
+	);
+
+	if (!variantKey) return null;
+
+	const optionKey = Object.keys(variantImages[variantKey] ?? {}).find(
+		(key) => key.toLowerCase() === optionName.toLowerCase(),
+	);
+
+	return optionKey ? variantImages[variantKey][optionKey] : null;
+}
+
+function parseProductVariants(product: RawProduct): VariantView[] {
+	const rawVariants = parseJsonValue(product.varients ?? product.variants);
+	const variantImages = normalizeVariantImages(product.variant_images);
+
+	if (!rawVariants || typeof rawVariants !== "object") {
+		return [];
+	}
+
+	const variants: VariantView[] = [];
+
+	// Supports both the current backend shape:
+	// { colors: { red: "100", green: "120" } }
+	// and an array/object shape containing option objects.
+	if (Array.isArray(rawVariants)) {
+		rawVariants.forEach((variantValue) => {
+			if (!variantValue || typeof variantValue !== "object") return;
+
+			const variant = variantValue as Record<string, unknown>;
+			const variantName = String(variant.name ?? variant.variant_name ?? "").trim();
+			if (!variantName) return;
+
+			const rawOptions = variant.options ?? variant.values;
+			const options: VariantOptionView[] = [];
+
+			if (Array.isArray(rawOptions)) {
+				rawOptions.forEach((optionValue) => {
+					if (!optionValue || typeof optionValue !== "object") return;
+					const option = optionValue as Record<string, unknown>;
+					const optionName = String(option.name ?? option.value ?? "").trim();
+					if (!optionName) return;
+
+					const image =
+						typeof option.image === "string" && option.image.trim()
+							? option.image.trim()
+							: getVariantImage(variantImages, variantName, optionName);
+
+					options.push({
+						name: optionName,
+						price: String(option.price ?? option.additionalPrice ?? "0"),
+						image: image || null,
+					});
+				});
+			}
+
+			if (options.length) variants.push({ name: variantName, options });
+		});
+
+		return variants;
+	}
+
+	Object.entries(rawVariants as Record<string, unknown>).forEach(
+		([variantName, rawOptions]) => {
+			if (!rawOptions || typeof rawOptions !== "object") return;
+
+			const options: VariantOptionView[] = [];
+
+			Object.entries(rawOptions as Record<string, unknown>).forEach(
+				([optionName, optionValue]) => {
+					let price = "0";
+					let image: string | null = null;
+
+					if (optionValue && typeof optionValue === "object") {
+						const option = optionValue as Record<string, unknown>;
+						price = String(option.price ?? option.additionalPrice ?? "0");
+						image =
+							typeof option.image === "string" && option.image.trim()
+								? option.image.trim()
+								: null;
+					} else {
+						price = String(optionValue ?? "0");
+					}
+
+					image =
+						image ?? getVariantImage(variantImages, variantName, optionName);
+
+					options.push({
+						name: optionName,
+						price,
+						image,
+					});
+				},
+			);
+
+			if (options.length) {
+				variants.push({ name: variantName, options });
+			}
+		},
+	);
+
+	return variants;
+}
+
+async function fetchImageAsFile(path: string, fallbackName: string) {
+	const url = imageUrl(path);
+	if (!url) {
+		throw new Error(`Invalid image path: ${path}`);
+	}
+
+	// Fetch existing backend images through our same-origin Next.js proxy.
+	// This avoids browser CORS errors while still sending the actual file.
+	const proxyUrl = `/api/admin/product-image?path=${encodeURIComponent(url)}`;
+	const response = await fetch(proxyUrl, {
+		method: "GET",
+		credentials: "include",
+		cache: "no-store",
+	});
+
+	if (!response.ok) {
+		throw new Error(`Unable to load existing image: ${path}`);
+	}
+
+	const blob = await response.blob();
+	const extension =
+		blob.type.split("/")[1]?.replace("jpeg", "jpg") ||
+		url.split(".").pop()?.split("?")[0] ||
+		"jpg";
+
+	return new File([blob], `${fallbackName}.${extension}`, {
+		type: blob.type || "image/jpeg",
+	});
 }
 
 function imageUrl(path?: string) {
@@ -417,6 +646,44 @@ function parseOrders(data: unknown, productId: string): Order[] {
 		}));
 }
 
+function parseEditableProductVariants(product: RawProduct): VariantEdit[] {
+	const variants = parseProductVariants(product);
+
+	return variants.map((variant, variantIndex) => ({
+		id: `variant-${variantIndex}-${slugifyForKey(variant.name) || "item"}`,
+		name: variant.name,
+		options: variant.options.map((option, optionIndex) => ({
+			id: `variant-${variantIndex}-option-${optionIndex}-${slugifyForKey(option.name) || "item"}`,
+			name: option.name,
+			price: option.price,
+			existingImage: option.image,
+			image: null,
+		})),
+	}));
+}
+
+function buildVariantsPayload(variants: VariantEdit[]) {
+	const payload: Record<string, Record<string, string>> = {};
+
+	variants.forEach((variant) => {
+		const variantName = variant.name.trim();
+		if (!variantName) return;
+
+		const options: Record<string, string> = {};
+
+		variant.options.forEach((option) => {
+			const optionName = option.name.trim();
+			if (!optionName) return;
+
+			options[optionName] = option.price.trim() || "0";
+		});
+
+		payload[variantName] = options;
+	});
+
+	return payload;
+}
+
 /* ============================================================================
    INITIAL FORM
 ============================================================================ */
@@ -446,6 +713,8 @@ function initialForm(product: RawProduct): FormState {
 		occasionIds: parseArray<number>(product.occasion_ids).map(Number),
 
 		customizeReqs: parseCustomizationRequirements(product.customize_reqs),
+
+		variants: parseEditableProductVariants(product),
 	};
 }
 
@@ -599,6 +868,8 @@ function ProductOverview({
 	const images = [product.primary_photo_path, ...otherPhotoPaths].filter(
 		(path): path is string => Boolean(path),
 	);
+
+	const variants = parseProductVariants(product);
 
 	const [activeImage, setActiveImage] = useState(0);
 
@@ -803,6 +1074,92 @@ function ProductOverview({
 				)}
 			</section>
 
+			<section className="rounded-2xl border border-[#E8DED7] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.02)] sm:p-6">
+				<div className="flex items-center justify-between gap-3">
+					<div>
+						<h2 className="flex items-center gap-2 text-base font-semibold text-[#2E2E2E]">
+							<Layers3 size={17} className="text-[#85161B]" />
+							Product variants
+						</h2>
+						<p className="mt-1 text-xs text-[#2E2E2E]/45">
+							Options, prices and variant images
+						</p>
+					</div>
+
+					<span className="rounded-full bg-[#85161B]/5 px-2.5 py-1 text-xs font-semibold text-[#85161B]">
+						{variants.length}
+					</span>
+				</div>
+
+				{variants.length === 0 ? (
+					<div className="mt-5 rounded-xl border border-dashed border-[#E8DED7] bg-[#FBF9F7] px-4 py-5 text-center">
+						<Layers3 size={22} className="mx-auto text-[#2E2E2E]/20" />
+						<p className="mt-2 text-xs text-[#2E2E2E]/50">
+							No variants added to this product.
+						</p>
+					</div>
+				) : (
+					<div className="mt-5 grid gap-4 md:grid-cols-2">
+						{variants.map((variant) => (
+							<div
+								key={variant.name}
+								className="overflow-hidden rounded-xl border border-[#E8DED7]"
+							>
+								<div className="flex items-center justify-between bg-[#FBF9F7] px-4 py-3">
+									<div>
+										<p className="text-sm font-semibold capitalize text-[#2E2E2E]">
+											{variant.name}
+										</p>
+										<p className="mt-0.5 text-[10px] text-[#2E2E2E]/45">
+											{variant.options.length} {variant.options.length === 1 ? "option" : "options"}
+										</p>
+									</div>
+								</div>
+
+								<div className="divide-y divide-[#F0E8E2]">
+									{variant.options.map((option) => (
+										<div
+											key={`${variant.name}-${option.name}`}
+											className="flex items-center gap-3 px-4 py-3"
+										>
+											<div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-[#E8DED7] bg-[#F7F2EE]">
+												{option.image ? (
+													<img
+														src={imageUrl(option.image)}
+														alt={`${variant.name} ${option.name}`}
+														className="h-full w-full object-cover"
+													/>
+												) : (
+													<div className="flex h-full w-full items-center justify-center">
+														<ImageIcon size={17} className="text-[#2E2E2E]/20" />
+													</div>
+												)}
+											</div>
+
+											<div className="min-w-0 flex-1">
+												<p className="truncate text-sm font-semibold capitalize text-[#2E2E2E]">
+													{option.name}
+												</p>
+												<p className="mt-0.5 text-[10px] text-[#2E2E2E]/45">
+													{option.image ? "Variant image available" : "No variant image"}
+												</p>
+											</div>
+
+											<div className="shrink-0 text-right">
+												<p className="text-[10px] text-[#2E2E2E]/40">Additional price</p>
+												<p className="mt-0.5 text-sm font-bold text-[#85161B]">
+													+₹{numberValue(option.price).toLocaleString("en-IN")}
+												</p>
+											</div>
+										</div>
+									))}
+								</div>
+							</div>
+						))}
+					</div>
+				)}
+			</section>
+
 			<section className="grid gap-5 lg:grid-cols-2">
 				<div className="rounded-2xl border border-[#E8DED7] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.02)] sm:p-6">
 					<div className="flex items-center justify-between">
@@ -910,6 +1267,7 @@ function ProductOverview({
 
 export default function AdminProductDetailsPage() {
 	const params = useParams<{ id: string }>();
+	const router = useRouter();
 
 	const productId = params?.id ? decodeURIComponent(params.id) : "";
 
@@ -929,6 +1287,10 @@ export default function AdminProductDetailsPage() {
 
 	const [otherPhotos, setOtherPhotos] = useState<File[]>([]);
 
+	const [removedPrimaryPhoto, setRemovedPrimaryPhoto] = useState(false);
+	const [removedOtherPhotoPaths, setRemovedOtherPhotoPaths] = useState<string[]>([]);
+	const [removedVariantImages, setRemovedVariantImages] = useState<RemovedVariantImage[]>([]);
+
 	const [loading, setLoading] = useState(true);
 
 	const [isEditing, setIsEditing] = useState(false);
@@ -938,6 +1300,9 @@ export default function AdminProductDetailsPage() {
 	const [error, setError] = useState("");
 
 	const [message, setMessage] = useState("");
+	const [deleting, setDeleting] = useState(false);
+	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+	const [deleteError, setDeleteError] = useState("");
 
 	/* =========================================================================
 	   LOAD DATA
@@ -1064,8 +1429,11 @@ export default function AdminProductDetailsPage() {
 	=========================================================================== */
 
 	const otherPhotoPaths = useMemo(
-		() => parseArray<string>(product?.other_photos_paths),
-		[product],
+		() =>
+			parseArray<string>(product?.other_photos_paths).filter(
+				(path) => !removedOtherPhotoPaths.includes(path),
+			),
+		[product, removedOtherPhotoPaths],
 	);
 
 	const primaryPreviewUrl = useMemo(
@@ -1164,9 +1532,129 @@ export default function AdminProductDetailsPage() {
 		);
 	};
 
+	/* ========================================================================
+	   VARIANTS
+	======================================================================== */
+
+	const addVariant = () => {
+		if (!form) return;
+
+		const id = `variant-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+		updateForm("variants", [
+			...form.variants,
+			{
+				id,
+				name: "",
+				options: [
+					{
+						id: `${id}-option-1`,
+						name: "",
+						price: "0",
+						existingImage: null,
+						image: null,
+					},
+				],
+			},
+		]);
+	};
+
+	const updateVariant = (index: number, changes: Partial<VariantEdit>) => {
+		if (!form) return;
+
+		updateForm(
+			"variants",
+			form.variants.map((variant, itemIndex) =>
+				itemIndex === index ? { ...variant, ...changes } : variant,
+			),
+		);
+	};
+
+	const removeVariant = (index: number) => {
+		if (!form) return;
+		updateForm(
+			"variants",
+			form.variants.filter((_, itemIndex) => itemIndex !== index),
+		);
+	};
+
+	const addVariantOption = (variantIndex: number) => {
+		if (!form) return;
+
+		const variant = form.variants[variantIndex];
+		if (!variant) return;
+
+		const optionId = `${variant.id}-option-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+		updateVariant(variantIndex, {
+			options: [
+				...variant.options,
+				{
+					id: optionId,
+					name: "",
+					price: "0",
+					existingImage: null,
+					image: null,
+				},
+			],
+		});
+	};
+
+	const updateVariantOption = (
+		variantIndex: number,
+		optionIndex: number,
+		changes: Partial<VariantOptionEdit>,
+	) => {
+		if (!form) return;
+
+		const variant = form.variants[variantIndex];
+		if (!variant) return;
+
+		updateVariant(variantIndex, {
+			options: variant.options.map((option, itemIndex) =>
+				itemIndex === optionIndex ? { ...option, ...changes } : option,
+			),
+		});
+	};
+
+	const removeVariantOption = (variantIndex: number, optionIndex: number) => {
+		if (!form) return;
+
+		const variant = form.variants[variantIndex];
+		if (!variant) return;
+
+		const option = variant.options[optionIndex];
+		if (option?.existingImage) {
+			markVariantImageForRemoval(variant.name.trim(), option.name.trim(), option.existingImage);
+		}
+
+		updateVariant(variantIndex, {
+			options: variant.options.filter(
+				(_, itemIndex) => itemIndex !== optionIndex,
+			),
+		});
+	};
+
 	/* =========================================================================
 	   OTHER PHOTOS
 	=========================================================================== */
+
+	const markOtherPhotoForRemoval = (path: string) => {
+		setRemovedOtherPhotoPaths((current) => current.includes(path) ? current : [...current, path]);
+	};
+
+	const undoOtherPhotoRemoval = (path: string) => {
+		setRemovedOtherPhotoPaths((current) => current.filter((item) => item !== path));
+	};
+
+	const markVariantImageForRemoval = (variant: string, option: string, path: string) => {
+		setRemovedVariantImages((current) => current.some((item) => item.variant === variant && item.option === option && item.path === path) ? current : [...current, { variant, option, path }]);
+	};
+
+	const undoVariantImageRemoval = (variant: string, option: string, path: string) => {
+		setRemovedVariantImages((current) => current.filter((item) => !(item.variant === variant && item.option === option && item.path === path)));
+	};
+
 
 	const removeOtherPhoto = (index: number) => {
 		setOtherPhotos((current) =>
@@ -1185,6 +1673,9 @@ export default function AdminProductDetailsPage() {
 
 		setPrimaryPhoto(null);
 		setOtherPhotos([]);
+		setRemovedPrimaryPhoto(false);
+		setRemovedOtherPhotoPaths([]);
+		setRemovedVariantImages([]);
 		setError("");
 		setMessage("");
 		setIsEditing(false);
@@ -1197,14 +1688,82 @@ export default function AdminProductDetailsPage() {
 	const saveProduct = async (event: React.FormEvent) => {
 		event.preventDefault();
 
-		if (!form || !productId) {
-			return;
-		}
+		if (!form || !productId) return;
 
 		if (!form.name.trim() || !form.description.trim()) {
 			setError("Product name and description are required.");
-
 			return;
+		}
+
+		const variantNames = new Set<string>();
+
+		for (const variant of form.variants) {
+			const variantName = variant.name.trim();
+
+			if (!variantName) {
+				setError("Every variant must have a name.");
+				return;
+			}
+
+			const variantNameKey = variantName.toLowerCase();
+			if (variantNames.has(variantNameKey)) {
+				setError(`Variant "${variantName}" is duplicated.`);
+				return;
+			}
+			variantNames.add(variantNameKey);
+
+			if (variant.options.length === 0) {
+				setError(`Variant "${variantName}" must contain at least one option.`);
+				return;
+			}
+
+			const optionNames = new Set<string>();
+			let hasAnyImage = false;
+
+			for (const option of variant.options) {
+				const optionName = option.name.trim();
+
+				if (!optionName) {
+					setError(`Every option in "${variantName}" must have a name.`);
+					return;
+				}
+
+				const optionNameKey = optionName.toLowerCase();
+				if (optionNames.has(optionNameKey)) {
+					setError(`Option "${optionName}" is duplicated in "${variantName}".`);
+					return;
+				}
+				optionNames.add(optionNameKey);
+
+				const price = Number(option.price);
+				if (
+					option.price.trim() === "" ||
+					!Number.isFinite(price) ||
+					price < 0
+				) {
+					setError(
+						`Price for "${optionName}" in "${variantName}" must be a valid number greater than or equal to 0.`,
+					);
+					return;
+				}
+
+				if (option.image || option.existingImage) {
+					hasAnyImage = true;
+				}
+			}
+
+			if (hasAnyImage) {
+				const missingImageOption = variant.options.find(
+					(option) => !option.image && !option.existingImage,
+				);
+
+				if (missingImageOption) {
+					setError(
+						`Every option in "${variantName}" must have an image because at least one option has an image.`,
+					);
+					return;
+				}
+			}
 		}
 
 		setSaving(true);
@@ -1214,53 +1773,63 @@ export default function AdminProductDetailsPage() {
 		try {
 			const body = new FormData();
 
+			// Send every current scalar field, not only changed fields.
 			body.append("mode", "edit");
 			body.append("command_type", "admin");
-
 			body.append("product_id", productId);
-
 			body.append("name", form.name);
-
 			body.append("description", form.description);
-
 			body.append("market_price", form.marketPrice);
-
 			body.append("selling_price", form.sellingPrice);
-
 			body.append("reseller_price", form.resellerPrice);
-
 			body.append("keywords", form.keywords);
-
 			body.append("delivery", form.delivery);
-
 			body.append("in_stock", form.inStock ? "available" : "unavailable");
 
-			/* PRIMARY PHOTO */
-
+			// Primary image: replacement, preserve, or delete.
 			if (primaryPhoto) {
 				body.append("primary_photo", primaryPhoto);
+			} else if (!removedPrimaryPhoto && product.primary_photo_path) {
+				body.append("primary_photo", await fetchImageAsFile(product.primary_photo_path, `product-${productId}-primary`));
 			}
 
-			/* OTHER PHOTOS */
+			if (removedPrimaryPhoto && !primaryPhoto && product.primary_photo_path) {
+				body.append("remove_primary_photo", "true");
+				body.append("removed_primary_photo", product.primary_photo_path);
+			}
+
+			// Send ALL current other files plus newly selected files.
+			for (let index = 0; index < otherPhotoPaths.length; index += 1) {
+				const path = otherPhotoPaths[index];
+				if (!path) continue;
+
+				body.append(
+					"other_photos[]",
+					await fetchImageAsFile(
+						path,
+						`product-${productId}-other-${index + 1}`,
+					),
+				);
+			}
 
 			otherPhotos.forEach((photo) => {
 				body.append("other_photos[]", photo);
 			});
 
-			/* CATEGORIES */
+			removedOtherPhotoPaths.forEach((path) => {
+				body.append("removed_other_photos[]", path);
+			});
 
+			// Send complete current category and occasion selections.
 			form.categoryIds.forEach((id) => {
 				body.append("category_ids[]", String(id));
 			});
-
-			/* OCCASIONS */
 
 			form.occasionIds.forEach((id) => {
 				body.append("occasion_ids[]", String(id));
 			});
 
-			/* CUSTOMIZATION REQUIREMENTS */
-
+			// Send complete current customization list.
 			form.customizeReqs.forEach((requirement) => {
 				body.append(
 					"customize_reqs[]",
@@ -1268,25 +1837,87 @@ export default function AdminProductDetailsPage() {
 				);
 			});
 
+			// Backend expects variant options as option -> price strings.
+			body.append(
+				"varients",
+				JSON.stringify(buildVariantsPayload(form.variants)),
+			);
+
+			// Send EVERY current variant image. If the admin selected a replacement,
+			// send the replacement; otherwise send the existing file again.
+			for (const variant of form.variants) {
+				const variantName = variant.name.trim();
+				if (!variantName) continue;
+
+				for (const option of variant.options) {
+					const optionName = option.name.trim();
+					if (!optionName) continue;
+
+					if (option.image) {
+						body.append(
+						`variant_images[${variantName}][${optionName}]`,
+						option.image,
+					);
+					} else if (
+						option.existingImage &&
+						!removedVariantImages.some(
+							(item) =>
+								item.variant === variantName &&
+								item.option === optionName &&
+								item.path === option.existingImage,
+						)
+					) {
+						body.append(
+						`variant_images[${variantName}][${optionName}]`,
+						await fetchImageAsFile(
+							option.existingImage,
+							`product-${productId}-${slugifyForKey(variantName)}-${slugifyForKey(optionName) || "option"}`,
+						),
+					);
+					}
+				}
+			}
+
+			removedVariantImages.forEach((item) => {
+				body.append("removed_variant_images[]", JSON.stringify(item));
+			});
+
 			const response = await fetch("/api/admin/products", {
 				method: "POST",
 				body,
 				credentials: "include",
+				cache: "no-store",
 			});
 
 			const data = await response.json().catch(() => ({}));
 
-			if (!response.ok) {
-				throw new Error(data.message || "Unable to update product.");
+			const logicalStatus =
+				data &&
+				typeof data === "object" &&
+				"status" in data &&
+				typeof (data as { status?: unknown }).status === "number"
+					? (data as { status: number }).status
+					: response.status;
+
+			if (!response.ok || logicalStatus >= 400) {
+				throw new Error(
+					data &&
+					typeof data === "object" &&
+					"message" in data &&
+					typeof (data as { message?: unknown }).message === "string"
+						? (data as { message: string }).message
+						: "Unable to update product.",
+				);
 			}
 
 			await loadProductData();
 
 			setPrimaryPhoto(null);
 			setOtherPhotos([]);
-
+			setRemovedPrimaryPhoto(false);
+			setRemovedOtherPhotoPaths([]);
+			setRemovedVariantImages([]);
 			setMessage("Product updated successfully.");
-
 			setIsEditing(false);
 		} catch (saveError) {
 			setError(
@@ -1296,6 +1927,43 @@ export default function AdminProductDetailsPage() {
 			);
 		} finally {
 			setSaving(false);
+		}
+	};
+
+	/* =========================================================================
+	   DELETE PRODUCT
+	=========================================================================== */
+
+	const deleteProduct = async () => {
+		if (!productId || deleting) return;
+		setDeleting(true);
+		setDeleteError("");
+
+		try {
+			const response = await fetch("/api/admin/products", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ mode: "delete", command_type: "admin", product_ids: [productId] }),
+				credentials: "include",
+				cache: "no-store",
+			});
+
+			const data = await response.json().catch(() => ({}));
+			const logicalStatus = data && typeof data === "object" && "status" in data && typeof (data as { status?: unknown }).status === "number"
+				? (data as { status: number }).status : response.status;
+			const success = response.ok && logicalStatus >= 200 && logicalStatus < 300 && !(data && typeof data === "object" && "success" in data && (data as { success?: unknown }).success === false);
+
+			if (!success) {
+				throw new Error(data && typeof data === "object" && "message" in data && typeof (data as { message?: unknown }).message === "string"
+					? (data as { message: string }).message : "Unable to delete product.");
+			}
+
+			setShowDeleteConfirm(false);
+			router.push("/admin/products");
+		} catch (deleteRequestError) {
+			setDeleteError(deleteRequestError instanceof Error ? deleteRequestError.message : "Unable to delete product.");
+		} finally {
+			setDeleting(false);
 		}
 	};
 
@@ -1383,6 +2051,11 @@ export default function AdminProductDetailsPage() {
 						>
 							View storefront
 						</Link>
+
+						<button type="button" onClick={() => { setDeleteError(""); setShowDeleteConfirm(true); }} disabled={deleting} className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50">
+							<Trash2 size={16} />
+							Delete product
+						</button>
 					</div>
 
 					{(error || message) && (
@@ -1406,6 +2079,22 @@ export default function AdminProductDetailsPage() {
 						averageRating={allReviewsRating}
 						onEdit={() => setIsEditing(true)}
 					/>
+
+					{showDeleteConfirm && (
+						<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+							<div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+								<div className="flex items-start gap-4">
+									<div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-700"><AlertCircle size={21} /></div>
+									<div><h2 className="text-lg font-semibold text-[#1F1F1F]">Delete product?</h2><p className="mt-1.5 text-sm leading-6 text-[#2E2E2E]/65">This will permanently delete <strong>{form.name || "this product"}</strong>. This action cannot be undone.</p></div>
+								</div>
+								{deleteError && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700">{deleteError}</div>}
+								<div className="mt-6 flex justify-end gap-2.5">
+									<button type="button" onClick={() => { setShowDeleteConfirm(false); setDeleteError(""); }} disabled={deleting} className="inline-flex items-center gap-2 rounded-xl border border-[#E8DED7] bg-white px-4 py-2.5 text-sm font-semibold text-[#2E2E2E] hover:bg-[#F7F2EE] disabled:opacity-50"><X size={15} />Cancel</button>
+									<button type="button" onClick={deleteProduct} disabled={deleting} className="inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#6F1217] disabled:cursor-not-allowed disabled:opacity-60">{deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}{deleting ? "Deleting..." : "Delete product"}</button>
+								</div>
+							</div>
+						</div>
+					)}
 				</div>
 			</main>
 		);
@@ -1663,7 +2352,7 @@ export default function AdminProductDetailsPage() {
 								</p>
 
 								<div className="relative mt-2.5 aspect-square w-28 overflow-hidden rounded-xl border border-[#E8DED7] bg-[#F7F2EE]">
-									{primaryPreviewUrl || product.primary_photo_path ? (
+									{primaryPreviewUrl || (!removedPrimaryPhoto && product.primary_photo_path) ? (
 										<img
 											src={
 												primaryPreviewUrl ??
@@ -1690,12 +2379,21 @@ export default function AdminProductDetailsPage() {
 									<input
 										type="file"
 										accept="image/*"
-										onChange={(event) =>
-											setPrimaryPhoto(event.target.files?.[0] ?? null)
-										}
+										onChange={(event) => {
+											const file = event.target.files?.[0] ?? null;
+											setPrimaryPhoto(file);
+											if (file) setRemovedPrimaryPhoto(false);
+										}}
 										className="mt-2 block w-full text-xs"
 									/>
 								</label>
+
+									{product.primary_photo_path && !primaryPhoto && !removedPrimaryPhoto && (
+										<button type="button" onClick={() => setRemovedPrimaryPhoto(true)} className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"><Trash2 size={13} /> Remove existing photo</button>
+									)}
+									{removedPrimaryPhoto && !primaryPhoto && (
+										<button type="button" onClick={() => setRemovedPrimaryPhoto(false)} className="mt-2 text-xs font-semibold text-[#85161B] hover:underline">Undo removal</button>
+									)}
 
 								{primaryPhoto && (
 									<button
@@ -1719,13 +2417,22 @@ export default function AdminProductDetailsPage() {
 									{otherPhotoPaths.map((photo, index) => (
 										<div
 											key={`${photo}-${index}`}
-											className="aspect-square overflow-hidden rounded-xl border border-[#E8DED7] bg-[#F7F2EE]"
+											className="relative aspect-square overflow-hidden rounded-xl border border-[#E8DED7] bg-[#F7F2EE]"
 										>
 											<img
 												src={imageUrl(photo)}
 												alt="Product"
 												className="h-full w-full object-cover"
 											/>
+												<button type="button" onClick={() => markOtherPhotoForRemoval(photo)} aria-label="Remove existing photo" className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-700/90 text-white hover:bg-red-800"><X size={12} /></button>
+										</div>
+									))}
+
+									{removedOtherPhotoPaths.map((photo) => (
+										<div key={`removed-${photo}`} className="relative aspect-square overflow-hidden rounded-xl border border-red-200 bg-red-50">
+											<img src={imageUrl(photo)} alt="Marked for removal" className="h-full w-full object-cover opacity-35" />
+											<div className="absolute inset-0 flex items-center justify-center bg-red-900/20 p-1 text-center text-[9px] font-semibold text-white">Marked for removal</div>
+											<button type="button" onClick={() => undoOtherPhotoRemoval(photo)} className="absolute bottom-1 left-1 right-1 rounded bg-white px-1.5 py-1 text-[8px] font-semibold text-[#85161B] shadow-sm">Undo</button>
 										</div>
 									))}
 
@@ -1835,6 +2542,193 @@ export default function AdminProductDetailsPage() {
 									this product.
 								</p>
 							)}
+						</div>
+
+						{/* VARIANTS */}
+
+						<div className="rounded-2xl border border-[#E8DED7] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.02)] sm:p-6">
+							<div className="flex items-start justify-between gap-3">
+								<div>
+									<h2 className="flex items-center gap-2 text-base font-semibold text-[#2E2E2E]">
+										<Layers3 size={17} className="text-[#85161B]" />
+										Product variants
+									</h2>
+									<p className="mt-1 text-xs leading-5 text-[#2E2E2E]/45">
+										Manage variant names, option prices and option images.
+									</p>
+								</div>
+
+								<button
+									type="button"
+									onClick={addVariant}
+									className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#85161B] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#6f1116]"
+								>
+									<Plus size={14} />
+									Add variant
+								</button>
+							</div>
+
+							{form.variants.length === 0 ? (
+								<div className="mt-4 rounded-xl border border-dashed border-[#E8DED7] bg-[#FBF9F7] px-4 py-5 text-center">
+									<Layers3 size={22} className="mx-auto text-[#2E2E2E]/20" />
+									<p className="mt-2 text-xs text-[#2E2E2E]/50">
+										No variants added. Click Add variant to create one.
+									</p>
+								</div>
+							) : (
+								<div className="mt-4 space-y-4">
+									{form.variants.map((variant, variantIndex) => (
+										<div
+											key={variant.id}
+											className="rounded-xl border border-[#E8DED7] bg-[#FBF9F7] p-4"
+										>
+											<div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+												<label className="min-w-0 flex-1">
+													<span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/45">
+														Variant name
+													</span>
+													<input
+														type="text"
+														value={variant.name}
+														onChange={(event) =>
+															updateVariant(variantIndex, {
+																name: event.target.value,
+															})
+														}
+														placeholder="e.g. colors"
+														className="h-10 w-full rounded-lg border border-[#E8DED7] bg-white px-3 text-sm outline-none focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
+													/>
+												</label>
+
+												<button
+													type="button"
+													onClick={() => removeVariant(variantIndex)}
+													className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 text-xs font-semibold text-red-600 hover:bg-red-50"
+												>
+													<Trash2 size={14} />
+													Remove variant
+												</button>
+											</div>
+
+											<div className="mt-4 space-y-3">
+												{variant.options.map((option, optionIndex) => (
+													<div
+														key={option.id}
+														className="rounded-xl border border-[#E8DED7] bg-white p-3"
+													>
+														<div className="grid gap-3 sm:grid-cols-[1fr_150px]">
+															<label>
+																<span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/45">
+																	Option name
+																</span>
+																<input
+																	type="text"
+																	value={option.name}
+																	onChange={(event) =>
+																		updateVariantOption(variantIndex, optionIndex, {
+																			name: event.target.value,
+																		})
+																	}
+																	placeholder="e.g. red"
+																	className="h-10 w-full rounded-lg border border-[#E8DED7] px-3 text-sm outline-none focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
+																/>
+															</label>
+
+															<label>
+																<span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-[#2E2E2E]/45">
+																	Additional price
+																</span>
+																<input
+																	type="number"
+																	min="0"
+																	step="0.01"
+																	value={option.price}
+																	onChange={(event) =>
+																		updateVariantOption(variantIndex, optionIndex, {
+																			price: event.target.value,
+																		})
+																	}
+																	className="h-10 w-full rounded-lg border border-[#E8DED7] px-3 text-sm outline-none focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
+																/>
+															</label>
+														</div>
+
+														<div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+											<div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-[#E8DED7] bg-[#F7F2EE]">
+												{option.image ? (
+													<img
+														src={URL.createObjectURL(option.image)}
+														alt={option.name || "New variant"}
+														className="h-full w-full object-cover"
+													/>
+												) : option.existingImage ? (
+												<div className="relative h-full w-full">
+													<img src={imageUrl(option.existingImage)} alt={option.name || "Variant"} className="h-full w-full object-cover" />
+													<button type="button" onClick={() => markVariantImageForRemoval(variant.name.trim(), option.name.trim(), option.existingImage!)} aria-label="Remove existing variant image" className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-700/90 text-white hover:bg-red-800"><X size={10} /></button>
+													</div>
+												) : (
+													<div className="flex h-full w-full items-center justify-center">
+														<ImageIcon size={18} className="text-[#2E2E2E]/20" />
+													</div>
+												)}
+											</div>
+
+															<div className="min-w-0 flex-1">
+																<label className="block text-xs font-medium text-[#2E2E2E]/65">
+																	{option.existingImage ? "Replace option image" : "Add option image"}
+																	<input
+																		type="file"
+																		accept="image/*"
+																		onChange={(event) =>
+																			updateVariantOption(variantIndex, optionIndex, {
+																				image: event.target.files?.[0] ?? null,
+																			})
+																		}
+																		className="mt-1.5 block w-full text-xs"
+																	/>
+																</label>
+												{option.existingImage && removedVariantImages.some((item) => item.variant === variant.name.trim() && item.option === option.name.trim() && item.path === option.existingImage) && (
+													<div className="mt-1.5 flex items-center gap-2"><span className="text-[10px] font-semibold text-red-700">Marked for removal</span><button type="button" onClick={() => undoVariantImageRemoval(variant.name.trim(), option.name.trim(), option.existingImage!)} className="text-[10px] font-semibold text-[#85161B] hover:underline">Undo</button></div>
+												)}
+
+																{option.image && (
+																	<p className="mt-1 text-[10px] font-medium text-[#85161B]">
+																		New image selected — it will replace the current image.
+																	</p>
+																)}
+															</div>
+
+															{variant.options.length > 1 && (
+																<button
+																	type="button"
+																	onClick={() => removeVariantOption(variantIndex, optionIndex)}
+																	className="inline-flex h-9 shrink-0 items-center justify-center gap-1 rounded-lg border border-red-200 px-2.5 text-xs font-semibold text-red-600 hover:bg-red-50"
+																>
+																	<X size={13} />
+																	Remove
+																</button>
+															)}
+														</div>
+													</div>
+												))}
+											</div>
+
+											<button
+												type="button"
+												onClick={() => addVariantOption(variantIndex)}
+												className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[#85161B]/20 bg-white px-3 py-2 text-xs font-semibold text-[#85161B] hover:bg-[#85161B]/5"
+											>
+												<Plus size={14} />
+												Add option
+											</button>
+										</div>
+									))}
+								</div>
+							)}
+
+							<p className="mt-4 rounded-lg bg-[#85161B]/5 px-3 py-2.5 text-[10px] leading-4 text-[#85161B]">
+								If you use an image for one option of a variant, every option in that variant must have an image.
+							</p>
 						</div>
 
 						{/* ACTIONS */}

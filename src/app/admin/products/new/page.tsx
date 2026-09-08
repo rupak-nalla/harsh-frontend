@@ -1,6 +1,13 @@
 "use client";
 
-import React, { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import React, {
+	ChangeEvent,
+	FormEvent,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
+
 import {
 	AlertCircle,
 	Check,
@@ -57,7 +64,9 @@ const API_URL = "https://printinghouseujjain.in";
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 function createId() {
-	return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+	return `${Date.now()}-${Math.random()
+		.toString(36)
+		.slice(2)}`;
 }
 
 function slugify(value: string) {
@@ -67,6 +76,10 @@ function slugify(value: string) {
 		.replace(/[^a-z0-9]+/g, "_")
 		.replace(/^_+|_+$/g, "");
 }
+
+/* ─────────────────────────────────────────
+   IMAGE PREVIEW
+───────────────────────────────────────── */
 
 function PreviewImage({
 	file,
@@ -84,9 +97,12 @@ function PreviewImage({
 		}
 
 		const objectUrl = URL.createObjectURL(file);
+
 		setUrl(objectUrl);
 
-		return () => URL.revokeObjectURL(objectUrl);
+		return () => {
+			URL.revokeObjectURL(objectUrl);
+		};
 	}, [file]);
 
 	if (!url) {
@@ -124,40 +140,48 @@ export default function NewProductPage() {
 	   CATEGORIES / OCCASIONS
 	───────────────────────────────────────── */
 
-	const [categories, setCategories] = useState<Category[]>([]);
-	const [occasions, setOccasions] = useState<Occasion[]>([]);
-
-	const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>(
+	const [categories, setCategories] = useState<Category[]>(
 		[],
 	);
 
-	const [selectedOccasionIds, setSelectedOccasionIds] = useState<number[]>(
+	const [occasions, setOccasions] = useState<Occasion[]>(
 		[],
 	);
 
-	const [loadingOptions, setLoadingOptions] = useState(true);
+	const [selectedCategoryIds, setSelectedCategoryIds] =
+		useState<number[]>([]);
+
+	const [selectedOccasionIds, setSelectedOccasionIds] =
+		useState<number[]>([]);
+
+	const [loadingOptions, setLoadingOptions] =
+		useState(true);
 
 	/* ─────────────────────────────────────────
 	   PHOTOS
 	───────────────────────────────────────── */
 
-	const [primaryPhoto, setPrimaryPhoto] = useState<File | null>(null);
+	const [primaryPhoto, setPrimaryPhoto] =
+		useState<File | null>(null);
 
-	const [otherPhotos, setOtherPhotos] = useState<File[]>([]);
+	const [otherPhotos, setOtherPhotos] = useState<File[]>(
+		[],
+	);
 
 	/* ─────────────────────────────────────────
 	   CUSTOMIZATION REQUIREMENTS
 	───────────────────────────────────────── */
 
-	const [customizations, setCustomizations] = useState<
-		CustomizationRequirement[]
-	>([]);
+	const [customizations, setCustomizations] =
+		useState<CustomizationRequirement[]>([]);
 
 	/* ─────────────────────────────────────────
 	   VARIANTS
 	───────────────────────────────────────── */
 
-	const [variants, setVariants] = useState<Variant[]>([]);
+	const [variants, setVariants] = useState<Variant[]>(
+		[],
+	);
 
 	/* ─────────────────────────────────────────
 	   SUBMIT STATE
@@ -178,17 +202,20 @@ export default function NewProductPage() {
 			try {
 				setLoadingOptions(true);
 
-				const [categoriesResponse, occasionsResponse] =
-					await Promise.all([
-						fetch("/api/admin/categories", {
-							method: "GET",
-							cache: "no-store",
-						}),
-						fetch("/api/admin/occasions", {
-							method: "GET",
-							cache: "no-store",
-						}),
-					]);
+				const [
+					categoriesResponse,
+					occasionsResponse,
+				] = await Promise.all([
+					fetch("/api/admin/categories", {
+						method: "GET",
+						cache: "no-store",
+					}),
+
+					fetch("/api/admin/occasions", {
+						method: "GET",
+						cache: "no-store",
+					}),
+				]);
 
 				const categoriesData =
 					await categoriesResponse.json();
@@ -199,18 +226,26 @@ export default function NewProductPage() {
 				const categoryList =
 					Array.isArray(categoriesData)
 						? categoriesData
-						: Array.isArray(categoriesData?.categories)
+						: Array.isArray(
+								categoriesData?.categories,
+							)
 							? categoriesData.categories
-							: Array.isArray(categoriesData?.data)
+							: Array.isArray(
+									categoriesData?.data,
+								)
 								? categoriesData.data
 								: [];
 
 				const occasionList =
 					Array.isArray(occasionsData)
 						? occasionsData
-						: Array.isArray(occasionsData?.occasions)
+						: Array.isArray(
+								occasionsData?.occasions,
+							)
 							? occasionsData.occasions
-							: Array.isArray(occasionsData?.data)
+							: Array.isArray(
+									occasionsData?.data,
+								)
 								? occasionsData.data
 								: [];
 
@@ -218,11 +253,15 @@ export default function NewProductPage() {
 					categoryList
 						.map((item: any) => ({
 							id: Number(item.id),
-							name: String(item.name ?? ""),
+							name: String(
+								item.name ?? "",
+							),
 						}))
 						.filter(
 							(item: Category) =>
-								Number.isFinite(item.id) &&
+								Number.isFinite(
+									item.id,
+								) &&
 								item.name,
 						),
 				);
@@ -231,16 +270,21 @@ export default function NewProductPage() {
 					occasionList
 						.map((item: any) => ({
 							id: Number(item.id),
-							name: String(item.name ?? ""),
+							name: String(
+								item.name ?? "",
+							),
 						}))
 						.filter(
 							(item: Occasion) =>
-								Number.isFinite(item.id) &&
+								Number.isFinite(
+									item.id,
+								) &&
 								item.name,
 						),
 				);
 			} catch (loadError) {
 				console.error(loadError);
+
 				setError(
 					"Unable to load categories and occasions.",
 				);
@@ -259,7 +303,9 @@ export default function NewProductPage() {
 	function toggleCategory(id: number) {
 		setSelectedCategoryIds((current) =>
 			current.includes(id)
-				? current.filter((item) => item !== id)
+				? current.filter(
+						(item) => item !== id,
+					)
 				: [...current, id],
 		);
 	}
@@ -267,7 +313,9 @@ export default function NewProductPage() {
 	function toggleOccasion(id: number) {
 		setSelectedOccasionIds((current) =>
 			current.includes(id)
-				? current.filter((item) => item !== id)
+				? current.filter(
+						(item) => item !== id,
+					)
 				: [...current, id],
 		);
 	}
@@ -307,12 +355,16 @@ export default function NewProductPage() {
 
 		setError("");
 		setPrimaryPhoto(file);
+
+		event.target.value = "";
 	}
 
 	function handleOtherPhotos(
 		event: ChangeEvent<HTMLInputElement>,
 	) {
-		const files = Array.from(event.target.files ?? []);
+		const files = Array.from(
+			event.target.files ?? [],
+		);
 
 		if (files.length === 0) {
 			return;
@@ -340,7 +392,10 @@ export default function NewProductPage() {
 
 	function removeOtherPhoto(index: number) {
 		setOtherPhotos((current) =>
-			current.filter((_, photoIndex) => photoIndex !== index),
+			current.filter(
+				(_, photoIndex) =>
+					photoIndex !== index,
+			),
 		);
 	}
 
@@ -362,7 +417,9 @@ export default function NewProductPage() {
 
 	function removeCustomization(id: string) {
 		setCustomizations((current) =>
-			current.filter((item) => item.id !== id),
+			current.filter(
+				(item) => item.id !== id,
+			),
 		);
 	}
 
@@ -389,7 +446,8 @@ export default function NewProductPage() {
 		const label = requirement.label.trim();
 
 		const key =
-			slugify(label) || `custom_${requirement.id}`;
+			slugify(label) ||
+			`custom_${requirement.id}`;
 
 		if (requirement.type === "photo") {
 			return `${key}:photo:${label}`;
@@ -427,7 +485,8 @@ export default function NewProductPage() {
 	function removeVariant(variantId: string) {
 		setVariants((current) =>
 			current.filter(
-				(variant) => variant.id !== variantId,
+				(variant) =>
+					variant.id !== variantId,
 			),
 		);
 	}
@@ -448,7 +507,9 @@ export default function NewProductPage() {
 		);
 	}
 
-	function addVariantOption(variantId: string) {
+	function addVariantOption(
+		variantId: string,
+	) {
 		setVariants((current) =>
 			current.map((variant) =>
 				variant.id === variantId
@@ -459,7 +520,8 @@ export default function NewProductPage() {
 								{
 									id: createId(),
 									name: "",
-									additionalPrice: "0",
+									additionalPrice:
+										"0",
 									image: null,
 								},
 							],
@@ -478,10 +540,12 @@ export default function NewProductPage() {
 				variant.id === variantId
 					? {
 							...variant,
-							options: variant.options.filter(
-								(option) =>
-									option.id !== optionId,
-							),
+							options:
+								variant.options.filter(
+									(option) =>
+										option.id !==
+										optionId,
+								),
 						}
 					: variant,
 			),
@@ -499,15 +563,18 @@ export default function NewProductPage() {
 				variant.id === variantId
 					? {
 							...variant,
-							options: variant.options.map(
-								(option) =>
-									option.id === optionId
-										? {
-												...option,
-												[field]: value,
-											}
-										: option,
-							),
+							options:
+								variant.options.map(
+									(option) =>
+										option.id ===
+										optionId
+											? {
+													...option,
+													[field]:
+														value,
+												}
+											: option,
+								),
 						}
 					: variant,
 			),
@@ -520,7 +587,8 @@ export default function NewProductPage() {
 		file: File | null,
 	) {
 		if (file) {
-			const validationError = validateImage(file);
+			const validationError =
+				validateImage(file);
 
 			if (validationError) {
 				setError(validationError);
@@ -535,15 +603,17 @@ export default function NewProductPage() {
 				variant.id === variantId
 					? {
 							...variant,
-							options: variant.options.map(
-								(option) =>
-									option.id === optionId
-										? {
-												...option,
-												image: file,
-											}
-										: option,
-							),
+							options:
+								variant.options.map(
+									(option) =>
+										option.id ===
+										optionId
+											? {
+													...option,
+													image: file,
+												}
+											: option,
+								),
 						}
 					: variant,
 			),
@@ -555,12 +625,24 @@ export default function NewProductPage() {
 	───────────────────────────────────────── */
 
 	function validateVariants() {
+		const variantNames = new Set<string>();
+
 		for (const variant of variants) {
-			const variantName = variant.name.trim();
+			const variantName =
+				variant.name.trim();
 
 			if (!variantName) {
 				return "Please enter a name for every variant.";
 			}
+
+			const variantKey =
+				variantName.toLowerCase();
+
+			if (variantNames.has(variantKey)) {
+				return `The variant "${variantName}" is repeated.`;
+			}
+
+			variantNames.add(variantKey);
 
 			if (variant.options.length === 0) {
 				return `Please add at least one option to "${variantName}".`;
@@ -569,27 +651,37 @@ export default function NewProductPage() {
 			const optionNames = new Set<string>();
 
 			for (const option of variant.options) {
-				const optionName = option.name.trim();
+				const optionName =
+					option.name.trim();
 
 				if (!optionName) {
 					return `Please enter a name for every option in "${variantName}".`;
 				}
 
-				const duplicateKey = optionName.toLowerCase();
+				const duplicateKey =
+					optionName.toLowerCase();
 
-				if (optionNames.has(duplicateKey)) {
+				if (
+					optionNames.has(
+						duplicateKey,
+					)
+				) {
 					return `The option "${optionName}" is repeated in "${variantName}".`;
 				}
 
 				optionNames.add(duplicateKey);
 
-				const additionalPrice = Number(
-					option.additionalPrice,
-				);
+				const additionalPrice =
+					Number(
+						option.additionalPrice,
+					);
 
 				if (
-					option.additionalPrice.trim() === "" ||
-					!Number.isFinite(additionalPrice) ||
+					option.additionalPrice.trim() ===
+						"" ||
+					!Number.isFinite(
+						additionalPrice,
+					) ||
 					additionalPrice < 0
 				) {
 					return `Please enter a valid additional price for "${optionName}" in variant "${variantName}".`;
@@ -597,32 +689,28 @@ export default function NewProductPage() {
 			}
 
 			/*
-			 * If one option has an image, every option
-			 * in that variant must have an image.
+			 * If one option has an image,
+			 * every option in that variant
+			 * must have an image.
 			 */
-			const hasAnyImage = variant.options.some(
-				(option) => option.image !== null,
-			);
+			const hasAnyImage =
+				variant.options.some(
+					(option) =>
+						option.image !== null,
+				);
 
-			const allHaveImages = variant.options.every(
-				(option) => option.image !== null,
-			);
+			const allHaveImages =
+				variant.options.every(
+					(option) =>
+						option.image !== null,
+				);
 
-			if (hasAnyImage && !allHaveImages) {
+			if (
+				hasAnyImage &&
+				!allHaveImages
+			) {
 				return `Please add images for every option in "${variantName}", or remove the images from all options.`;
 			}
-		}
-
-		const variantNames = new Set<string>();
-
-		for (const variant of variants) {
-			const key = variant.name.trim().toLowerCase();
-
-			if (variantNames.has(key)) {
-				return `The variant "${variant.name.trim()}" is repeated.`;
-			}
-
-			variantNames.add(key);
 		}
 
 		return "";
@@ -671,13 +759,18 @@ export default function NewProductPage() {
 			}
 
 			if (
-				customization.type === "text" ||
-				customization.type === "photos"
+				customization.type ===
+					"text" ||
+				customization.type ===
+					"photos"
 			) {
-				const limit = Number(customization.limit);
+				const limit = Number(
+					customization.limit,
+				);
 
 				if (
-					customization.limit.trim() === "" ||
+					customization.limit.trim() ===
+						"" ||
 					!Number.isFinite(limit) ||
 					limit <= 0
 				) {
@@ -686,7 +779,8 @@ export default function NewProductPage() {
 			}
 		}
 
-		const variantError = validateVariants();
+		const variantError =
+			validateVariants();
 
 		if (variantError) {
 			return variantError;
@@ -697,32 +791,74 @@ export default function NewProductPage() {
 
 	/* ─────────────────────────────────────────
 	   BUILD VARIANT PAYLOAD
+
+	   IMPORTANT:
+
+	   Backend expects:
+
+	   {
+	     "colors": {
+	       "red": "100",
+	       "green": "120"
+	     },
+	     "charms": {
+	       "Gold": "50",
+	       "Black": "40"
+	     }
+	   }
+
+	   Prices are deliberately kept as STRINGS.
 	───────────────────────────────────────── */
 
 	function buildVariantsPayload() {
 		const variantsPayload: Record<
 			string,
-			Record<string, number>
+			Record<string, string>
 		> = {};
 
 		variants.forEach((variant) => {
-			const variantName = variant.name.trim();
+			const variantName =
+				variant.name.trim();
 
-			const optionsPayload: Record<string, number> = {};
+			if (!variantName) {
+				return;
+			}
 
-			variant.options.forEach((option) => {
-				const optionName = option.name.trim();
+			const optionsPayload: Record<
+				string,
+				string
+			> = {};
 
-				if (!optionName) {
-					return;
-				}
+			variant.options.forEach(
+				(option) => {
+					const optionName =
+						option.name.trim();
 
-				optionsPayload[optionName] = Number(
-					option.additionalPrice || 0,
-				);
-			});
+					if (!optionName) {
+						return;
+					}
 
-			variantsPayload[variantName] = optionsPayload;
+					/*
+					 * IMPORTANT:
+					 *
+					 * Keep price as a string.
+					 *
+					 * "100"
+					 * "120"
+					 * "50"
+					 * "40"
+					 */
+					optionsPayload[
+						optionName
+					] =
+						option.additionalPrice.trim() ||
+						"0";
+				},
+			);
+
+			variantsPayload[
+				variantName
+			] = optionsPayload;
 		});
 
 		return variantsPayload;
@@ -732,7 +868,9 @@ export default function NewProductPage() {
 	   SUBMIT
 	───────────────────────────────────────── */
 
-	async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+	async function handleSubmit(
+		event: FormEvent<HTMLFormElement>,
+	) {
 		event.preventDefault();
 
 		if (saving) {
@@ -742,14 +880,17 @@ export default function NewProductPage() {
 		setError("");
 		setSuccess("");
 
-		const validationError = validateForm();
+		const validationError =
+			validateForm();
 
 		if (validationError) {
 			setError(validationError);
+
 			window.scrollTo({
 				top: 0,
 				behavior: "smooth",
 			});
+
 			return;
 		}
 
@@ -758,10 +899,29 @@ export default function NewProductPage() {
 
 			const body = new FormData();
 
-			/* BASIC DETAILS */
+			/* ─────────────────────────────
+			   MODE / COMMAND
+			───────────────────────────── */
 
-			body.append("name", name.trim());
-			body.append("description", description.trim());
+			body.append("mode", "new");
+			body.append(
+				"command_type",
+				"admin",
+			);
+
+			/* ─────────────────────────────
+			   BASIC DETAILS
+			───────────────────────────── */
+
+			body.append(
+				"name",
+				name.trim(),
+			);
+
+			body.append(
+				"description",
+				description.trim(),
+			);
 
 			body.append(
 				"market_price",
@@ -783,7 +943,9 @@ export default function NewProductPage() {
 				keywords.trim(),
 			);
 
-			/* PRIMARY PHOTO */
+			/* ─────────────────────────────
+			   PRIMARY PHOTO
+			───────────────────────────── */
 
 			if (primaryPhoto) {
 				body.append(
@@ -792,34 +954,48 @@ export default function NewProductPage() {
 				);
 			}
 
-			/* OTHER PHOTOS */
+			/* ─────────────────────────────
+			   OTHER PHOTOS
+			───────────────────────────── */
 
-			otherPhotos.forEach((photo) => {
-				body.append(
-					"other_photos[]",
-					photo,
-				);
-			});
+			otherPhotos.forEach(
+				(photo) => {
+					body.append(
+						"other_photos[]",
+						photo,
+					);
+				},
+			);
 
-			/* CATEGORIES */
+			/* ─────────────────────────────
+			   CATEGORIES
+			───────────────────────────── */
 
-			selectedCategoryIds.forEach((categoryId) => {
-				body.append(
-					"category_ids[]",
-					String(categoryId),
-				);
-			});
+			selectedCategoryIds.forEach(
+				(categoryId) => {
+					body.append(
+						"category_ids[]",
+						String(categoryId),
+					);
+				},
+			);
 
-			/* OCCASIONS */
+			/* ─────────────────────────────
+			   OCCASIONS
+			───────────────────────────── */
 
-			selectedOccasionIds.forEach((occasionId) => {
-				body.append(
-					"occasion_ids[]",
-					String(occasionId),
-				);
-			});
+			selectedOccasionIds.forEach(
+				(occasionId) => {
+					body.append(
+						"occasion_ids[]",
+						String(occasionId),
+					);
+				},
+			);
 
-			/* CUSTOMIZATION REQUIREMENTS */
+			/* ─────────────────────────────
+			   CUSTOMIZATION REQUIREMENTS
+			───────────────────────────── */
 
 			if (customizations.length > 0) {
 				const customizationPayload =
@@ -835,30 +1011,27 @@ export default function NewProductPage() {
 				);
 			}
 
-			/* ─────────────────────────────────────
+			/* ─────────────────────────────
 			   VARIANTS
-
-			   IMPORTANT:
-
-			   Backend expects option prices.
-
-			   Example:
-
-			   {
-			     "Color": {
-			       "Red": 0,
-			       "Green": 20
-			     },
-			     "Size": {
-			       "Small": 0,
-			       "Large": 50
-			     }
-			   }
-			───────────────────────────────────── */
+			───────────────────────────── */
 
 			if (variants.length > 0) {
 				const variantsPayload =
 					buildVariantsPayload();
+
+				/*
+				 * Example:
+				 *
+				 * {
+				 *   "colors": {
+				 *     "red": "100",
+				 *     "green": "120"
+				 *   },
+				 *   "charms": {
+				 *     "Gold": "50",
+				 *     "Black": "40"
+				 *   }
+				 */
 
 				body.append(
 					"varients",
@@ -867,36 +1040,87 @@ export default function NewProductPage() {
 					),
 				);
 
-				/*
-				 * Variant images:
-				 *
-				 * variant_images[Color][Red]
-				 * variant_images[Color][Green]
-				 */
+				/* ─────────────────────────
+				   VARIANT IMAGES
 
-				variants.forEach((variant) => {
-					const variantName =
-						variant.name.trim();
+				   Example:
 
-					variant.options.forEach(
-						(option) => {
-							if (!option.image) {
-								return;
-							}
+				   variant_images[colors][red]
+				   variant_images[colors][green]
 
-							const optionName =
-								option.name.trim();
+				   These remain exactly as before.
+				───────────────────────── */
 
-							body.append(
-								`variant_images[${variantName}][${optionName}]`,
-								option.image,
-							);
-						},
-					);
-				});
+				variants.forEach(
+					(variant) => {
+						const variantName =
+							variant.name.trim();
+
+						variant.options.forEach(
+							(option) => {
+								if (
+									!option.image
+								) {
+									return;
+								}
+
+								const optionName =
+									option.name.trim();
+
+								if (
+									!optionName
+								) {
+									return;
+								}
+
+								body.append(
+									`variant_images[${variantName}][${optionName}]`,
+									option.image,
+								);
+							},
+						);
+					},
+				);
 			}
 
-			/* SEND REQUEST */
+			/* ─────────────────────────────
+			   DEBUG
+
+			   This prints all non-file
+			   FormData values in console.
+			───────────────────────────── */
+
+			console.log(
+				"Product request:",
+			);
+
+			for (const [
+				key,
+				value,
+			] of body.entries()) {
+				if (value instanceof File) {
+					console.log(
+						key,
+						`[File: ${value.name}]`,
+					);
+				} else {
+					console.log(
+						key,
+						value,
+					);
+				}
+			}
+
+			/* ─────────────────────────────
+			   SEND REQUEST
+
+			   DO NOT manually set
+			   Content-Type.
+
+			   Browser will automatically
+			   set multipart/form-data with
+			   the correct boundary.
+			───────────────────────────── */
 
 			const response = await fetch(
 				"/api/admin/products",
@@ -904,10 +1128,12 @@ export default function NewProductPage() {
 					method: "POST",
 					body,
 					credentials: "include",
+					cache: "no-store",
 				},
 			);
 
-			const text = await response.text();
+			const text =
+				await response.text();
 
 			let data: any = {};
 
@@ -921,21 +1147,18 @@ export default function NewProductPage() {
 				};
 			}
 
-			/*
-			 * Backend may return:
-			 *
-			 * HTTP 200
-			 * {
-			 *   status: 400,
-			 *   message: "..."
-			 * }
-			 *
-			 * So check both HTTP status and
-			 * logical API status.
-			 */
+			console.log(
+				"Product API response:",
+				data,
+			);
+
+			/* ─────────────────────────────
+			   CHECK HTTP + LOGICAL STATUS
+			───────────────────────────── */
 
 			const logicalStatus =
-				typeof data?.status === "number"
+				typeof data?.status ===
+				"number"
 					? data.status
 					: response.status;
 
@@ -952,17 +1175,25 @@ export default function NewProductPage() {
 				);
 			}
 
+			/* ─────────────────────────────
+			   SUCCESS
+			───────────────────────────── */
+
 			setSuccess(
 				"Product created successfully.",
 			);
 
-			/* Reset form */
+			/* ─────────────────────────────
+			   RESET FORM
+			───────────────────────────── */
 
 			setName("");
 			setDescription("");
+
 			setMarketPrice("");
 			setSellingPrice("");
 			setResellerPrice("");
+
 			setKeywords("");
 
 			setSelectedCategoryIds([]);
@@ -979,7 +1210,9 @@ export default function NewProductPage() {
 				behavior: "smooth",
 			});
 		} catch (submitError) {
-			console.error(submitError);
+			console.error(
+				submitError,
+			);
 
 			setError(
 				submitError instanceof Error
@@ -1000,29 +1233,43 @@ export default function NewProductPage() {
 	   SELECTED NAMES
 	───────────────────────────────────────── */
 
-	const selectedCategoryNames = useMemo(
-		() =>
-			categories
-				.filter((category) =>
-					selectedCategoryIds.includes(
-						category.id,
+	const selectedCategoryNames =
+		useMemo(
+			() =>
+				categories
+					.filter((category) =>
+						selectedCategoryIds.includes(
+							category.id,
+						),
+					)
+					.map(
+						(category) =>
+							category.name,
 					),
-				)
-				.map((category) => category.name),
-		[categories, selectedCategoryIds],
-	);
+			[
+				categories,
+				selectedCategoryIds,
+			],
+		);
 
-	const selectedOccasionNames = useMemo(
-		() =>
-			occasions
-				.filter((occasion) =>
-					selectedOccasionIds.includes(
-						occasion.id,
+	const selectedOccasionNames =
+		useMemo(
+			() =>
+				occasions
+					.filter((occasion) =>
+						selectedOccasionIds.includes(
+							occasion.id,
+						),
+					)
+					.map(
+						(occasion) =>
+							occasion.name,
 					),
-				)
-				.map((occasion) => occasion.name),
-		[occasions, selectedOccasionIds],
-	);
+			[
+				occasions,
+				selectedOccasionIds,
+			],
+		);
 
 	/* ─────────────────────────────────────────
 	   UI
@@ -1042,9 +1289,7 @@ export default function NewProductPage() {
 									"#85161B",
 							}}
 						>
-							<Package
-								size={22}
-							/>
+							<Package size={22} />
 						</div>
 
 						<div>
@@ -1055,8 +1300,9 @@ export default function NewProductPage() {
 							<p className="text-sm text-gray-500">
 								Add product details,
 								photos,
-								customization options
-								and variants.
+								customization
+								options and
+								variants.
 							</p>
 						</div>
 					</div>
@@ -1073,7 +1319,8 @@ export default function NewProductPage() {
 
 						<div className="flex-1">
 							<p className="font-semibold">
-								Unable to save
+								Unable to
+								save
 								product
 							</p>
 
@@ -1117,9 +1364,7 @@ export default function NewProductPage() {
 					onSubmit={handleSubmit}
 					className="space-y-6"
 				>
-					{/* ─────────────────────────────
-					    BASIC INFORMATION
-					───────────────────────────── */}
+					{/* BASIC INFORMATION */}
 
 					<section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
 						<div className="mb-5">
@@ -1128,8 +1373,9 @@ export default function NewProductPage() {
 							</h2>
 
 							<p className="mt-1 text-sm text-gray-500">
-								Enter the basic details of
-								your product.
+								Enter the basic
+								details of your
+								product.
 							</p>
 						</div>
 
@@ -1142,9 +1388,12 @@ export default function NewProductPage() {
 								<input
 									type="text"
 									value={name}
-									onChange={(event) =>
+									onChange={(
+										event,
+									) =>
 										setName(
-											event.target
+											event
+												.target
 												.value,
 										)
 									}
@@ -1159,10 +1408,15 @@ export default function NewProductPage() {
 								</label>
 
 								<textarea
-									value={description}
-									onChange={(event) =>
+									value={
+										description
+									}
+									onChange={(
+										event,
+									) =>
 										setDescription(
-											event.target
+											event
+												.target
 												.value,
 										)
 									}
@@ -1179,10 +1433,15 @@ export default function NewProductPage() {
 
 								<input
 									type="text"
-									value={keywords}
-									onChange={(event) =>
+									value={
+										keywords
+									}
+									onChange={(
+										event,
+									) =>
 										setKeywords(
-											event.target
+											event
+												.target
 												.value,
 										)
 									}
@@ -1191,16 +1450,16 @@ export default function NewProductPage() {
 								/>
 
 								<p className="mt-1.5 text-xs text-gray-500">
-									Separate keywords using
-									commas or spaces.
+									Separate
+									keywords
+									using commas
+									or spaces.
 								</p>
 							</div>
 						</div>
 					</section>
 
-					{/* ─────────────────────────────
-					    PRICING
-					───────────────────────────── */}
+					{/* PRICING */}
 
 					<section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
 						<div className="mb-5">
@@ -1209,107 +1468,88 @@ export default function NewProductPage() {
 							</h2>
 
 							<p className="mt-1 text-sm text-gray-500">
-								Set the different prices for
-								this product.
+								Set the
+								different prices
+								for this
+								product.
 							</p>
 						</div>
 
 						<div className="grid gap-5 sm:grid-cols-3">
-							<div>
-								<label className="mb-2 block text-sm font-medium text-gray-700">
-									Market Price
-								</label>
-
-								<div className="relative">
-									<span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-gray-500">
-										₹
-									</span>
-
-									<input
-										type="number"
-										min="0"
-										step="0.01"
-										value={marketPrice}
-										onChange={(
-											event,
-										) =>
-											setMarketPrice(
-												event
-													.target
-													.value,
-											)
+							{[
+								{
+									label: "Market Price",
+									value: marketPrice,
+									setValue:
+										setMarketPrice,
+									placeholder:
+										"150",
+								},
+								{
+									label: "Selling Price",
+									value: sellingPrice,
+									setValue:
+										setSellingPrice,
+									placeholder:
+										"100",
+								},
+								{
+									label: "Reseller Price",
+									value: resellerPrice,
+									setValue:
+										setResellerPrice,
+									placeholder:
+										"80",
+								},
+							].map(
+								(
+									price,
+								) => (
+									<div
+										key={
+											price.label
 										}
-										placeholder="150"
-										className="w-full rounded-xl border border-gray-300 py-3 pl-8 pr-4 text-sm outline-none focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
-									/>
-								</div>
-							</div>
+									>
+										<label className="mb-2 block text-sm font-medium text-gray-700">
+											{
+												price.label
+											}
+										</label>
 
-							<div>
-								<label className="mb-2 block text-sm font-medium text-gray-700">
-									Selling Price
-								</label>
+										<div className="relative">
+											<span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-gray-500">
+												₹
+											</span>
 
-								<div className="relative">
-									<span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-gray-500">
-										₹
-									</span>
-
-									<input
-										type="number"
-										min="0"
-										step="0.01"
-										value={sellingPrice}
-										onChange={(
-											event,
-										) =>
-											setSellingPrice(
-												event
-													.target
-													.value,
-											)
-										}
-										placeholder="100"
-										className="w-full rounded-xl border border-gray-300 py-3 pl-8 pr-4 text-sm outline-none focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
-									/>
-								</div>
-							</div>
-
-							<div>
-								<label className="mb-2 block text-sm font-medium text-gray-700">
-									Reseller Price
-								</label>
-
-								<div className="relative">
-									<span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-gray-500">
-										₹
-									</span>
-
-									<input
-										type="number"
-										min="0"
-										step="0.01"
-										value={resellerPrice}
-										onChange={(
-											event,
-										) =>
-											setResellerPrice(
-												event
-													.target
-													.value,
-											)
-										}
-										placeholder="80"
-										className="w-full rounded-xl border border-gray-300 py-3 pl-8 pr-4 text-sm outline-none focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
-									/>
-								</div>
-							</div>
+											<input
+												type="number"
+												min="0"
+												step="0.01"
+												value={
+													price.value
+												}
+												onChange={(
+													event,
+												) =>
+													price.setValue(
+														event
+															.target
+															.value,
+													)
+												}
+												placeholder={
+													price.placeholder
+												}
+												className="w-full rounded-xl border border-gray-300 py-3 pl-8 pr-4 text-sm outline-none focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
+											/>
+										</div>
+									</div>
+								),
+							)}
 						</div>
 					</section>
 
-					{/* ─────────────────────────────
-					    PHOTOS
-					───────────────────────────── */}
+					{/* PHOTOS */}
 
 					<section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
 						<div className="mb-5">
@@ -1318,8 +1558,10 @@ export default function NewProductPage() {
 							</h2>
 
 							<p className="mt-1 text-sm text-gray-500">
-								Upload a main product image
-								and additional images.
+								Upload a main
+								product image
+								and additional
+								images.
 							</p>
 						</div>
 
@@ -1351,6 +1593,7 @@ export default function NewProductPage() {
 												) => {
 													event.preventDefault();
 													event.stopPropagation();
+
 													setPrimaryPhoto(
 														null,
 													);
@@ -1374,12 +1617,19 @@ export default function NewProductPage() {
 											/>
 
 											<span className="text-sm font-medium text-gray-700">
-												Click to upload
+												Click
+												to
+												upload
 											</span>
 
 											<span className="mt-1 text-xs text-gray-500">
-												PNG, JPG, WEBP
-												(up to 10 MB)
+												PNG,
+												JPG,
+												WEBP
+												(up
+												to
+												10
+												MB)
 											</span>
 										</>
 									)}
@@ -1399,7 +1649,8 @@ export default function NewProductPage() {
 
 							<div>
 								<label className="mb-2 block text-sm font-medium text-gray-700">
-									Additional Photos
+									Additional
+									Photos
 								</label>
 
 								<label className="flex min-h-[100px] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 transition hover:border-[#85161B] hover:bg-gray-100">
@@ -1409,11 +1660,14 @@ export default function NewProductPage() {
 									/>
 
 									<span className="text-sm font-medium text-gray-700">
-										Add more photos
+										Add more
+										photos
 									</span>
 
 									<span className="mt-1 text-xs text-gray-500">
-										You can select multiple
+										You can
+										select
+										multiple
 										images
 									</span>
 
@@ -1428,7 +1682,8 @@ export default function NewProductPage() {
 									/>
 								</label>
 
-								{otherPhotos.length > 0 && (
+								{otherPhotos.length >
+									0 && (
 									<div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4">
 										{otherPhotos.map(
 											(
@@ -1470,26 +1725,26 @@ export default function NewProductPage() {
 						</div>
 					</section>
 
-					{/* ─────────────────────────────
-					    CATEGORIES
-					───────────────────────────── */}
+					{/* CATEGORIES / OCCASIONS */}
 
 					<section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
 						<div className="mb-5">
 							<h2 className="text-lg font-semibold text-gray-900">
-								Categories & Occasions
+								Categories &
+								Occasions
 							</h2>
 
 							<p className="mt-1 text-sm text-gray-500">
-								Choose where this product
-								should appear.
+								Choose where this
+								product should
+								appear.
 							</p>
 						</div>
 
 						{loadingOptions ? (
 							<div className="py-8 text-center text-sm text-gray-500">
-								Loading categories and
-								occasions...
+								Loading categories
+								and occasions...
 							</div>
 						) : (
 							<div className="grid gap-6 lg:grid-cols-2">
@@ -1504,7 +1759,8 @@ export default function NewProductPage() {
 										{categories.length ===
 										0 ? (
 											<p className="text-sm text-gray-500">
-												No categories
+												No
+												categories
 												found.
 											</p>
 										) : (
@@ -1569,7 +1825,8 @@ export default function NewProductPage() {
 										{occasions.length ===
 										0 ? (
 											<p className="text-sm text-gray-500">
-												No occasions
+												No
+												occasions
 												found.
 											</p>
 										) : (
@@ -1623,9 +1880,7 @@ export default function NewProductPage() {
 						)}
 					</section>
 
-					{/* ─────────────────────────────
-					    CUSTOMIZATION
-					───────────────────────────── */}
+					{/* CUSTOMIZATION */}
 
 					<section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
 						<div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -1635,8 +1890,9 @@ export default function NewProductPage() {
 								</h2>
 
 								<p className="mt-1 text-sm text-gray-500">
-									Tell customers what they
-									need to provide for
+									Tell customers what
+									they need to
+									provide for
 									personalization.
 								</p>
 							</div>
@@ -1653,7 +1909,8 @@ export default function NewProductPage() {
 							</button>
 						</div>
 
-						{customizations.length === 0 ? (
+						{customizations.length ===
+						0 ? (
 							<div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-5 py-10 text-center">
 								<ImageIcon
 									size={28}
@@ -1666,9 +1923,10 @@ export default function NewProductPage() {
 								</p>
 
 								<p className="mt-1 text-xs text-gray-500">
-									Add one if customers
-									need to provide text
-									or photos.
+									Add one if
+									customers need to
+									provide text or
+									photos.
 								</p>
 							</div>
 						) : (
@@ -1829,9 +2087,7 @@ export default function NewProductPage() {
 						)}
 					</section>
 
-					{/* ─────────────────────────────
-					    VARIANTS
-					───────────────────────────── */}
+					{/* VARIANTS */}
 
 					<section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
 						<div className="mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -1841,8 +2097,9 @@ export default function NewProductPage() {
 								</h2>
 
 								<p className="mt-1 text-sm text-gray-500">
-									Add options such as size,
-									color, material, etc.
+									Add options such as
+									size, color,
+									material, etc.
 								</p>
 							</div>
 
@@ -1856,7 +2113,8 @@ export default function NewProductPage() {
 							</button>
 						</div>
 
-						{variants.length === 0 ? (
+						{variants.length ===
+						0 ? (
 							<div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-5 py-10 text-center">
 								<Package
 									size={30}
@@ -1868,8 +2126,9 @@ export default function NewProductPage() {
 								</p>
 
 								<p className="mt-1 text-xs text-gray-500">
-									For example, add a Color
-									variant with Red and
+									For example, add a
+									Color variant
+									with Red and
 									Green options.
 								</p>
 							</div>
@@ -1878,7 +2137,6 @@ export default function NewProductPage() {
 								{variants.map(
 									(
 										variant,
-										variantIndex,
 									) => (
 										<div
 											key={
@@ -2161,14 +2419,13 @@ export default function NewProductPage() {
 						)}
 					</section>
 
-					{/* ─────────────────────────────
-					    SUBMIT
-					───────────────────────────── */}
+					{/* SUBMIT */}
 
 					<div className="sticky bottom-4 z-10 rounded-2xl border border-gray-200 bg-white/95 p-4 shadow-lg backdrop-blur">
 						<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 							<div className="text-sm text-gray-500">
-								{variants.length > 0
+								{variants.length >
+								0
 									? `${variants.length} variant${
 											variants.length >
 											1
@@ -2186,7 +2443,9 @@ export default function NewProductPage() {
 								{saving ? (
 									<>
 										<span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-										Creating Product...
+
+										Creating
+										Product...
 									</>
 								) : (
 									<>
@@ -2195,7 +2454,9 @@ export default function NewProductPage() {
 												18
 											}
 										/>
-										Create Product
+
+										Create
+										Product
 									</>
 								)}
 							</button>
