@@ -4,7 +4,48 @@ const INIT_API_URL = "https://printinghouseujjain.in/api/init";
 
 /*
  * -------------------------------------------------------
- * Clear admin authentication cookie
+ * GET CLIENT IP
+ * -------------------------------------------------------
+ */
+function getClientIp(request: NextRequest): string {
+	/*
+	 * Vercel / proxy environments may provide the
+	 * original client IP through x-forwarded-for.
+	 */
+	const forwardedFor = request.headers.get("x-forwarded-for");
+
+	if (forwardedFor) {
+		/*
+		 * x-forwarded-for can contain:
+		 *
+		 * client, proxy1, proxy2
+		 *
+		 * The first address is normally the
+		 * original client.
+		 */
+		return forwardedFor.split(",")[0].trim();
+	}
+
+	const realIp = request.headers.get("x-real-ip");
+
+	if (realIp) {
+		return realIp.trim();
+	}
+
+	/*
+	 * NextRequest may expose the IP depending
+	 * on the deployment environment.
+	 */
+	if (request.ip) {
+		return request.ip;
+	}
+
+	return "";
+}
+
+/*
+ * -------------------------------------------------------
+ * CLEAR ADMIN COOKIE
  * -------------------------------------------------------
  */
 function clearAdminAuthCookie(response: NextResponse) {
@@ -16,13 +57,13 @@ function clearAdminAuthCookie(response: NextResponse) {
 		path: "/",
 		httpOnly: true,
 		secure: true,
-		sameSite: "lax",
+		sameSite: "none",
 	});
 }
 
 /*
  * -------------------------------------------------------
- * Redirect to login and clear admin session
+ * REDIRECT TO LOGIN
  * -------------------------------------------------------
  */
 function redirectToLogin(request: NextRequest) {
@@ -35,7 +76,7 @@ function redirectToLogin(request: NextRequest) {
 
 /*
  * -------------------------------------------------------
- * Get all Set-Cookie headers
+ * GET SET-COOKIE HEADERS
  * -------------------------------------------------------
  */
 function getSetCookies(response: Response): string[] {
@@ -50,7 +91,7 @@ function getSetCookies(response: Response): string[] {
 
 /*
  * -------------------------------------------------------
- * Check whether admin_auth was deleted
+ * CHECK ADMIN COOKIE DELETION
  * -------------------------------------------------------
  */
 function hasDeletedAdminAuth(setCookies: string[]): boolean {
@@ -61,7 +102,7 @@ function hasDeletedAdminAuth(setCookies: string[]): boolean {
 
 /*
  * -------------------------------------------------------
- * Forward backend cookies
+ * FORWARD BACKEND COOKIES
  * -------------------------------------------------------
  */
 function forwardSetCookies(response: NextResponse, setCookies: string[]) {
@@ -85,10 +126,9 @@ export async function proxy(request: NextRequest) {
 	 */
 	if (pathname === "/admin" || pathname.startsWith("/admin/")) {
 		try {
-			/*
-			 * Get cookies sent by browser.
-			 */
 			const cookie = request.headers.get("cookie");
+
+			const clientIp = getClientIp(request);
 
 			console.log("========================================");
 
@@ -96,9 +136,11 @@ export async function proxy(request: NextRequest) {
 
 			console.log("ADMIN REQUEST HAS COOKIE:", !!cookie);
 
+			console.log("ADMIN CLIENT IP:", clientIp || "UNKNOWN");
+
 			/*
 			 * ------------------------------------------------
-			 * No cookies at all
+			 * NO COOKIE
 			 * ------------------------------------------------
 			 */
 			if (!cookie) {
@@ -109,7 +151,7 @@ export async function proxy(request: NextRequest) {
 
 			/*
 			 * ------------------------------------------------
-			 * Call backend /api/init
+			 * CALL BACKEND /api/init
 			 * ------------------------------------------------
 			 */
 			const response = await fetch(INIT_API_URL, {
@@ -117,7 +159,20 @@ export async function proxy(request: NextRequest) {
 
 				headers: {
 					Cookie: cookie,
+
 					Accept: "application/json",
+
+					/*
+					 * Forward the original
+					 * browser IP.
+					 */
+					...(clientIp
+						? {
+								"X-Forwarded-For": clientIp,
+
+								"X-Real-IP": clientIp,
+							}
+						: {}),
 				},
 
 				cache: "no-store",
@@ -127,7 +182,7 @@ export async function proxy(request: NextRequest) {
 
 			/*
 			 * ------------------------------------------------
-			 * Read Set-Cookie headers
+			 * READ SET-COOKIE
 			 * ------------------------------------------------
 			 */
 			const setCookies = getSetCookies(response);
@@ -136,18 +191,18 @@ export async function proxy(request: NextRequest) {
 
 			/*
 			 * ------------------------------------------------
-			 * Backend explicitly deleted admin_auth
+			 * BACKEND DELETED ADMIN COOKIE
 			 * ------------------------------------------------
 			 */
 			if (hasDeletedAdminAuth(setCookies)) {
-				console.log("ADMIN: admin_auth=deleted received.");
+				console.log("ADMIN: Backend returned admin_auth=deleted.");
 
 				return redirectToLogin(request);
 			}
 
 			/*
 			 * ------------------------------------------------
-			 * Backend HTTP error
+			 * BACKEND HTTP ERROR
 			 * ------------------------------------------------
 			 */
 			if (!response.ok) {
@@ -158,7 +213,7 @@ export async function proxy(request: NextRequest) {
 
 			/*
 			 * ------------------------------------------------
-			 * Read response
+			 * READ RESPONSE
 			 * ------------------------------------------------
 			 */
 			const text = await response.text();
@@ -181,7 +236,7 @@ export async function proxy(request: NextRequest) {
 
 			/*
 			 * ------------------------------------------------
-			 * Validate admin
+			 * ADMIN CHECK
 			 * ------------------------------------------------
 			 */
 			const isAdmin = data?.login_status === true && data?.type === "admin";
@@ -190,7 +245,7 @@ export async function proxy(request: NextRequest) {
 
 			/*
 			 * ------------------------------------------------
-			 * Not authenticated / not admin
+			 * INVALID ADMIN SESSION
 			 * ------------------------------------------------
 			 */
 			if (!isAdmin) {
@@ -201,7 +256,7 @@ export async function proxy(request: NextRequest) {
 
 			/*
 			 * ------------------------------------------------
-			 * Valid admin
+			 * VALID ADMIN
 			 * ------------------------------------------------
 			 */
 			console.log("ADMIN: Valid admin session.");
@@ -209,8 +264,8 @@ export async function proxy(request: NextRequest) {
 			const nextResponse = NextResponse.next();
 
 			/*
-			 * Forward any cookies generated/refreshed
-			 * by backend.
+			 * Forward cookies generated by
+			 * the backend.
 			 */
 			forwardSetCookies(nextResponse, setCookies);
 

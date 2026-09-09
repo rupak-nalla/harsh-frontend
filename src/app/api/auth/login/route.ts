@@ -2,6 +2,35 @@ import { NextRequest, NextResponse } from "next/server";
 
 const API_URL = "https://printinghouseujjain.in";
 
+/**
+ * Get the original client IP.
+ *
+ * When the request comes through Next.js/Vercel, the backend would
+ * otherwise see the server/proxy IP instead of the user's IP.
+ */
+function getClientIp(request: NextRequest): string {
+	const forwardedFor = request.headers.get("x-forwarded-for");
+
+	if (forwardedFor) {
+		// X-Forwarded-For can contain:
+		// client-ip, proxy-ip, proxy-ip...
+		return forwardedFor.split(",")[0].trim();
+	}
+
+	const realIp = request.headers.get("x-real-ip");
+
+	if (realIp) {
+		return realIp.trim();
+	}
+
+	// Available in some Next.js hosting environments.
+	if (request.ip) {
+		return request.ip;
+	}
+
+	return "";
+}
+
 export async function POST(request: NextRequest) {
 	try {
 		const body = await request.json().catch(() => null);
@@ -20,17 +49,41 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		// Backend expects multipart/form-data
+		// Get the original browser/client IP.
+		const clientIp = getClientIp(request);
+
+		// Backend expects multipart/form-data.
 		const backendFormData = new FormData();
 
 		backendFormData.append("email", email.trim().toLowerCase());
 		backendFormData.append("password", password);
 
+		/*
+		 * Forward the login request to the backend.
+		 *
+		 * IMPORTANT:
+		 * Do not manually set Content-Type here.
+		 * fetch() will generate the correct multipart/form-data
+		 * boundary automatically.
+		 */
 		const response = await fetch(`${API_URL}/api/login`, {
 			method: "POST",
 			body: backendFormData,
 			headers: {
 				Accept: "application/json",
+
+				/*
+				 * The backend admin authentication checks the client IP.
+				 *
+				 * X-Forwarded-For is set to the original client IP.
+				 * X-Real-IP is also provided for backends that use it.
+				 */
+				...(clientIp
+					? {
+							"X-Forwarded-For": clientIp,
+							"X-Real-IP": clientIp,
+						}
+					: {}),
 			},
 			cache: "no-store",
 		});
@@ -53,6 +106,13 @@ export async function POST(request: NextRequest) {
 
 		/*
 		 * Forward ALL Set-Cookie headers from the backend.
+		 *
+		 * This is important because the backend may return:
+		 *
+		 * - admin_auth
+		 * - user_auth
+		 * - auth_session
+		 * - other authentication/session cookies
 		 */
 		const setCookies =
 			typeof response.headers.getSetCookie === "function"
