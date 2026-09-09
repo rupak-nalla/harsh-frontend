@@ -3,11 +3,36 @@ import { NextRequest, NextResponse } from "next/server";
 const API_URL = "https://printinghouseujjain.in";
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
-function getForwardHeaders(request: NextRequest) {
+/* ─────────────────────────────────────────
+   CLIENT IP
+───────────────────────────────────────── */
+
+function getClientIp(request: NextRequest): string {
+	const forwardedFor = request.headers.get("x-forwarded-for");
+
+	if (forwardedFor) {
+		return forwardedFor.split(",")[0].trim();
+	}
+
+	const realIp = request.headers.get("x-real-ip");
+
+	if (realIp) {
+		return realIp.trim();
+	}
+
+	return "";
+}
+
+/* ─────────────────────────────────────────
+   FORWARD HEADERS
+───────────────────────────────────────── */
+
+function getForwardHeaders(request: NextRequest): Headers {
 	const headers = new Headers();
 
 	const cookie = request.headers.get("cookie");
 	const authorization = request.headers.get("authorization");
+	const clientIp = getClientIp(request);
 
 	if (cookie) {
 		headers.set("cookie", cookie);
@@ -17,14 +42,57 @@ function getForwardHeaders(request: NextRequest) {
 		headers.set("authorization", authorization);
 	}
 
+	if (clientIp) {
+		headers.set("X-Forwarded-For", clientIp);
+		headers.set("X-Real-IP", clientIp);
+	}
+
+	headers.set("Accept", "application/json");
+
 	return headers;
 }
+
+/* ─────────────────────────────────────────
+   FORWARD ALL SET-COOKIE HEADERS
+───────────────────────────────────────── */
+
+function forwardSetCookies(
+	sourceResponse: Response,
+	nextResponse: NextResponse,
+) {
+	const headers = sourceResponse.headers as Headers & {
+		getSetCookie?: () => string[];
+	};
+
+	if (typeof headers.getSetCookie === "function") {
+		const cookies = headers.getSetCookie();
+
+		for (const cookie of cookies) {
+			nextResponse.headers.append("set-cookie", cookie);
+		}
+
+		return;
+	}
+
+	const setCookie = sourceResponse.headers.get("set-cookie");
+
+	if (setCookie) {
+		nextResponse.headers.set("set-cookie", setCookie);
+	}
+}
+
+/* ─────────────────────────────────────────
+   POST — HOME CONTENT UPDATE
+───────────────────────────────────────── */
 
 export async function POST(request: NextRequest) {
 	try {
 		const formData = await request.formData();
 
-		// Server-side file-size validation.
+		/* =====================================================
+		   SERVER-SIDE FILE-SIZE VALIDATION
+		===================================================== */
+
 		for (const [, value] of formData.entries()) {
 			if (value instanceof File && value.size > MAX_FILE_SIZE) {
 				return NextResponse.json(
@@ -37,12 +105,32 @@ export async function POST(request: NextRequest) {
 			}
 		}
 
+		const clientIp = getClientIp(request);
+
+		console.log("=================================");
+		console.log("HOME CONTENT UPDATE PROXY");
+		console.log("Has Cookie:", Boolean(request.headers.get("cookie")));
+		console.log(
+			"Has Authorization:",
+			Boolean(request.headers.get("authorization")),
+		);
+		console.log("Client IP:", clientIp || "unknown");
+		console.log("=================================");
+
+		/* =====================================================
+		   FORWARD TO BACKEND
+		===================================================== */
+
 		const response = await fetch(`${API_URL}/api/home_content_update`, {
 			method: "POST",
 			body: formData,
 			headers: getForwardHeaders(request),
 			cache: "no-store",
 		});
+
+		/* =====================================================
+		   READ BACKEND RESPONSE
+		===================================================== */
 
 		const text = await response.text();
 
@@ -71,12 +159,24 @@ export async function POST(request: NextRequest) {
 			status = response.ok ? 200 : response.status;
 		}
 
-		return NextResponse.json(data, {
+		/* =====================================================
+		   RETURN RESPONSE
+		===================================================== */
+
+		const nextResponse = NextResponse.json(data, {
 			status,
 			headers: {
 				"Cache-Control": "no-store",
 			},
 		});
+
+		/* =====================================================
+		   FORWARD BACKEND SET-COOKIE
+		===================================================== */
+
+		forwardSetCookies(response, nextResponse);
+
+		return nextResponse;
 	} catch (error) {
 		console.error("Home content update proxy error:", error);
 

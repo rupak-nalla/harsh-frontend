@@ -30,13 +30,95 @@ const API_URL = "https://printinghouseujjain.in";
  *         Id=...
  */
 
+/* ─────────────────────────────────────────
+   CLIENT IP
+───────────────────────────────────────── */
+
+function getClientIp(request: NextRequest): string {
+	const forwardedFor = request.headers.get("x-forwarded-for");
+
+	if (forwardedFor) {
+		return forwardedFor.split(",")[0].trim();
+	}
+
+	const realIp = request.headers.get("x-real-ip");
+
+	if (realIp) {
+		return realIp.trim();
+	}
+
+	return "";
+}
+
+/* ─────────────────────────────────────────
+   FORWARD HEADERS
+───────────────────────────────────────── */
+
+function getForwardHeaders(
+	request: NextRequest,
+	cookie: string | null,
+): HeadersInit {
+	const clientIp = getClientIp(request);
+
+	return {
+		Accept: "application/json",
+
+		...(cookie
+			? {
+					Cookie: cookie,
+				}
+			: {}),
+
+		...(clientIp
+			? {
+					"X-Forwarded-For": clientIp,
+					"X-Real-IP": clientIp,
+				}
+			: {}),
+	};
+}
+
+/* ─────────────────────────────────────────
+   FORWARD ALL SET-COOKIE HEADERS
+───────────────────────────────────────── */
+
+function forwardSetCookies(
+	sourceResponse: Response,
+	nextResponse: NextResponse,
+) {
+	const headers = sourceResponse.headers as Headers & {
+		getSetCookie?: () => string[];
+	};
+
+	if (typeof headers.getSetCookie === "function") {
+		const cookies = headers.getSetCookie();
+
+		for (const cookie of cookies) {
+			nextResponse.headers.append("set-cookie", cookie);
+		}
+
+		return;
+	}
+
+	const setCookie = sourceResponse.headers.get("set-cookie");
+
+	if (setCookie) {
+		nextResponse.headers.set("set-cookie", setCookie);
+	}
+}
+
+/* ─────────────────────────────────────────
+   GET — LIST OCCASIONS
+───────────────────────────────────────── */
+
 export async function GET(request: NextRequest) {
 	try {
 		const cookie = request.headers.get("cookie");
+		const clientIp = getClientIp(request);
 
 		/* =========================================================
-           BUILD BACKEND REQUEST
-        ========================================================= */
+		   BUILD BACKEND REQUEST
+		========================================================= */
 
 		const backendFormData = new FormData();
 
@@ -45,21 +127,19 @@ export async function GET(request: NextRequest) {
 		console.log("=================================");
 		console.log("ADMIN OCCASIONS PROXY (GET)");
 		console.log("Has Cookie:", Boolean(cookie));
+		console.log("Client IP:", clientIp || "unknown");
 		console.log("=================================");
 
 		const response = await fetch(`${API_URL}/api/occasions`, {
 			method: "POST",
-			headers: {
-				Accept: "application/json",
-				...(cookie ? { Cookie: cookie } : {}),
-			},
+			headers: getForwardHeaders(request, cookie),
 			body: backendFormData,
 			cache: "no-store",
 		});
 
 		/* =========================================================
-           READ BACKEND RESPONSE
-        ========================================================= */
+		   READ BACKEND RESPONSE
+		========================================================= */
 
 		const text = await response.text();
 
@@ -76,21 +156,18 @@ export async function GET(request: NextRequest) {
 		}
 
 		console.log("Backend Occasions Status:", response.status);
+
 		console.log("Backend Occasions Response:", data);
 
 		/* =========================================================
-           RETURN RESPONSE TO FRONTEND
-        ========================================================= */
+		   RETURN RESPONSE TO FRONTEND
+		========================================================= */
 
 		const nextResponse = NextResponse.json(data, {
 			status: response.status,
 		});
 
-		const setCookie = response.headers.get("set-cookie");
-
-		if (setCookie) {
-			nextResponse.headers.set("set-cookie", setCookie);
-		}
+		forwardSetCookies(response, nextResponse);
 
 		return nextResponse;
 	} catch (error) {
@@ -115,19 +192,22 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
 	try {
 		const cookie = request.headers.get("cookie");
+		const clientIp = getClientIp(request);
 		const contentType = request.headers.get("content-type");
 
 		/* =========================================================
-           READ INCOMING REQUEST
-        ========================================================= */
+		   READ INCOMING REQUEST
+		========================================================= */
 
 		let backendFormData: FormData;
 
 		if (contentType?.includes("application/x-www-form-urlencoded")) {
 			const text = await request.text();
+
 			backendFormData = new FormData();
 
 			const params = new URLSearchParams(text);
+
 			for (const [key, value] of params) {
 				backendFormData.append(key, value);
 			}
@@ -135,6 +215,7 @@ export async function POST(request: NextRequest) {
 			backendFormData.set("command_type", "admin");
 		} else if (contentType?.includes("multipart/form-data")) {
 			backendFormData = await request.formData();
+
 			backendFormData.set("command_type", "admin");
 		} else {
 			const body = await request.json();
@@ -146,7 +227,7 @@ export async function POST(request: NextRequest) {
 					backendFormData.append(key, value);
 				} else if (Array.isArray(value)) {
 					for (const item of value) {
-						backendFormData.append(`${key}[]`, item);
+						backendFormData.append(`${key}[]`, String(item));
 					}
 				} else if (value !== null && value !== undefined) {
 					backendFormData.append(key, String(value));
@@ -162,25 +243,23 @@ export async function POST(request: NextRequest) {
 		console.log("ADMIN OCCASIONS PROXY (POST)");
 		console.log("Mode:", mode);
 		console.log("Has Cookie:", Boolean(cookie));
+		console.log("Client IP:", clientIp || "unknown");
 		console.log("=================================");
 
 		/* =========================================================
-           FORWARD TO BACKEND
-        ========================================================= */
+		   FORWARD TO BACKEND
+		========================================================= */
 
 		const response = await fetch(`${API_URL}/api/occasions`, {
 			method: "POST",
-			headers: {
-				Accept: "application/json",
-				...(cookie ? { Cookie: cookie } : {}),
-			},
+			headers: getForwardHeaders(request, cookie),
 			body: backendFormData,
 			cache: "no-store",
 		});
 
 		/* =========================================================
-           READ BACKEND RESPONSE
-        ========================================================= */
+		   READ BACKEND RESPONSE
+		========================================================= */
 
 		const text = await response.text();
 
@@ -197,21 +276,18 @@ export async function POST(request: NextRequest) {
 		}
 
 		console.log("Backend Occasions Status:", response.status);
+
 		console.log("Backend Occasions Response:", data);
 
 		/* =========================================================
-           RETURN RESPONSE TO FRONTEND
-        ========================================================= */
+		   RETURN RESPONSE TO FRONTEND
+		========================================================= */
 
 		const nextResponse = NextResponse.json(data, {
 			status: response.status,
 		});
 
-		const setCookie = response.headers.get("set-cookie");
-
-		if (setCookie) {
-			nextResponse.headers.set("set-cookie", setCookie);
-		}
+		forwardSetCookies(response, nextResponse);
 
 		return nextResponse;
 	} catch (error) {

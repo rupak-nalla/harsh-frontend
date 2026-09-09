@@ -5,23 +5,95 @@ const API_URL = "https://printinghouseujjain.in";
 /*
  * ADMIN — LIST ALL ORDERS
  *
- * NOTE:
- *
- * This endpoint was not explicitly confirmed. It's inferred from
- * the same pattern as /api/admin/users and /api/admin/occasions —
- * hitting the existing backend route (/api/orders) with
- * command_type=admin instead of relying on the requesting user's
- * cookie session, on the assumption the backend switches between
- * "my orders" and "all orders" the same way /api/products
- * switches between a single product_id and a command_type.
- *
- * Confirm with the backend team and adjust the endpoint / field
- * name if this assumption is wrong.
+ * Uses the existing backend /api/orders endpoint with
+ * command_type=admin.
  */
+
+/* ─────────────────────────────────────────
+   CLIENT IP
+───────────────────────────────────────── */
+
+function getClientIp(request: NextRequest): string {
+	const forwardedFor = request.headers.get("x-forwarded-for");
+
+	if (forwardedFor) {
+		return forwardedFor.split(",")[0].trim();
+	}
+
+	const realIp = request.headers.get("x-real-ip");
+
+	if (realIp) {
+		return realIp.trim();
+	}
+
+	return "";
+}
+
+/* ─────────────────────────────────────────
+   FORWARD HEADERS
+───────────────────────────────────────── */
+
+function getForwardHeaders(
+	request: NextRequest,
+	cookie: string | null,
+): HeadersInit {
+	const clientIp = getClientIp(request);
+
+	return {
+		Accept: "application/json",
+
+		...(cookie
+			? {
+					Cookie: cookie,
+				}
+			: {}),
+
+		...(clientIp
+			? {
+					"X-Forwarded-For": clientIp,
+					"X-Real-IP": clientIp,
+				}
+			: {}),
+	};
+}
+
+/* ─────────────────────────────────────────
+   FORWARD ALL SET-COOKIE HEADERS
+───────────────────────────────────────── */
+
+function forwardSetCookies(
+	sourceResponse: Response,
+	nextResponse: NextResponse,
+) {
+	const headers = sourceResponse.headers as Headers & {
+		getSetCookie?: () => string[];
+	};
+
+	if (typeof headers.getSetCookie === "function") {
+		const cookies = headers.getSetCookie();
+
+		for (const cookie of cookies) {
+			nextResponse.headers.append("set-cookie", cookie);
+		}
+
+		return;
+	}
+
+	const setCookie = sourceResponse.headers.get("set-cookie");
+
+	if (setCookie) {
+		nextResponse.headers.set("set-cookie", setCookie);
+	}
+}
+
+/* ─────────────────────────────────────────
+   GET — LIST ALL ORDERS
+───────────────────────────────────────── */
 
 export async function GET(request: NextRequest) {
 	try {
 		const cookie = request.headers.get("cookie");
+		const clientIp = getClientIp(request);
 
 		const backendFormData = new FormData();
 
@@ -30,14 +102,12 @@ export async function GET(request: NextRequest) {
 		console.log("=================================");
 		console.log("ADMIN ORDERS PROXY");
 		console.log("Has Cookie:", Boolean(cookie));
+		console.log("Client IP:", clientIp || "unknown");
 		console.log("=================================");
 
 		const response = await fetch(`${API_URL}/api/orders`, {
 			method: "POST",
-			headers: {
-				Accept: "application/json",
-				...(cookie ? { Cookie: cookie } : {}),
-			},
+			headers: getForwardHeaders(request, cookie),
 			body: backendFormData,
 			cache: "no-store",
 		});
@@ -57,18 +127,17 @@ export async function GET(request: NextRequest) {
 		}
 
 		console.log("Backend Admin Orders Status:", response.status);
+
 		console.log("Backend Admin Orders Response:", data);
 
 		const nextResponse = NextResponse.json(data, {
 			status: response.status,
 		});
 
-		const setCookie = response.headers.get("set-cookie");
+		forwardSetCookies(response, nextResponse);
 
-		if (setCookie) {
-			nextResponse.headers.set("set-cookie", setCookie);
-		}
-        console.log(nextResponse);
+		console.log("Admin Orders Response Cookies Forwarded.");
+
 		return nextResponse;
 	} catch (error) {
 		console.error("Admin orders proxy error:", error);

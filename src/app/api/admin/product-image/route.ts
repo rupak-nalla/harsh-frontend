@@ -30,12 +30,18 @@ export async function GET(request: NextRequest) {
 
 		if (!response.ok) {
 			return NextResponse.json(
-				{ status: response.status, message: "Unable to load image." },
-				{ status: response.status },
+				{
+					status: response.status,
+					message: "Unable to load image.",
+				},
+				{
+					status: response.status,
+				},
 			);
 		}
 
 		const contentType = response.headers.get("content-type") || "image/jpeg";
+
 		const buffer = await response.arrayBuffer();
 
 		return new NextResponse(buffer, {
@@ -47,8 +53,13 @@ export async function GET(request: NextRequest) {
 		});
 	} catch {
 		return NextResponse.json(
-			{ status: 500, message: "Unable to load existing image." },
-			{ status: 500 },
+			{
+				status: 500,
+				message: "Unable to load existing image.",
+			},
+			{
+				status: 500,
+			},
 		);
 	}
 }

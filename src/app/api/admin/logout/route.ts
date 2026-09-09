@@ -2,6 +2,59 @@ import { NextRequest, NextResponse } from "next/server";
 
 const API_URL = "https://printinghouseujjain.in";
 
+/* ─────────────────────────────────────────
+   CLIENT IP
+───────────────────────────────────────── */
+
+function getClientIp(request: NextRequest): string {
+	const forwardedFor = request.headers.get("x-forwarded-for");
+
+	if (forwardedFor) {
+		return forwardedFor.split(",")[0].trim();
+	}
+
+	const realIp = request.headers.get("x-real-ip");
+
+	if (realIp) {
+		return realIp.trim();
+	}
+
+	return "";
+}
+
+/* ─────────────────────────────────────────
+   FORWARD ALL SET-COOKIE HEADERS
+───────────────────────────────────────── */
+
+function forwardSetCookies(
+	sourceResponse: Response,
+	nextResponse: NextResponse,
+) {
+	const headers = sourceResponse.headers as Headers & {
+		getSetCookie?: () => string[];
+	};
+
+	if (typeof headers.getSetCookie === "function") {
+		const cookies = headers.getSetCookie();
+
+		for (const cookie of cookies) {
+			nextResponse.headers.append("set-cookie", cookie);
+		}
+
+		return;
+	}
+
+	const setCookie = sourceResponse.headers.get("set-cookie");
+
+	if (setCookie) {
+		nextResponse.headers.set("set-cookie", setCookie);
+	}
+}
+
+/* ─────────────────────────────────────────
+   POST — ADMIN LOGOUT
+───────────────────────────────────────── */
+
 export async function POST(request: NextRequest) {
 	try {
 		/* =====================================================
@@ -13,10 +66,34 @@ export async function POST(request: NextRequest) {
 		backendFormData.append("command_type", "admin");
 
 		/* =====================================================
-		   FORWARD AUTH COOKIES
+		   FORWARD AUTH COOKIES + CLIENT IP
 		===================================================== */
 
 		const cookieHeader = request.headers.get("cookie");
+		const clientIp = getClientIp(request);
+
+		console.log("=================================");
+		console.log("ADMIN LOGOUT PROXY");
+		console.log("Has Cookie:", Boolean(cookieHeader));
+		console.log("Client IP:", clientIp || "unknown");
+		console.log("=================================");
+
+		const headers: HeadersInit = {
+			Accept: "application/json",
+
+			...(cookieHeader
+				? {
+						Cookie: cookieHeader,
+					}
+				: {}),
+
+			...(clientIp
+				? {
+						"X-Forwarded-For": clientIp,
+						"X-Real-IP": clientIp,
+					}
+				: {}),
+		};
 
 		/* =====================================================
 		   SEND LOGOUT REQUEST TO BACKEND
@@ -24,11 +101,7 @@ export async function POST(request: NextRequest) {
 
 		const backendResponse = await fetch(`${API_URL}/api/logout`, {
 			method: "POST",
-			headers: cookieHeader
-				? {
-						Cookie: cookieHeader,
-					}
-				: undefined,
+			headers,
 			body: backendFormData,
 			cache: "no-store",
 		});
@@ -46,6 +119,10 @@ export async function POST(request: NextRequest) {
 		} else {
 			responseData = await backendResponse.text().catch(() => "");
 		}
+
+		console.log("Backend Admin Logout Status:", backendResponse.status);
+
+		console.log("Backend Admin Logout Response:", responseData);
 
 		/* =====================================================
 		   CREATE RESPONSE
@@ -68,42 +145,7 @@ export async function POST(request: NextRequest) {
 		   FORWARD BACKEND SET-COOKIE HEADERS
 		===================================================== */
 
-		/*
-		 * The backend may return Set-Cookie headers that
-		 * invalidate the authentication session.
-		 *
-		 * Those headers belong to the backend response and
-		 * are NOT automatically sent to the browser because
-		 * the browser is communicating with this Next.js
-		 * proxy instead.
-		 */
-
-		const setCookieHeaders = backendResponse.headers.getSetCookie?.() ?? [];
-
-		for (const setCookie of setCookieHeaders) {
-			response.headers.append("Set-Cookie", setCookie);
-		}
-
-		/* =====================================================
-		   OPTIONAL LOCAL COOKIE CLEANUP
-		===================================================== */
-
-		/*
-		 * If your Next.js application has its own authentication
-		 * cookies, expire them here.
-		 *
-		 * IMPORTANT:
-		 * Replace these names ONLY if these are actually
-		 * cookies used by your application.
-		 */
-
-		// response.cookies.set("admin_token", "", {
-		// 	httpOnly: true,
-		// 	secure: process.env.NODE_ENV === "production",
-		// 	sameSite: "lax",
-		// 	expires: new Date(0),
-		// 	path: "/",
-		// });
+		forwardSetCookies(backendResponse, response);
 
 		/* =====================================================
 		   RETURN RESPONSE
@@ -112,11 +154,6 @@ export async function POST(request: NextRequest) {
 		return response;
 	} catch (error) {
 		console.error("Admin logout proxy error:", error);
-
-		/*
-		 * Even if the backend request fails, return an error.
-		 * We don't blindly report logout as successful.
-		 */
 
 		return NextResponse.json(
 			{

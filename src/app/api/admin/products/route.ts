@@ -6,6 +6,32 @@ const API_URL = "https://printinghouseujjain.in";
    HELPERS
 ============================================================================ */
 
+/*
+ * -------------------------------------------------------
+ * GET CLIENT IP
+ * -------------------------------------------------------
+ */
+function getClientIp(request: NextRequest): string {
+	const forwardedFor = request.headers.get("x-forwarded-for");
+
+	if (forwardedFor) {
+		return forwardedFor.split(",")[0].trim();
+	}
+
+	const realIp = request.headers.get("x-real-ip");
+
+	if (realIp) {
+		return realIp.trim();
+	}
+
+	return "";
+}
+
+/*
+ * -------------------------------------------------------
+ * PARSE RESPONSE
+ * -------------------------------------------------------
+ */
 async function parseResponse(response: Response): Promise<unknown> {
 	const text = await response.text();
 
@@ -22,6 +48,11 @@ async function parseResponse(response: Response): Promise<unknown> {
 	}
 }
 
+/*
+ * -------------------------------------------------------
+ * GET LOGICAL STATUS
+ * -------------------------------------------------------
+ */
 function getLogicalStatus(data: unknown, fallbackStatus: number): number {
 	if (
 		data &&
@@ -48,6 +79,11 @@ function getLogicalStatus(data: unknown, fallbackStatus: number): number {
 	return fallbackStatus;
 }
 
+/*
+ * -------------------------------------------------------
+ * GET MESSAGE
+ * -------------------------------------------------------
+ */
 function getMessage(data: unknown): string {
 	if (
 		data &&
@@ -61,6 +97,11 @@ function getMessage(data: unknown): string {
 	return "Request failed.";
 }
 
+/*
+ * -------------------------------------------------------
+ * GET FORWARD HEADERS
+ * -------------------------------------------------------
+ */
 function getForwardHeaders(request: NextRequest): Headers {
 	const headers = new Headers();
 
@@ -78,13 +119,41 @@ function getForwardHeaders(request: NextRequest): Headers {
 		headers.set("Authorization", authorization);
 	}
 
+	/*
+	 * Forward the original client IP.
+	 */
+	const clientIp = getClientIp(request);
+
+	if (clientIp) {
+		headers.set("X-Forwarded-For", clientIp);
+		headers.set("X-Real-IP", clientIp);
+	}
+
 	return headers;
 }
 
-function forwardSetCookie(
+/*
+ * -------------------------------------------------------
+ * FORWARD SET-COOKIE
+ * -------------------------------------------------------
+ */
+function forwardSetCookies(
 	sourceResponse: Response,
 	nextResponse: NextResponse,
 ) {
+	const setCookies =
+		typeof sourceResponse.headers.getSetCookie === "function"
+			? sourceResponse.headers.getSetCookie()
+			: [];
+
+	if (setCookies.length > 0) {
+		for (const cookie of setCookies) {
+			nextResponse.headers.append("Set-Cookie", cookie);
+		}
+
+		return;
+	}
+
 	const setCookie = sourceResponse.headers.get("set-cookie");
 
 	if (setCookie) {
@@ -101,6 +170,13 @@ export async function GET(request: NextRequest) {
 		const productId = request.nextUrl.searchParams.get("product_id");
 
 		const headers = getForwardHeaders(request);
+
+		console.log("=================================");
+		console.log("PRODUCTS GET PROXY");
+		console.log("Has Cookie:", Boolean(request.headers.get("cookie")));
+		console.log("Client IP:", getClientIp(request) || "UNKNOWN");
+		console.log("Product ID:", productId || "ALL");
+		console.log("=================================");
 
 		/* ----------------------------------------------------------------------
 		   SINGLE PRODUCT
@@ -126,7 +202,7 @@ export async function GET(request: NextRequest) {
 				status,
 			});
 
-			forwardSetCookie(response, nextResponse);
+			forwardSetCookies(response, nextResponse);
 
 			return nextResponse;
 		}
@@ -149,7 +225,7 @@ export async function GET(request: NextRequest) {
 			status,
 		});
 
-		forwardSetCookie(response, nextResponse);
+		forwardSetCookies(response, nextResponse);
 
 		return nextResponse;
 	} catch (error) {
@@ -177,7 +253,7 @@ export async function POST(request: NextRequest) {
 
 		/* ======================================================================
 		   JSON REQUEST
-		   
+
 		   Used by:
 		   - Bulk product deletion
 		====================================================================== */
@@ -286,6 +362,15 @@ export async function POST(request: NextRequest) {
 			const cookie = request.headers.get("cookie");
 			const authorization = request.headers.get("authorization");
 
+			const clientIp = getClientIp(request);
+
+			console.log("=================================");
+			console.log("ADMIN PRODUCT DELETE");
+			console.log("Has Cookie:", Boolean(cookie));
+			console.log("Client IP:", clientIp || "UNKNOWN");
+			console.log("Product IDs:", normalizedProductIds);
+			console.log("=================================");
+
 			/* ------------------------------------------------------------------
 			   DELETE SEQUENTIALLY
 			------------------------------------------------------------------ */
@@ -307,17 +392,7 @@ export async function POST(request: NextRequest) {
 					formData.append("product_id", String(productId));
 					formData.append("command_type", "admin");
 
-					const headers: HeadersInit = {
-						Accept: "application/json",
-					};
-
-					if (cookie) {
-						headers.Cookie = cookie;
-					}
-
-					if (authorization) {
-						headers.Authorization = authorization;
-					}
+					const headers = getForwardHeaders(request);
 
 					console.log(`Deleting product ${productId}...`);
 
@@ -410,7 +485,7 @@ export async function POST(request: NextRequest) {
 
 		/* ======================================================================
 		   MULTIPART REQUEST
-		   
+
 		   Used by:
 		   - Create product
 		   - Edit product
@@ -421,18 +496,22 @@ export async function POST(request: NextRequest) {
 			contentType.includes("application/x-www-form-urlencoded")
 		) {
 			/*
-			 * IMPORTANT:
-			 *
 			 * Do NOT call request.json() here.
 			 *
-			 * We forward the original FormData directly to the backend.
+			 * We forward the original FormData directly
+			 * to the backend.
 			 */
 
 			const formData = await request.formData();
 
 			const headers = getForwardHeaders(request);
 
+			console.log("=================================");
+			console.log("PRODUCT CREATE / EDIT PROXY");
+			console.log("Has Cookie:", Boolean(request.headers.get("cookie")));
+			console.log("Client IP:", getClientIp(request) || "UNKNOWN");
 			console.log("Forwarding multipart product request to backend...");
+			console.log("=================================");
 
 			const response = await fetch(`${API_URL}/api/products`, {
 				method: "POST",
@@ -451,7 +530,7 @@ export async function POST(request: NextRequest) {
 				status,
 			});
 
-			forwardSetCookie(response, nextResponse);
+			forwardSetCookies(response, nextResponse);
 
 			return nextResponse;
 		}

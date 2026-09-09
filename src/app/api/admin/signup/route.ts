@@ -3,25 +3,31 @@ import { NextRequest, NextResponse } from "next/server";
 const API_URL = "https://printinghouseujjain.in";
 
 /*
- * ADMIN — CREATE ACCOUNT (NO OTP)
- *
- * Backend expects:
- *
- * POST /api/sinup   <-- kept exactly as given; confirm with backend
- *                        whether this is really "sinup" or a typo
- *                        for "signup".
- *
- * name
- * email
- * phone
- * password
- * reseller (yes / no)
- *
- * The frontend's reseller toggle can send true/false, "on"/"off",
- * "1"/"0", or "yes"/"no" — this route normalizes any of those to
- * the "yes"/"no" string the backend expects.
+ * -------------------------------------------------------
+ * GET CLIENT IP
+ * -------------------------------------------------------
  */
+function getClientIp(request: NextRequest): string {
+	const forwardedFor = request.headers.get("x-forwarded-for");
 
+	if (forwardedFor) {
+		return forwardedFor.split(",")[0].trim();
+	}
+
+	const realIp = request.headers.get("x-real-ip");
+
+	if (realIp) {
+		return realIp.trim();
+	}
+
+	return "";
+}
+
+/*
+ * -------------------------------------------------------
+ * NORMALIZE RESELLER
+ * -------------------------------------------------------
+ */
 function normalizeReseller(value: FormDataEntryValue | null): "yes" | "no" {
 	if (value === null) {
 		return "no";
@@ -34,13 +40,56 @@ function normalizeReseller(value: FormDataEntryValue | null): "yes" | "no" {
 	return truthy.includes(normalized) ? "yes" : "no";
 }
 
+/*
+ * -------------------------------------------------------
+ * GET SET-COOKIE HEADERS
+ * -------------------------------------------------------
+ */
+function getSetCookies(response: Response): string[] {
+	if (typeof response.headers.getSetCookie === "function") {
+		return response.headers.getSetCookie();
+	}
+
+	const setCookie = response.headers.get("set-cookie");
+
+	return setCookie ? [setCookie] : [];
+}
+
+/*
+ * -------------------------------------------------------
+ * FORWARD SET-COOKIE HEADERS
+ * -------------------------------------------------------
+ */
+function forwardSetCookies(response: NextResponse, setCookies: string[]) {
+	for (const cookie of setCookies) {
+		response.headers.append("Set-Cookie", cookie);
+	}
+}
+
+/*
+ * =======================================================
+ * ADMIN — CREATE ACCOUNT
+ * =======================================================
+ *
+ * Backend:
+ *
+ * POST /api/sinup
+ *
+ * command_type=admin
+ * name
+ * email
+ * phone
+ * password
+ * reseller
+ */
 export async function POST(request: NextRequest) {
 	try {
 		const cookie = request.headers.get("cookie");
+		const clientIp = getClientIp(request);
 
-		/* =========================================================
-           READ FORMDATA FROM FRONTEND
-        ========================================================= */
+		/* =====================================================
+		   READ FORMDATA FROM FRONTEND
+		===================================================== */
 
 		const formData = await request.formData();
 
@@ -78,11 +127,12 @@ export async function POST(request: NextRequest) {
 		console.log("Phone:", phone);
 		console.log("Reseller:", reseller);
 		console.log("Has Cookie:", Boolean(cookie));
+		console.log("Client IP:", clientIp || "UNKNOWN");
 		console.log("=================================");
 
-		/* =========================================================
-           SEND FORMDATA TO BACKEND
-        ========================================================= */
+		/* =====================================================
+		   SEND FORMDATA TO BACKEND
+		===================================================== */
 
 		const backendFormData = new FormData();
 
@@ -95,17 +145,38 @@ export async function POST(request: NextRequest) {
 
 		const response = await fetch(`${API_URL}/api/sinup`, {
 			method: "POST",
+
 			headers: {
 				Accept: "application/json",
-				...(cookie ? { Cookie: cookie } : {}),
+
+				/*
+				 * Forward existing authentication cookies.
+				 */
+				...(cookie
+					? {
+							Cookie: cookie,
+						}
+					: {}),
+
+				/*
+				 * Forward the original browser/client IP.
+				 */
+				...(clientIp
+					? {
+							"X-Forwarded-For": clientIp,
+							"X-Real-IP": clientIp,
+						}
+					: {}),
 			},
+
 			body: backendFormData,
+
 			cache: "no-store",
 		});
 
-		/* =========================================================
-           READ BACKEND RESPONSE
-        ========================================================= */
+		/* =====================================================
+		   READ BACKEND RESPONSE
+		===================================================== */
 
 		const text = await response.text();
 
@@ -124,18 +195,23 @@ export async function POST(request: NextRequest) {
 		console.log("Backend Signup Status:", response.status);
 		console.log("Backend Signup Response:", data);
 
-		/* =========================================================
-           RETURN RESPONSE TO FRONTEND
-        ========================================================= */
+		/* =====================================================
+		   RETURN RESPONSE TO FRONTEND
+		===================================================== */
 
 		const nextResponse = NextResponse.json(data, {
 			status: response.status,
 		});
 
-		const setCookie = response.headers.get("set-cookie");
+		/*
+		 * Forward ALL Set-Cookie headers from backend.
+		 */
+		const setCookies = getSetCookies(response);
 
-		if (setCookie) {
-			nextResponse.headers.set("set-cookie", setCookie);
+		if (setCookies.length > 0) {
+			console.log("Backend Signup Set-Cookie:", setCookies);
+
+			forwardSetCookies(nextResponse, setCookies);
 		}
 
 		return nextResponse;
