@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from "react";
@@ -8,13 +9,13 @@ import {
 	ShoppingBag,
 	Package,
 	Users,
-	Boxes,
 	Menu,
 	X,
 	Store,
 	Tag,
 	SlidersHorizontal,
 	Zap,
+	Boxes,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -47,6 +48,11 @@ const NAV_ITEMS = [
 		label: "Customers",
 		href: "/admin/customers",
 		icon: Users,
+	},
+	{
+		label: "Resellers",
+		href: "/admin/resellers",
+		icon: Boxes,
 	},
 	{
 		href: "/admin/store-customisation",
@@ -104,7 +110,7 @@ export default function AdminNavbar() {
 
 				{/* NAVIGATION */}
 
-				<nav className="flex-1 space-y-1 p-4">
+				<nav className="flex-1 space-y-1 overflow-y-auto p-4">
 					{NAV_ITEMS.map((item) => {
 						const Icon = item.icon;
 						const active = isActive(item.href);
@@ -230,7 +236,7 @@ export default function AdminNavbar() {
 
 				{mobileOpen && (
 					<div className="border-t border-[#E8DED7] bg-white px-4 py-3">
-						<nav className="space-y-1">
+						<nav className="max-h-[calc(100vh-4rem)] space-y-1 overflow-y-auto">
 							{NAV_ITEMS.map((item) => {
 								const Icon = item.icon;
 								const active = isActive(item.href);
@@ -257,7 +263,7 @@ export default function AdminNavbar() {
 											}
 										`}
 									>
-										<Icon size={18} />
+										<Icon size={18} strokeWidth={2} />
 
 										<span>{item.label}</span>
 									</Link>
