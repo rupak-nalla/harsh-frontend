@@ -4,12 +4,12 @@ const INIT_API_URL = "https://printinghouseujjain.in/api/init";
 
 /*
  * -------------------------------------------------------
- * CLEAR AUTH COOKIE
+ * Clear admin authentication cookie
  * -------------------------------------------------------
  */
-function clearAuthCookie(response: NextResponse) {
+function clearAdminAuthCookie(response: NextResponse) {
 	response.cookies.set({
-		name: "user_auth",
+		name: "admin_auth",
 		value: "",
 		expires: new Date(0),
 		maxAge: 0,
@@ -22,33 +22,27 @@ function clearAuthCookie(response: NextResponse) {
 
 /*
  * -------------------------------------------------------
- * REDIRECT TO LOGIN
+ * Redirect to login and clear admin session
  * -------------------------------------------------------
  */
 function redirectToLogin(request: NextRequest) {
-	return NextResponse.redirect(new URL("/login", request.url));
+	const response = NextResponse.redirect(new URL("/login", request.url));
+
+	clearAdminAuthCookie(response);
+
+	return response;
 }
 
 /*
  * -------------------------------------------------------
- * GET SET-COOKIE HEADERS
+ * Get all Set-Cookie headers
  * -------------------------------------------------------
  */
 function getSetCookies(response: Response): string[] {
-	/*
-	 * Node/Next.js supports getSetCookie().
-	 *
-	 * This is important because /api/init can return
-	 * multiple Set-Cookie headers.
-	 */
 	if (typeof response.headers.getSetCookie === "function") {
 		return response.headers.getSetCookie();
 	}
 
-	/*
-	 * Fallback for environments where getSetCookie()
-	 * is not available.
-	 */
 	const setCookie = response.headers.get("set-cookie");
 
 	return setCookie ? [setCookie] : [];
@@ -56,18 +50,18 @@ function getSetCookies(response: Response): string[] {
 
 /*
  * -------------------------------------------------------
- * CHECK IF user_auth WAS DELETED
+ * Check whether admin_auth was deleted
  * -------------------------------------------------------
  */
-function hasDeletedUserAuth(setCookies: string[]) {
+function hasDeletedAdminAuth(setCookies: string[]): boolean {
 	return setCookies.some((cookieHeader) =>
-		/user_auth=deleted(?:;|,|$)/i.test(cookieHeader),
+		/admin_auth=deleted(?:;|,|$)/i.test(cookieHeader),
 	);
 }
 
 /*
  * -------------------------------------------------------
- * FORWARD BACKEND COOKIES
+ * Forward backend cookies
  * -------------------------------------------------------
  */
 function forwardSetCookies(response: NextResponse, setCookies: string[]) {
@@ -88,16 +82,11 @@ export async function proxy(request: NextRequest) {
 	 * =====================================================
 	 * ADMIN AUTHENTICATION
 	 * =====================================================
-	 *
-	 * Every request under /admin is validated against
-	 * the real backend /api/init endpoint.
 	 */
 	if (pathname === "/admin" || pathname.startsWith("/admin/")) {
 		try {
 			/*
-			 * ------------------------------------------------
-			 * GET BROWSER COOKIES
-			 * ------------------------------------------------
+			 * Get cookies sent by browser.
 			 */
 			const cookie = request.headers.get("cookie");
 
@@ -109,22 +98,18 @@ export async function proxy(request: NextRequest) {
 
 			/*
 			 * ------------------------------------------------
-			 * NO COOKIE
+			 * No cookies at all
 			 * ------------------------------------------------
 			 */
 			if (!cookie) {
-				console.log("ADMIN: No authentication cookie.");
+				console.log("ADMIN: No cookies found.");
 
-				const redirectResponse = redirectToLogin(request);
-
-				clearAuthCookie(redirectResponse);
-
-				return redirectResponse;
+				return redirectToLogin(request);
 			}
 
 			/*
 			 * ------------------------------------------------
-			 * CALL BACKEND /api/init
+			 * Call backend /api/init
 			 * ------------------------------------------------
 			 */
 			const response = await fetch(INIT_API_URL, {
@@ -142,7 +127,7 @@ export async function proxy(request: NextRequest) {
 
 			/*
 			 * ------------------------------------------------
-			 * GET BACKEND SET-COOKIE HEADERS
+			 * Read Set-Cookie headers
 			 * ------------------------------------------------
 			 */
 			const setCookies = getSetCookies(response);
@@ -151,55 +136,29 @@ export async function proxy(request: NextRequest) {
 
 			/*
 			 * ------------------------------------------------
-			 * CHECK user_auth=deleted
+			 * Backend explicitly deleted admin_auth
 			 * ------------------------------------------------
 			 */
-			const userAuthDeleted = hasDeletedUserAuth(setCookies);
+			if (hasDeletedAdminAuth(setCookies)) {
+				console.log("ADMIN: admin_auth=deleted received.");
 
-			console.log("USER_AUTH DELETED:", userAuthDeleted);
-
-			/*
-			 * ------------------------------------------------
-			 * BACKEND EXPLICITLY DELETED AUTH
-			 * ------------------------------------------------
-			 *
-			 * Example:
-			 *
-			 * user_auth=deleted;
-			 * Max-Age=0;
-			 */
-			if (userAuthDeleted) {
-				console.log("ADMIN: Backend returned user_auth=deleted.");
-
-				const redirectResponse = redirectToLogin(request);
-
-				/*
-				 * Make sure the browser actually
-				 * removes its existing HttpOnly cookie.
-				 */
-				clearAuthCookie(redirectResponse);
-
-				return redirectResponse;
+				return redirectToLogin(request);
 			}
 
 			/*
 			 * ------------------------------------------------
-			 * BACKEND HTTP ERROR
+			 * Backend HTTP error
 			 * ------------------------------------------------
 			 */
 			if (!response.ok) {
-				console.log("ADMIN: Backend rejected authentication.");
+				console.log("ADMIN: /api/init returned HTTP error.");
 
-				const redirectResponse = redirectToLogin(request);
-
-				clearAuthCookie(redirectResponse);
-
-				return redirectResponse;
+				return redirectToLogin(request);
 			}
 
 			/*
 			 * ------------------------------------------------
-			 * READ BACKEND RESPONSE
+			 * Read response
 			 * ------------------------------------------------
 			 */
 			const text = await response.text();
@@ -208,21 +167,12 @@ export async function proxy(request: NextRequest) {
 
 			try {
 				data = text ? JSON.parse(text) : {};
-			} catch (error) {
-				console.error("ADMIN INIT INVALID JSON:", text);
+			} catch {
+				console.error("ADMIN: Invalid JSON from /api/init:", text);
 
-				const redirectResponse = redirectToLogin(request);
-
-				clearAuthCookie(redirectResponse);
-
-				return redirectResponse;
+				return redirectToLogin(request);
 			}
 
-			/*
-			 * ------------------------------------------------
-			 * DEBUG INFORMATION
-			 * ------------------------------------------------
-			 */
 			console.log("ADMIN INIT RESPONSE:", data);
 
 			console.log("ADMIN LOGIN STATUS:", data?.login_status);
@@ -231,13 +181,8 @@ export async function proxy(request: NextRequest) {
 
 			/*
 			 * ------------------------------------------------
-			 * ADMIN CHECK
+			 * Validate admin
 			 * ------------------------------------------------
-			 *
-			 * Both conditions must be true:
-			 *
-			 * login_status === true
-			 * type === "admin"
 			 */
 			const isAdmin = data?.login_status === true && data?.type === "admin";
 
@@ -245,22 +190,18 @@ export async function proxy(request: NextRequest) {
 
 			/*
 			 * ------------------------------------------------
-			 * NOT ADMIN
+			 * Not authenticated / not admin
 			 * ------------------------------------------------
 			 */
 			if (!isAdmin) {
-				console.log("ADMIN: Authentication failed.");
+				console.log("ADMIN: Invalid admin session.");
 
-				const redirectResponse = redirectToLogin(request);
-
-				clearAuthCookie(redirectResponse);
-
-				return redirectResponse;
+				return redirectToLogin(request);
 			}
 
 			/*
 			 * ------------------------------------------------
-			 * VALID ADMIN SESSION
+			 * Valid admin
 			 * ------------------------------------------------
 			 */
 			console.log("ADMIN: Valid admin session.");
@@ -268,80 +209,32 @@ export async function proxy(request: NextRequest) {
 			const nextResponse = NextResponse.next();
 
 			/*
-			 * ------------------------------------------------
-			 * FORWARD ANY BACKEND SET-COOKIE HEADERS
-			 * ------------------------------------------------
-			 *
-			 * This allows /api/init to refresh/update
-			 * the session cookie when necessary.
+			 * Forward any cookies generated/refreshed
+			 * by backend.
 			 */
 			forwardSetCookies(nextResponse, setCookies);
 
-			console.log("ADMIN: Allowing request.");
+			console.log("ADMIN: Request allowed.");
 
 			console.log("========================================");
 
 			return nextResponse;
 		} catch (error) {
-			/*
-			 * ------------------------------------------------
-			 * NETWORK / BACKEND ERROR
-			 * ------------------------------------------------
-			 */
 			console.error("ADMIN AUTHENTICATION ERROR:", error);
 
-			const redirectResponse = redirectToLogin(request);
-
-			clearAuthCookie(redirectResponse);
-
-			return redirectResponse;
+			return redirectToLogin(request);
 		}
 	}
 
 	/*
-	 * =======================================================
+	 * =====================================================
 	 * OTHER ROUTES
-	 * =======================================================
+	 * =====================================================
 	 */
 
 	if (process.env.NODE_ENV !== "production") {
 		return NextResponse.next();
 	}
-
-	/*
-	 * -------------------------------------------------------
-	 * BLOCKED ROUTES
-	 * -------------------------------------------------------
-	 *
-	 * Keep this section if you want to add route
-	 * blocking later.
-	 */
-
-	/*
-	const BLOCKED_ROUTES = [
-		"/login",
-		"/admin",
-		"/checkout",
-		"/cart",
-		"/register",
-		"/forgot-password",
-		"/profile",
-		"/orders",
-		"/order-tracking",
-	];
-
-	const isBlocked = BLOCKED_ROUTES.some(
-		(route) =>
-			pathname === route ||
-			pathname.startsWith(`${route}/`),
-	);
-
-	if (isBlocked) {
-		return new NextResponse(null, {
-			status: 404,
-		});
-	}
-	*/
 
 	return NextResponse.next();
 }
