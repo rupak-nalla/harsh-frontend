@@ -12,8 +12,6 @@ function getClientIp(request: NextRequest): string {
 	const forwardedFor = request.headers.get("x-forwarded-for");
 
 	if (forwardedFor) {
-		// X-Forwarded-For can contain:
-		// client-ip, proxy-ip, proxy-ip...
 		return forwardedFor.split(",")[0].trim();
 	}
 
@@ -21,11 +19,6 @@ function getClientIp(request: NextRequest): string {
 
 	if (realIp) {
 		return realIp.trim();
-	}
-
-	// Available in some Next.js hosting environments.
-	if (request.ip) {
-		return request.ip;
 	}
 
 	return "";

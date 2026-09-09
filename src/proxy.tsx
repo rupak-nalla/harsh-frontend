@@ -8,21 +8,9 @@ const INIT_API_URL = "https://printinghouseujjain.in/api/init";
  * -------------------------------------------------------
  */
 function getClientIp(request: NextRequest): string {
-	/*
-	 * Vercel / proxy environments may provide the
-	 * original client IP through x-forwarded-for.
-	 */
 	const forwardedFor = request.headers.get("x-forwarded-for");
 
 	if (forwardedFor) {
-		/*
-		 * x-forwarded-for can contain:
-		 *
-		 * client, proxy1, proxy2
-		 *
-		 * The first address is normally the
-		 * original client.
-		 */
 		return forwardedFor.split(",")[0].trim();
 	}
 
@@ -30,14 +18,6 @@ function getClientIp(request: NextRequest): string {
 
 	if (realIp) {
 		return realIp.trim();
-	}
-
-	/*
-	 * NextRequest may expose the IP depending
-	 * on the deployment environment.
-	 */
-	if (request.ip) {
-		return request.ip;
 	}
 
 	return "";
