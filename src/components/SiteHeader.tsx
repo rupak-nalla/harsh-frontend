@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -18,55 +17,12 @@ import {
 } from "lucide-react";
 
 export default function SiteHeader() {
-	const router = useRouter();
-
 	const [mobileOpen, setMobileOpen] = React.useState(false);
-	const [trackingOrders, setTrackingOrders] = React.useState(false);
 	const [searchOpen, setSearchOpen] = React.useState(false);
 	const [searchValue, setSearchValue] = React.useState("");
 
 	const closeMobileMenu = () => {
 		setMobileOpen(false);
-	};
-
-	const handleTrackOrders = async () => {
-		if (trackingOrders) return;
-
-		setTrackingOrders(true);
-
-		try {
-			const response = await fetch("/api/orders", {
-				method: "GET",
-				credentials: "include",
-				cache: "no-store",
-			});
-
-			const data = await response.json().catch(() => ({}));
-
-			if (!response.ok) {
-				router.push("/order-tracking");
-				return;
-			}
-
-			const rawOrders = Array.isArray(data?.wishlist)
-				? data.wishlist
-				: Array.isArray(data?.orders)
-					? data.orders
-					: Array.isArray(data?.result)
-						? data.result
-						: [];
-
-			if (rawOrders.length > 0) {
-				router.push("/orders");
-			} else {
-				router.push("/order-tracking");
-			}
-		} catch (error) {
-			console.error("Track orders check failed:", error);
-			router.push("/order-tracking");
-		} finally {
-			setTrackingOrders(false);
-		}
 	};
 
 	const handleSearch = (e: React.FormEvent) => {
@@ -409,11 +365,9 @@ export default function SiteHeader() {
 						    ONE DESKTOP BUTTON
 						================================================= */}
 
-						<button
-							type="button"
-							onClick={handleTrackOrders}
-							disabled={trackingOrders}
-							aria-label="Track Orders"
+						<Link
+							href="/orders"
+							aria-label="Orders"
 							className="
 								hidden
 								h-10
@@ -431,15 +385,13 @@ export default function SiteHeader() {
 								hover:border-[#85161b]/30
 								hover:bg-[#fdf7f3]
 								hover:text-[#85161b]
-								disabled:cursor-wait
-								disabled:opacity-60
 								md:flex
 							"
 						>
 							<ClipboardList size={20} strokeWidth={1.8} />
 
-							<span>{trackingOrders ? "Checking..." : "Track Orders"}</span>
-						</button>
+							<span>Orders</span>
+						</Link>
 
 						{/* =================================================
 						    CART
@@ -869,31 +821,22 @@ export default function SiteHeader() {
 
 										{/* ORDERS */}
 
-										<button
-											type="button"
-											onClick={() => {
-												closeMobileMenu();
-												handleTrackOrders();
-											}}
-											disabled={trackingOrders}
-											aria-label="Track Orders"
+										<Link
+											href="/orders"
+											onClick={closeMobileMenu}
 											className="
 												flex
 												min-h-[58px]
-												w-full
 												items-center
 												justify-between
 												rounded-xl
 												px-4
-												text-left
 												text-[16px]
 												font-medium
 												text-[#171717]
 												transition
 												hover:bg-[#f5eee9]
 												hover:text-[#85161b]
-												disabled:cursor-wait
-												disabled:opacity-60
 											"
 										>
 											<span className="flex items-center">
@@ -909,7 +852,7 @@ export default function SiteHeader() {
 												>
 													<ClipboardList size={20} strokeWidth={1.8} />
 												</span>
-												{trackingOrders ? "Checking..." : "Track Orders"}
+												Orders
 											</span>
 
 											<ArrowRight
@@ -917,7 +860,7 @@ export default function SiteHeader() {
 												strokeWidth={1.6}
 												className="text-[#b1a59e]"
 											/>
-										</button>
+										</Link>
 									</nav>
 								</div>
 

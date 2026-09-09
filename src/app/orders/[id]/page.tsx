@@ -52,17 +52,12 @@ type Customization = {
 	photos: string[];
 };
 
-type SelectedVariants = Record<string, string>;
-type VariantImages = Record<string, string>;
-
 type OrderItem = {
 	id: string;
 	name: string;
 	image: string;
 	qty: number;
 	price: number;
-	selectedVariants: SelectedVariants;
-	variantImages: VariantImages;
 	customizations: Customization[];
 };
 
@@ -102,8 +97,6 @@ type RawCartItem = {
 
 	quantity?: string | number;
 	selling_price?: string | number;
-	selected_variants?: string | Record<string, unknown> | null;
-	variants?: string | Record<string, unknown> | null;
 	customization?: string;
 
 	[key: string]: unknown;
@@ -352,116 +345,6 @@ function extractUploadedPhotos(value: string): string[] {
    CUSTOMIZATION PARSER
 ───────────────────────────────────────── */
 
-function parseSelectedVariants(value: unknown): SelectedVariants {
-	if (!value) {
-		return {};
-	}
-
-	let parsed: unknown = value;
-
-	if (typeof value === "string") {
-		const trimmed = value.trim();
-
-		if (!trimmed || trimmed === "{}" || trimmed === "[]") {
-			return {};
-		}
-
-		try {
-			parsed = JSON.parse(trimmed);
-		} catch {
-			return {};
-		}
-	}
-
-	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-		return {};
-	}
-
-	const result: SelectedVariants = {};
-
-	Object.entries(parsed as Record<string, unknown>).forEach(
-		([variantName, optionName]) => {
-			if (
-				variantName.trim() &&
-				typeof optionName === "string" &&
-				optionName.trim()
-			) {
-				result[variantName.trim()] = optionName.trim();
-			}
-		},
-	);
-
-	return result;
-}
-
-function getVariantImageUrl(imagePath: unknown): string {
-	if (typeof imagePath !== "string" || !imagePath.trim()) {
-		return "";
-	}
-
-	const image = imagePath.trim();
-
-	if (image.startsWith("http://") || image.startsWith("https://")) {
-		return image;
-	}
-
-	if (image.startsWith("/")) {
-		return `https://printinghouseujjain.in${image}`;
-	}
-
-	return `${PRODUCT_IMAGE_URL}${image}`;
-}
-
-function parseVariantImages(
-	variantsValue: unknown,
-	selectedVariants: SelectedVariants,
-): VariantImages {
-	if (!variantsValue || Object.keys(selectedVariants).length === 0) {
-		return {};
-	}
-
-	let parsed: unknown = variantsValue;
-
-	if (typeof variantsValue === "string") {
-		try {
-			parsed = JSON.parse(variantsValue);
-		} catch {
-			return {};
-		}
-	}
-
-	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-		return {};
-	}
-
-	const result: VariantImages = {};
-
-	Object.entries(selectedVariants).forEach(([variantName, optionName]) => {
-		const variantGroup = (parsed as Record<string, unknown>)[variantName];
-
-		if (
-			!variantGroup ||
-			typeof variantGroup !== "object" ||
-			Array.isArray(variantGroup)
-		) {
-			return;
-		}
-
-		const option = (variantGroup as Record<string, unknown>)[optionName];
-
-		if (!option || typeof option !== "object" || Array.isArray(option)) {
-			return;
-		}
-
-		const image = getVariantImageUrl((option as Record<string, unknown>).image);
-		if (image) {
-			result[variantName] = image;
-		}
-	});
-
-	return result;
-}
-
 function parseCustomizations(item: RawCartItem): Customization[] {
 	const customizations: Customization[] = [];
 	let values: Record<string, unknown> = {};
@@ -577,27 +460,19 @@ function normalizeOrder(raw: RawOrder): Order {
 
 	const items: OrderItem[] = rawItems.map((item, index) => {
 		const quantity = toNumber(item.quantity);
-		const selectedVariants = parseSelectedVariants(item.selected_variants);
-		const variantImages = parseVariantImages(item.variants, selectedVariants);
-		const firstVariantImage = Object.values(variantImages)[0] ?? "";
 
 		return {
 			id: String(item.id ?? `${orderId}-item-${index}`),
 
 			name: item.name ?? "Untitled product",
 
-			image: firstVariantImage ||
-				(item.primary_photo_path
-					? `${PRODUCT_IMAGE_URL}${item.primary_photo_path}`
-					: ""),
+			image: item.primary_photo_path
+				? `${PRODUCT_IMAGE_URL}${item.primary_photo_path}`
+				: "",
 
 			qty: quantity > 0 ? Math.floor(quantity) : 1,
 
 			price: toNumber(item.selling_price),
-
-			selectedVariants,
-
-			variantImages,
 
 			customizations: parseCustomizations(item),
 		};
@@ -1152,7 +1027,7 @@ function OrderProduct({ item }: { item: OrderItem }) {
 	return (
 		<div className="p-5 sm:p-6">
 			<div className="flex gap-4">
-				<div className="h-32 w-32 shrink-0 overflow-hidden rounded-2xl border border-[#E9DED7] bg-[#F5F1ED] sm:h-36 sm:w-36">
+				<div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-[#F5F1ED] sm:h-28 sm:w-28">
 					{item.image ? (
 						<img
 							src={item.image}
@@ -1172,32 +1047,6 @@ function OrderProduct({ item }: { item: OrderItem }) {
 					</h3>
 
 					<p className="mt-1 text-xs text-[#2E2E2E]/50">Quantity: {item.qty}</p>
-
-					{Object.keys(item.selectedVariants).length > 0 && (
-						<div className="mt-3">
-							<p className="text-[11px] font-bold uppercase tracking-wide text-[#2E2E2E]/45">
-								Selected variant
-							</p>
-
-							<div className="mt-1.5 flex flex-wrap gap-2">
-								{Object.entries(item.selectedVariants).map(
-											([variantName, optionName]) => (
-												<span
-													key={`${variantName}-${optionName}`}
-													className="inline-flex items-center gap-2 rounded-xl border border-[#E9DED7] bg-white px-2 py-2 text-xs"
-												>
-													<span className="font-semibold text-[#2E2E2E]/55">
-														{variantName}:
-													</span>
-													<span className="font-bold text-[#85161B]">
-														{optionName}
-													</span>
-												</span>
-											),
-										)}
-							</div>
-						</div>
-					)}
 
 					<p className="mt-3 text-sm font-bold text-[#85161B]">
 						₹{item.price.toFixed(2)}

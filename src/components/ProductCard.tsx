@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
 	Heart,
 	ShoppingBag,
@@ -25,13 +25,6 @@ type CustomizeRequirement = {
 	optional: boolean;
 };
 
-type VariantOption = {
-	price: number;
-	image: string | null;
-};
-
-type VariantMap = Record<string, Record<string, VariantOption>>;
-
 type Item = {
 	id: string;
 	name: string;
@@ -43,7 +36,6 @@ type Item = {
 	description?: string;
 	brand?: string;
 	customizeReqs?: string | string[] | null;
-	varients?: string | VariantMap | null;
 
 	/*
 	 * true = product is sold without customization
@@ -60,104 +52,6 @@ type Item = {
 };
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
-
-const PRODUCT_IMAGE_BASE_URL =
-	"https://printinghouseujjain.in/assets/products/";
-
-function resolveVariantImage(value: unknown): string | null {
-	if (typeof value !== "string" || !value.trim()) {
-		return null;
-	}
-
-	const trimmed = value.trim();
-
-	if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-		return trimmed;
-	}
-
-	return `${PRODUCT_IMAGE_BASE_URL}${trimmed.replace(/^\/+/, "")}`;
-}
-
-/* =========================================================
-   PARSE VARIANTS
-========================================================= */
-
-function parseVariants(value?: string | VariantMap | null): VariantMap {
-	if (!value) {
-		return {};
-	}
-
-	let parsed: unknown = value;
-
-	if (typeof value === "string") {
-		try {
-			parsed = JSON.parse(value);
-		} catch (error) {
-			console.error("Failed to parse variants:", value, error);
-			return {};
-		}
-	}
-
-	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-		return {};
-	}
-
-	const result: VariantMap = {};
-
-	Object.entries(parsed as Record<string, unknown>).forEach(
-		([variantName, options]) => {
-			if (
-				!variantName.trim() ||
-				!options ||
-				typeof options !== "object" ||
-				Array.isArray(options)
-			) {
-				return;
-			}
-
-			const parsedOptions: Record<string, VariantOption> = {};
-
-			Object.entries(options as Record<string, unknown>).forEach(
-				([optionName, optionValue]) => {
-					if (!optionName.trim()) {
-						return;
-					}
-
-					// Options are stored either as a bare number/numeric
-					// string, or as an object like
-					// { price: "50", image: "47_variant_red.jpg" }.
-					const isObjectValue =
-						optionValue &&
-						typeof optionValue === "object" &&
-						!Array.isArray(optionValue);
-
-					const rawPrice = isObjectValue
-						? (optionValue as { price?: unknown }).price
-						: optionValue;
-
-					const rawImage = isObjectValue
-						? (optionValue as { image?: unknown }).image
-						: null;
-
-					const numericPrice = Number(rawPrice);
-
-					if (Number.isFinite(numericPrice)) {
-						parsedOptions[optionName.trim()] = {
-							price: numericPrice,
-							image: resolveVariantImage(rawImage),
-						};
-					}
-				},
-			);
-
-			if (Object.keys(parsedOptions).length > 0) {
-				result[variantName.trim()] = parsedOptions;
-			}
-		},
-	);
-
-	return result;
-}
 
 /* =========================================================
    PARSE CUSTOMIZATION REQUIREMENTS
@@ -356,47 +250,6 @@ export default function ProductCard({
 	const [selectedOption, setSelectedOption] = useState("");
 
 	/* =====================================================
-       VARIANT SELECTION
-    ===================================================== */
-
-	const variants = useMemo(() => parseVariants(item.varients), [item.varients]);
-
-	const variantNames = Object.keys(variants);
-
-	const [selectedVariants, setSelectedVariants] = useState<
-		Record<string, string>
-	>({});
-
-	const variantPriceAddition = useMemo(
-		() =>
-			variantNames.reduce((total, variantName) => {
-				const selectedOptionName = selectedVariants[variantName];
-				if (!selectedOptionName) return total;
-
-				return (
-					total + (variants[variantName]?.[selectedOptionName]?.price ?? 0)
-				);
-			}, 0),
-		[variantNames, variants, selectedVariants],
-	);
-
-	const currentSellingPrice = item.price;
-	const currentMarketPrice = item.original || 0;
-
-	const allVariantsSelected = variantNames.every((variantName) =>
-		Boolean(selectedVariants[variantName]),
-	);
-
-	const handleVariantChange = (variantName: string, optionName: string) => {
-		setSelectedVariants((previous) => ({
-			...previous,
-			[variantName]: optionName,
-		}));
-		setCartError("");
-		setCustomizationValidationError("");
-	};
-
-	/* =====================================================
        PARSED CUSTOMIZATION REQUIREMENTS
     ===================================================== */
 
@@ -468,7 +321,6 @@ export default function ProductCard({
 		setCustomizationFiles({});
 		setCustomizationValidationError("");
 		setSelectedOption("");
-		setSelectedVariants({});
 		setRawOrder(false);
 	};
 
@@ -538,16 +390,6 @@ export default function ProductCard({
             ================================================= */
 
 			formData.append("product_id", item.id);
-
-			/* =================================================
-               VARIANTS
-            ================================================= */
-
-			Object.entries(selectedVariants).forEach(([variantName, optionName]) => {
-				if (variantName.trim() && optionName.trim()) {
-					formData.append(`variant[${variantName}]`, optionName);
-				}
-			});
 
 			/* =================================================
                OPTION
@@ -691,12 +533,6 @@ export default function ProductCard({
 			formData.append("product_id", item.id);
 			formData.append("customize", "raw");
 
-			Object.entries(selectedVariants).forEach(([variantName, optionName]) => {
-				if (variantName.trim() && optionName.trim()) {
-					formData.append(`variant[${variantName}]`, optionName);
-				}
-			});
-
 			console.log("========== ADD TO CART (RAW) ==========");
 
 			for (const [key, value] of formData.entries()) {
@@ -767,15 +603,6 @@ export default function ProductCard({
 		}
 
 		setCartError("");
-
-		/* =================================================
-           VARIANTS / CUSTOMIZATION
-        ================================================= */
-
-		if (variantNames.length > 0 || hasCustomization) {
-			openCustomizationModal();
-			return;
-		}
 
 		/* =================================================
            NO CUSTOMIZATION
@@ -1007,17 +834,6 @@ export default function ProductCard({
 
 	const handleCustomizationSubmit = async () => {
 		setCustomizationValidationError("");
-
-		/* =================================================
-           REQUIRED VARIANTS
-        ================================================= */
-
-		if (variantNames.length > 0 && !allVariantsSelected) {
-			setCustomizationValidationError(
-				"Please select an option for every variant.",
-			);
-			return;
-		}
 
 		/*
 		 * RAW ORDER — buyer opted out of customization for
@@ -1370,7 +1186,7 @@ export default function ProductCard({
                                     text-[#85161B]
                                 "
 							>
-								₹{currentSellingPrice.toFixed(0)}
+								₹{item.price.toFixed(0)}
 							</span>
 
 							{showOriginal && item.original && (
@@ -1382,7 +1198,7 @@ export default function ProductCard({
                                             line-through
                                         "
 								>
-									₹{currentMarketPrice.toFixed(0)}
+									₹{item.original.toFixed(0)}
 								</span>
 							)}
 						</div>
@@ -1608,114 +1424,6 @@ export default function ProductCard({
 
 						<div className="overflow-y-auto px-5 py-5 sm:px-6">
 							<div className="space-y-5">
-								{/* =================================================
-                                    VARIANTS
-                                ================================================= */}
-
-								{variantNames.length > 0 && (
-									<div className="rounded-xl border border-[#DED6D0] bg-[#FBF9F7] p-4">
-										<div className="mb-3">
-											<p className="text-sm font-semibold text-[#202020]">
-												Choose your variant
-											</p>
-											<p className="mt-1 text-[11px] leading-[1.5] text-black/45">
-												Select one option for every required variant before
-												adding the product to your cart.
-											</p>
-										</div>
-
-										<div className="space-y-4">
-											{variantNames.map((variantName) => {
-												const options = variants[variantName];
-												const selected = selectedVariants[variantName];
-
-												return (
-													<div key={variantName}>
-														<div className="mb-2 flex items-center justify-between gap-3">
-															<span className="text-xs font-semibold capitalize text-[#202020]">
-																{variantName}
-															</span>
-															<span className="text-[10px] font-semibold text-[#85161B]">
-																Required · Select one
-															</span>
-														</div>
-
-														<div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-															{Object.entries(options).map(
-																([optionName, optionData]) => {
-																	const isSelected = selected === optionName;
-																	const additionalPrice = optionData.price;
-																	const optionImage = optionData.image;
-
-																	return (
-																		<button
-																			key={optionName}
-																			type="button"
-																			onClick={() =>
-																				handleVariantChange(
-																					variantName,
-																					optionName,
-																				)
-																			}
-																			className={`flex items-center gap-2.5 rounded-xl border px-3 py-3 text-left transition ${
-																				isSelected
-																					? "border-[#85161B] bg-[#85161B] text-white shadow-sm"
-																					: "border-[#DED6D0] bg-white text-[#2E2E2E] hover:border-[#85161B]/50"
-																			}`}
-																			aria-pressed={isSelected}
-																		>
-																			{optionImage && (
-																				<img
-																					src={optionImage}
-																					alt={optionName}
-																					className={`h-9 w-9 shrink-0 rounded-lg object-cover ${
-																						isSelected
-																							? "ring-2 ring-white/70"
-																							: "ring-1 ring-black/5"
-																					}`}
-																				/>
-																			)}
-
-																			<div className="min-w-0">
-																				<span className="block truncate text-[11px] font-semibold">
-																					{optionName}
-																				</span>
-																				<span
-																					className={`mt-0.5 block text-[10px] ${isSelected ? "text-white/75" : "text-black/40"}`}
-																				>
-																					{additionalPrice >= 0
-																						? `+₹${additionalPrice.toFixed(0)}`
-																						: `-₹${Math.abs(additionalPrice).toFixed(0)}`}
-																				</span>
-																			</div>
-																		</button>
-																	);
-																},
-															)}
-														</div>
-													</div>
-												);
-											})}
-										</div>
-
-										<div className="mt-4 flex items-center justify-between border-t border-[#E8DED7] pt-3">
-											<span className="text-xs font-medium text-black/50">
-												Selected price
-											</span>
-											<div className="text-right">
-												<span className="text-base font-bold text-[#85161B]">
-													₹{(item.price + variantPriceAddition).toFixed(0)}
-												</span>
-												{item.original ? (
-													<span className="ml-2 text-[11px] font-medium text-black/30 line-through">
-														₹{(item.original + variantPriceAddition).toFixed(0)}
-													</span>
-												) : null}
-											</div>
-										</div>
-									</div>
-								)}
-
 								{/* =================================================
                                     RAW ORDER TOGGLE
                                 ================================================= */}

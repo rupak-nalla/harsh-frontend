@@ -1,9 +1,11 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+
 import { useRouter, useSearchParams } from "next/navigation";
 
 import ProductCard from "../../components/ProductCard";
+
 import { CartProvider } from "../../context/CartContext";
 
 import {
@@ -21,48 +23,9 @@ import {
 
 const API_URL = "/api/shop-data";
 
-const PRODUCT_IMAGE_URL =
-	"https://printinghouseujjain.in/assets/products/";
+const PRODUCT_IMAGE_URL = "https://printinghouseujjain.in/assets/products/";
 
 const PRODUCTS_PER_PAGE = 8;
-
-/* =========================================================
-   VARIANT TYPES
-========================================================= */
-
-/*
- * Backend variant structure:
- *
- * {
- *   "Color": {
- *     "Red": {
- *       "price": "0",
- *       "image": "47_Color_Red.jpg"
- *     },
- *     "Black": {
- *       "price": "50",
- *       "image": "47_Color_Black.jpg"
- *     }
- *   }
- *
- * We also support the older/simple format:
- *
- * {
- *   "Color": {
- *     "Red": "0",
- *     "Black": "50"
- *   }
- */
-
-interface VariantOption {
-	price: number;
-	image?: string | null;
-}
-
-type VariantMap = Record<
-	string,
-	Record<string, VariantOption>
->;
 
 /* =========================================================
    API TYPES
@@ -84,41 +47,28 @@ interface ApiProduct {
 	id: number;
 	name: string;
 	description?: string | null;
-
-	/*
-	 * Backend can return variants as:
-	 *
-	 * - JSON string
-	 * - already parsed object
-	 * - null
-	 */
-	variants?: string | VariantMap | null;
-
+	varients?: string | null;
 	primary_photo_path?: string | null;
 	other_photos_paths?: string | null;
-
 	market_price?: string | number | null;
 	selling_price?: string | number | null;
 	reseller_price?: string | number | null;
-
 	category_ids?: string | null;
 	occasion_ids?: string | null;
-
 	in_stock?: string | null;
-
 	sold?: number;
 
 	/*
-	 * Backend normally returns:
+	 * Backend normally returns this as a JSON string:
 	 *
 	 * '["text:10:Enter your custom name"]'
+	 *
+	 * But we also support an already parsed array.
 	 */
 	customize_reqs?: string | string[] | null;
 
 	keywords?: string | null;
-
 	created_at?: string;
-
 	delivery?: string | number | null;
 }
 
@@ -131,22 +81,12 @@ interface Product {
 	name: string;
 	price: number;
 	original: number;
-
-	/*
-	 * Keep backend variant data intact internally.
-	 */
-	varients: string | VariantMap | null;
-
 	image: string;
-
 	categoryIds: number[];
 	occasionIds: number[];
-
 	categoryNames: string[];
 	occasionNames: string[];
-
 	description: string;
-
 	inStock: boolean;
 
 	customizeReqs: string | string[] | null;
@@ -167,9 +107,6 @@ const SORT_OPTIONS = [
    HELPERS
 ========================================================= */
 
-/**
- * Parse JSON array of IDs.
- */
 function parseIds(value?: string | null): number[] {
 	if (!value) {
 		return [];
@@ -182,132 +119,12 @@ function parseIds(value?: string | null): number[] {
 			return [];
 		}
 
-		return parsed
-			.map((id) => Number(id))
-			.filter((id) => !Number.isNaN(id));
+		return parsed.map((id) => Number(id)).filter((id) => !Number.isNaN(id));
 	} catch {
 		return [];
 	}
 }
 
-/**
- * Parse variant data.
- *
- * Supports:
- *
- * 1. JSON string
- *
- * 2. Already parsed object
- *
- * 3. Older/simple format
- */
-function parseVariants(value: unknown): VariantMap {
-	if (!value) {
-		return {};
-	}
-
-	let parsed: unknown = value;
-
-	if (typeof value === "string") {
-		try {
-			parsed = JSON.parse(value);
-		} catch {
-			return {};
-		}
-	}
-
-	if (
-		!parsed ||
-		typeof parsed !== "object" ||
-		Array.isArray(parsed)
-	) {
-		return {};
-	}
-
-	const result: VariantMap = {};
-
-	Object.entries(parsed as Record<string, unknown>).forEach(
-		([variantName, options]) => {
-			if (
-				!variantName.trim() ||
-				!options ||
-				typeof options !== "object" ||
-				Array.isArray(options)
-			) {
-				return;
-			}
-
-			const parsedOptions: Record<string, VariantOption> = {};
-
-			Object.entries(
-				options as Record<string, unknown>,
-			).forEach(([optionName, optionValue]) => {
-				if (!optionName.trim()) {
-					return;
-				}
-
-				/*
-				 * New format:
-				 *
-				 * {
-				 *   price: "50",
-				 *   image: "..."
-				 * }
-				 */
-				if (
-					optionValue &&
-					typeof optionValue === "object" &&
-					!Array.isArray(optionValue)
-				) {
-					const option = optionValue as {
-						price?: unknown;
-						image?: unknown;
-					};
-
-					const numericPrice = Number(option.price);
-
-					if (Number.isFinite(numericPrice)) {
-						parsedOptions[optionName.trim()] = {
-							price: numericPrice,
-							image:
-								typeof option.image === "string"
-									? option.image
-									: null,
-						};
-					}
-
-					return;
-				}
-
-				/*
-				 * Old/simple format:
-				 *
-				 * {
-				 *   "Red": "50"
-				 * }
-				 */
-				const numericPrice = Number(optionValue);
-
-				if (Number.isFinite(numericPrice)) {
-					parsedOptions[optionName.trim()] = {
-						price: numericPrice,
-						image: null,
-					};
-				}
-			});
-
-			if (Object.keys(parsedOptions).length > 0) {
-				result[variantName.trim()] = parsedOptions;
-			}
-		},
-	);
-
-	return result;
-}
-
-/**
- * Create URL-safe slug.
- */
 function createSlug(value: string) {
 	return value
 		.toLowerCase()
@@ -339,11 +156,9 @@ export default function ShopPage() {
 	   API DATA
 	===================================================== */
 
-	const [categories, setCategories] =
-		useState<ApiCategory[]>([]);
+	const [categories, setCategories] = useState<ApiCategory[]>([]);
 
-	const [occasions, setOccasions] =
-		useState<ApiOccasion[]>([]);
+	const [occasions, setOccasions] = useState<ApiOccasion[]>([]);
 
 	const [products, setProducts] = useState<Product[]>([]);
 
@@ -355,11 +170,9 @@ export default function ShopPage() {
 	   FILTER STATE
 	===================================================== */
 
-	const [selectedCategories, setSelectedCategories] =
-		useState<number[]>([]);
+	const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
 
-	const [selectedOccasions, setSelectedOccasions] =
-		useState<number[]>([]);
+	const [selectedOccasions, setSelectedOccasions] = useState<number[]>([]);
 
 	const [search, setSearch] = useState("");
 
@@ -398,10 +211,9 @@ export default function ShopPage() {
 				   CATEGORIES
 				================================================= */
 
-				const apiCategories: ApiCategory[] =
-					Array.isArray(data.categories)
-						? data.categories
-						: [];
+				const apiCategories: ApiCategory[] = Array.isArray(data.categories)
+					? data.categories
+					: [];
 
 				setCategories(apiCategories);
 
@@ -409,10 +221,9 @@ export default function ShopPage() {
 				   OCCASIONS
 				================================================= */
 
-				const apiOccasions: ApiOccasion[] =
-					Array.isArray(data.occasions)
-						? data.occasions
-						: [];
+				const apiOccasions: ApiOccasion[] = Array.isArray(data.occasions)
+					? data.occasions
+					: [];
 
 				setOccasions(apiOccasions);
 
@@ -420,149 +231,93 @@ export default function ShopPage() {
 				   PRODUCTS
 				================================================= */
 
-				const apiProducts: ApiProduct[] =
-					Array.isArray(data.products)
-						? data.products
-						: [];
+				const apiProducts: ApiProduct[] = Array.isArray(data.products)
+					? data.products
+					: [];
 
-				console.log(
-					"Raw API products:",
-					apiProducts,
-				);
+				console.log("Raw API products:", apiProducts);
 
-				const formattedProducts: Product[] =
-					apiProducts.map((product) => {
-						const categoryIds = parseIds(
-							product.category_ids,
-						);
+				const formattedProducts: Product[] = apiProducts.map((product) => {
+					const categoryIds = parseIds(product.category_ids);
 
-						const occasionIds = parseIds(
-							product.occasion_ids,
-						);
+					const occasionIds = parseIds(product.occasion_ids);
 
-						const description =
-							typeof product.description ===
-							"string"
-								? product.description.trim()
-								: "";
+					const description =
+						typeof product.description === "string"
+							? product.description.trim()
+							: "";
 
-						/* =========================================
-						   CUSTOMIZATION REQUIREMENTS
-						========================================= */
+					/*
+					 * IMPORTANT:
+					 *
+					 * Preserve customize_reqs.
+					 *
+					 * Backend examples:
+					 *
+					 * "[\"text:10:Enter your custom name\"]"
+					 *
+					 * "[\"photo:Upload Photo\",\"text:8:CustomText (optional)\"]"
+					 */
 
-						const customizeReqs =
-							Array.isArray(product.customize_reqs)
-								? product.customize_reqs
-								: typeof product.customize_reqs ===
-									  "string"
-									? product.customize_reqs
-									: null;
+					const customizeReqs = Array.isArray(product.customize_reqs)
+						? product.customize_reqs
+						: typeof product.customize_reqs === "string"
+							? product.customize_reqs
+							: null;
 
-						console.log(
-							`Product "${product.name}" customization requirements:`,
-							customizeReqs,
-						);
+					console.log(
+						`Product "${product.name}" customization requirements:`,
+						customizeReqs,
+					);
 
-						/* =========================================
-						   VARIANTS
-						========================================= */
+					return {
+						id: String(product.id),
 
-						/*
-						 * Preserve the complete backend
-						 * variant structure.
-						 *
-						 * This includes:
-						 *
-						 * - price
-						 * - image
-						 */
+						name: product.name || "Untitled Product",
 
-						const variants =
-							product.variants ?? null;
+						price: Number(product.selling_price) || 0,
 
-						console.log(
-							`Product "${product.name}" variants:`,
-							variants,
-						);
+						original: Number(product.market_price) || 0,
 
-						return {
-							id: String(product.id),
+						image: product.primary_photo_path
+							? PRODUCT_IMAGE_URL + product.primary_photo_path
+							: "",
 
-							name:
-								product.name ||
-								"Untitled Product",
+						categoryIds,
 
-							price:
-								Number(
-									product.selling_price,
-								) || 0,
+						occasionIds,
 
-							original:
-								Number(
-									product.market_price,
-								) || 0,
+						categoryNames: categoryIds
+							.map(
+								(id) =>
+									apiCategories.find((category) => category.id === id)?.name ||
+									"",
+							)
+							.filter(Boolean),
 
-							varients: variants,
+						occasionNames: occasionIds
+							.map(
+								(id) =>
+									apiOccasions.find((occasion) => occasion.id === id)?.name ||
+									"",
+							)
+							.filter(Boolean),
 
-							image:
-								product.primary_photo_path
-									? PRODUCT_IMAGE_URL +
-										product.primary_photo_path
-									: "",
+						description,
 
-							categoryIds,
+						inStock: product.in_stock === "available",
 
-							occasionIds,
+						customizeReqs,
+					};
+				});
 
-							categoryNames:
-								categoryIds
-									.map(
-										(id) =>
-											apiCategories.find(
-												(category) =>
-													category.id ===
-													id,
-											)?.name || "",
-									)
-									.filter(Boolean),
-
-							occasionNames:
-								occasionIds
-									.map(
-										(id) =>
-											apiOccasions.find(
-												(occasion) =>
-													occasion.id ===
-													id,
-											)?.name || "",
-									)
-									.filter(Boolean),
-
-							description,
-
-							inStock:
-								product.in_stock ===
-								"available",
-
-							customizeReqs,
-						};
-					});
-
-				console.log(
-					"Formatted products:",
-					formattedProducts,
-				);
+				console.log("Formatted products:", formattedProducts);
 
 				setProducts(formattedProducts);
 			} catch (error) {
-				console.error(
-					"Failed to fetch shop data:",
-					error,
-				);
+				console.error("Failed to fetch shop data:", error);
 
-				setError(
-					"Unable to load products. Please try again.",
-				);
+				setError("Unable to load products. Please try again.");
 			} finally {
 				setLoading(false);
 			}
@@ -576,32 +331,22 @@ export default function ShopPage() {
 	===================================================== */
 
 	useEffect(() => {
-		if (
-			!categoryFromUrl ||
-			categories.length === 0
-		) {
+		if (!categoryFromUrl || categories.length === 0) {
 			setSelectedCategories([]);
 			return;
 		}
 
 		const selectedIds = categoryFromUrl
 			.split(",")
-			.map((slug) =>
-				slug.trim().toLowerCase(),
-			)
+			.map((slug) => slug.trim().toLowerCase())
 			.map((slug) => {
 				const category = categories.find(
-					(item) =>
-						createSlug(item.name) ===
-						slug,
+					(item) => createSlug(item.name) === slug,
 				);
 
 				return category?.id;
 			})
-			.filter(
-				(id): id is number =>
-					typeof id === "number",
-			);
+			.filter((id): id is number => typeof id === "number");
 
 		setSelectedCategories(selectedIds);
 
@@ -613,32 +358,22 @@ export default function ShopPage() {
 	===================================================== */
 
 	useEffect(() => {
-		if (
-			!occasionFromUrl ||
-			occasions.length === 0
-		) {
+		if (!occasionFromUrl || occasions.length === 0) {
 			setSelectedOccasions([]);
 			return;
 		}
 
 		const selectedIds = occasionFromUrl
 			.split(",")
-			.map((slug) =>
-				slug.trim().toLowerCase(),
-			)
+			.map((slug) => slug.trim().toLowerCase())
 			.map((slug) => {
 				const occasion = occasions.find(
-					(item) =>
-						createSlug(item.name) ===
-						slug,
+					(item) => createSlug(item.name) === slug,
 				);
 
 				return occasion?.id;
 			})
-			.filter(
-				(id): id is number =>
-					typeof id === "number",
-			);
+			.filter((id): id is number => typeof id === "number");
 
 		setSelectedOccasions(selectedIds);
 
@@ -659,23 +394,13 @@ export default function ShopPage() {
 	   CATEGORY CHANGE
 	===================================================== */
 
-	const handleCategoryChange = (
-		categoryId: number,
-	) => {
+	const handleCategoryChange = (categoryId: number) => {
 		let updatedCategories: number[];
 
-		if (
-			selectedCategories.includes(categoryId)
-		) {
-			updatedCategories =
-				selectedCategories.filter(
-					(id) => id !== categoryId,
-				);
+		if (selectedCategories.includes(categoryId)) {
+			updatedCategories = selectedCategories.filter((id) => id !== categoryId);
 		} else {
-			updatedCategories = [
-				...selectedCategories,
-				categoryId,
-			];
+			updatedCategories = [...selectedCategories, categoryId];
 		}
 
 		setSelectedCategories(updatedCategories);
@@ -683,60 +408,32 @@ export default function ShopPage() {
 		setCurrentPage(1);
 
 		const selectedSlugs = updatedCategories
-			.map((id) =>
-				categories.find(
-					(category) =>
-						category.id === id,
-				),
-			)
+			.map((id) => categories.find((category) => category.id === id))
 			.filter(Boolean)
-			.map((category) =>
-				createSlug(category!.name),
-			);
+			.map((category) => createSlug(category!.name));
 
-		const params = new URLSearchParams(
-			searchParams.toString(),
-		);
+		const params = new URLSearchParams(searchParams.toString());
 
 		if (selectedSlugs.length === 0) {
 			params.delete("category");
 		} else {
-			params.set(
-				"category",
-				selectedSlugs.join(","),
-			);
+			params.set("category", selectedSlugs.join(","));
 		}
 
-		router.push(
-			`/shop${
-				params.toString()
-					? `?${params.toString()}`
-					: ""
-			}`,
-		);
+		router.push(`/shop${params.toString() ? `?${params.toString()}` : ""}`);
 	};
 
 	/* =====================================================
 	   OCCASION CHANGE
 	===================================================== */
 
-	const handleOccasionChange = (
-		occasionId: number,
-	) => {
+	const handleOccasionChange = (occasionId: number) => {
 		let updatedOccasions: number[];
 
-		if (
-			selectedOccasions.includes(occasionId)
-		) {
-			updatedOccasions =
-				selectedOccasions.filter(
-					(id) => id !== occasionId,
-				);
+		if (selectedOccasions.includes(occasionId)) {
+			updatedOccasions = selectedOccasions.filter((id) => id !== occasionId);
 		} else {
-			updatedOccasions = [
-				...selectedOccasions,
-				occasionId,
-			];
+			updatedOccasions = [...selectedOccasions, occasionId];
 		}
 
 		setSelectedOccasions(updatedOccasions);
@@ -744,81 +441,48 @@ export default function ShopPage() {
 		setCurrentPage(1);
 
 		const selectedSlugs = updatedOccasions
-			.map((id) =>
-				occasions.find(
-					(occasion) =>
-						occasion.id === id,
-				),
-			)
+			.map((id) => occasions.find((occasion) => occasion.id === id))
 			.filter(Boolean)
-			.map((occasion) =>
-				createSlug(occasion!.name),
-			);
+			.map((occasion) => createSlug(occasion!.name));
 
-		const params = new URLSearchParams(
-			searchParams.toString(),
-		);
+		const params = new URLSearchParams(searchParams.toString());
 
 		if (selectedSlugs.length === 0) {
 			params.delete("occasion");
 		} else {
-			params.set(
-				"occasion",
-				selectedSlugs.join(","),
-			);
+			params.set("occasion", selectedSlugs.join(","));
 		}
 
-		router.push(
-			`/shop${
-				params.toString()
-					? `?${params.toString()}`
-					: ""
-			}`,
-		);
+		router.push(`/shop${params.toString() ? `?${params.toString()}` : ""}`);
 	};
 
 	/* =====================================================
 	   SHOP SEARCH
 	===================================================== */
 
-	const handleShopSearch = (
-		e: React.FormEvent,
-	) => {
+	const handleShopSearch = (e: React.FormEvent) => {
 		e.preventDefault();
 
 		const trimmedSearch = search.trim();
 
-		const params = new URLSearchParams(
-			searchParams.toString(),
-		);
+		const params = new URLSearchParams(searchParams.toString());
 
 		if (trimmedSearch) {
-			params.set(
-				"search",
-				trimmedSearch,
-			);
+			params.set("search", trimmedSearch);
 		} else {
 			params.delete("search");
 		}
 
 		setCurrentPage(1);
 
-		router.push(
-			`/shop${
-				params.toString()
-					? `?${params.toString()}`
-					: ""
-			}`,
-		);
+		router.push(`/shop${params.toString() ? `?${params.toString()}` : ""}`);
 	};
 
 	/* =====================================================
 	   SEARCH INPUT CHANGE
 	===================================================== */
 
-	const handleSearchChange = (
-		value: string,
-	) => {
+	const handleSearchChange = (value: string) => {
 		setSearch(value);
 	};
 
@@ -827,22 +491,14 @@ export default function ShopPage() {
 	===================================================== */
 
 	const clearSearch = () => {
-		const params = new URLSearchParams(
-			searchParams.toString(),
-		);
+		const params = new URLSearchParams(searchParams.toString());
 
 		params.delete("search");
 
 		setSearch("");
 		setCurrentPage(1);
 
-		router.push(
-			`/shop${
-				params.toString()
-					? `?${params.toString()}`
-					: ""
-			}`,
-		);
+		router.push(`/shop${params.toString() ? `?${params.toString()}` : ""}`);
 	};
 
 	/* =====================================================
@@ -853,89 +509,53 @@ export default function ShopPage() {
 		return products
 			.filter((product) => {
 				const matchesCategory =
-					selectedCategories.length ===
-						0 ||
-					selectedCategories.some(
-						(categoryId) =>
-							product.categoryIds.includes(
-								categoryId,
-							),
+					selectedCategories.length === 0 ||
+					selectedCategories.some((categoryId) =>
+						product.categoryIds.includes(categoryId),
 					);
 
 				const matchesOccasion =
 					selectedOccasions.length === 0 ||
-					selectedOccasions.some(
-						(occasionId) =>
-							product.occasionIds.includes(
-								occasionId,
-							),
+					selectedOccasions.some((occasionId) =>
+						product.occasionIds.includes(occasionId),
 					);
 
-				const searchText =
-					search.toLowerCase().trim();
+				const searchText = search.toLowerCase().trim();
 
 				const matchesSearch =
 					!searchText ||
-					product.name
-						.toLowerCase()
-						.includes(searchText) ||
-					product.description
-						.toLowerCase()
-						.includes(searchText);
+					product.name.toLowerCase().includes(searchText) ||
+					product.description.toLowerCase().includes(searchText);
 
-				return (
-					matchesCategory &&
-					matchesOccasion &&
-					matchesSearch
-				);
+				return matchesCategory && matchesOccasion && matchesSearch;
 			})
 			.sort((a, b) => {
-				if (
-					sort ===
-					"Price: Low to High"
-				) {
+				if (sort === "Price: Low to High") {
 					return a.price - b.price;
 				}
 
-				if (
-					sort ===
-					"Price: High to Low"
-				) {
+				if (sort === "Price: High to Low") {
 					return b.price - a.price;
 				}
 
 				if (sort === "Name: A-Z") {
-					return a.name.localeCompare(
-						b.name,
-					);
+					return a.name.localeCompare(b.name);
 				}
 
 				return 0;
 			});
-	}, [
-		products,
-		selectedCategories,
-		selectedOccasions,
-		search,
-		sort,
-	]);
+	}, [products, selectedCategories, selectedOccasions, search, sort]);
 
 	/* =====================================================
 	   PAGINATION
 	===================================================== */
 
-	const totalPages = Math.ceil(
-		filteredProducts.length /
-			PRODUCTS_PER_PAGE,
-	);
+	const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
 
-	const paginatedProducts =
-		filteredProducts.slice(
-			(currentPage - 1) *
-				PRODUCTS_PER_PAGE,
-			currentPage *
-				PRODUCTS_PER_PAGE,
-		);
+	const paginatedProducts = filteredProducts.slice(
+		(currentPage - 1) * PRODUCTS_PER_PAGE,
+		currentPage * PRODUCTS_PER_PAGE,
+	);
 
 	/* =====================================================
 	   RESET PAGINATION
@@ -943,22 +563,14 @@ export default function ShopPage() {
 
 	useEffect(() => {
 		setCurrentPage(1);
-	}, [
-		selectedCategories,
-		selectedOccasions,
-		search,
-		sort,
-	]);
+	}, [selectedCategories, selectedOccasions, search, sort]);
 
 	/* =====================================================
 	   KEEP PAGE VALID
 	===================================================== */
 
 	useEffect(() => {
-		if (
-			totalPages > 0 &&
-			currentPage > totalPages
-		) {
+		if (totalPages > 0 && currentPage > totalPages) {
 			setCurrentPage(totalPages);
 		}
 	}, [currentPage, totalPages]);
@@ -983,10 +595,7 @@ export default function ShopPage() {
 	===================================================== */
 
 	const goToPage = (page: number) => {
-		if (
-			page < 1 ||
-			page > totalPages
-		) {
+		if (page < 1 || page > totalPages) {
 			return;
 		}
 
@@ -1003,34 +612,19 @@ export default function ShopPage() {
 	===================================================== */
 
 	const activeFilterCount =
-		selectedCategories.length +
-		selectedOccasions.length;
+		selectedCategories.length + selectedOccasions.length;
 
 	/* =====================================================
 	   TITLE
 	===================================================== */
 
-	const selectedCategoryNames =
-		selectedCategories
-			.map(
-				(id) =>
-					categories.find(
-						(category) =>
-							category.id === id,
-					)?.name,
-			)
-			.filter(Boolean);
+	const selectedCategoryNames = selectedCategories
+		.map((id) => categories.find((category) => category.id === id)?.name)
+		.filter(Boolean);
 
-	const selectedOccasionNames =
-		selectedOccasions
-			.map(
-				(id) =>
-					occasions.find(
-						(occasion) =>
-							occasion.id === id,
-					)?.name,
-			)
-			.filter(Boolean);
+	const selectedOccasionNames = selectedOccasions
+		.map((id) => occasions.find((occasion) => occasion.id === id)?.name)
+		.filter(Boolean);
 
 	/* =====================================================
 	   RENDER
@@ -1039,16 +633,10 @@ export default function ShopPage() {
 	return (
 		<CartProvider>
 			<main
-				className="
-					min-h-screen
-					bg-[#FBF9F7]
-					pt-[112px]
-					sm:pt-[120px]
-				"
+				className="min-h-screen bg-[#FBF9F7] pt-[112px]
+					sm:pt-[120px]"
 			>
-				{/* =================================================
-				    HERO
-				================================================= */}
+				{/* HERO */}
 
 				<section className="border-b border-[#E8DED7] bg-white">
 					<div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8 lg:py-14">
@@ -1058,26 +646,18 @@ export default function ShopPage() {
 							</p>
 
 							<h1 className="text-3xl font-bold tracking-tight text-[#2E2E2E] sm:text-4xl lg:text-5xl">
-								Find something{" "}
-								<span className="text-[#85161B]">
-									special.
-								</span>
+								Find something <span className="text-[#85161B]">special.</span>
 							</h1>
 
 							<p className="mt-4 max-w-xl text-sm leading-7 text-[#2E2E2E]/60 sm:text-base">
-								Discover personalized
-								gifts, thoughtful
-								keepsakes, and
-								custom-made products
-								for every occasion.
+								Discover personalized gifts, thoughtful keepsakes, and
+								custom-made products for every occasion.
 							</p>
 						</div>
 					</div>
 				</section>
 
-				{/* =================================================
-				    SHOP CONTENT
-				================================================= */}
+				{/* SHOP CONTENT */}
 
 				<section className="mx-auto max-w-7xl px-4 py-7 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
 					{/* MOBILE FILTER */}
@@ -1085,33 +665,19 @@ export default function ShopPage() {
 					<div className="mb-5 flex items-center justify-between lg:hidden">
 						<p className="text-sm text-[#2E2E2E]/55">
 							{filteredProducts.length}{" "}
-							{filteredProducts.length ===
-							1
-								? "product"
-								: "products"}
+							{filteredProducts.length === 1 ? "product" : "products"}
 						</p>
 
 						<button
 							type="button"
-							onClick={() =>
-								setFiltersOpen(
-									true,
-								)
-							}
+							onClick={() => setFiltersOpen(true)}
 							className="inline-flex items-center gap-2 rounded-xl border border-[#DED6D0] bg-white px-4 py-2.5 text-sm font-medium text-[#2E2E2E] transition hover:border-[#85161B]/40"
 						>
-							<SlidersHorizontal
-								size={16}
-							/>
-
+							<SlidersHorizontal size={16} />
 							Filters
-
-							{activeFilterCount >
-								0 && (
+							{activeFilterCount > 0 && (
 								<span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#85161B] px-1 text-[10px] font-bold text-white">
-									{
-										activeFilterCount
-									}
+									{activeFilterCount}
 								</span>
 							)}
 						</button>
@@ -1122,27 +688,13 @@ export default function ShopPage() {
 
 						<aside className="hidden w-64 shrink-0 lg:block">
 							<CategoryFilters
-								categories={
-									categories
-								}
-								occasions={
-									occasions
-								}
-								selectedCategories={
-									selectedCategories
-								}
-								selectedOccasions={
-									selectedOccasions
-								}
-								onCategoryChange={
-									handleCategoryChange
-								}
-								onOccasionChange={
-									handleOccasionChange
-								}
-								onClear={
-									clearFilters
-								}
+								categories={categories}
+								occasions={occasions}
+								selectedCategories={selectedCategories}
+								selectedOccasions={selectedOccasions}
+								onCategoryChange={handleCategoryChange}
+								onOccasionChange={handleOccasionChange}
+								onClear={clearFilters}
 							/>
 						</aside>
 
@@ -1154,29 +706,18 @@ export default function ShopPage() {
 							<div className="mb-7 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
 								<div className="shrink-0">
 									<h2 className="text-xl font-semibold text-[#2E2E2E]">
-										{selectedCategoryNames.length >
-										0
-											? selectedCategoryNames.join(
-													", ",
-												)
-											: selectedOccasionNames.length >
-												  0
-												? selectedOccasionNames.join(
-														", ",
-													)
+										{selectedCategoryNames.length > 0
+											? selectedCategoryNames.join(", ")
+											: selectedOccasionNames.length > 0
+												? selectedOccasionNames.join(", ")
 												: search
 													? `Search results for "${search}"`
 													: "All Products"}
 									</h2>
 
 									<p className="mt-1 text-sm text-[#2E2E2E]/50">
-										{
-											filteredProducts.length
-										}{" "}
-										{filteredProducts.length ===
-										1
-											? "product"
-											: "products"}
+										{filteredProducts.length}{" "}
+										{filteredProducts.length === 1 ? "product" : "products"}
 									</p>
 								</div>
 
@@ -1184,9 +725,7 @@ export default function ShopPage() {
 
 								<div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto lg:items-center">
 									<form
-										onSubmit={
-											handleShopSearch
-										}
+										onSubmit={handleShopSearch}
 										className="flex min-w-0 flex-1 items-center rounded-xl border border-[#DED6D0] bg-white px-3.5 transition focus-within:border-[#85161B] focus-within:ring-2 focus-within:ring-[#85161B]/10 sm:w-72 sm:flex-none lg:w-80"
 									>
 										<Search
@@ -1196,18 +735,8 @@ export default function ShopPage() {
 
 										<input
 											type="search"
-											value={
-												search
-											}
-											onChange={(
-												e,
-											) =>
-												handleSearchChange(
-													e
-														.target
-														.value,
-												)
-											}
+											value={search}
+											onChange={(e) => handleSearchChange(e.target.value)}
 											placeholder="Search products..."
 											className="min-w-0 w-full bg-transparent py-2.5 text-sm text-[#2E2E2E] outline-none placeholder:text-[#2E2E2E]/35"
 										/>
@@ -1215,17 +744,11 @@ export default function ShopPage() {
 										{search && (
 											<button
 												type="button"
-												onClick={
-													clearSearch
-												}
+												onClick={clearSearch}
 												aria-label="Clear search"
 												className="ml-2 shrink-0 text-[#2E2E2E]/40 transition hover:text-[#85161B]"
 											>
-												<X
-													size={
-														16
-													}
-												/>
+												<X size={16} />
 											</button>
 										)}
 									</form>
@@ -1235,28 +758,17 @@ export default function ShopPage() {
 									<div className="relative self-start sm:self-auto">
 										<button
 											type="button"
-											onClick={() =>
-												setSortOpen(
-													(value) =>
-														!value,
-												)
-											}
+											onClick={() => setSortOpen((value) => !value)}
 											className="flex items-center gap-2 rounded-xl border border-[#DED6D0] bg-white px-4 py-2.5 text-sm font-medium text-[#2E2E2E] transition hover:border-[#85161B]/40"
 										>
-											<span className="hidden sm:inline">
-												Sort:
-											</span>
+											<span className="hidden sm:inline">Sort:</span>
 
 											{sort}
 
 											<ChevronDown
-												size={
-													16
-												}
+												size={16}
 												className={`transition-transform ${
-													sortOpen
-														? "rotate-180"
-														: ""
+													sortOpen ? "rotate-180" : ""
 												}`}
 											/>
 										</button>
@@ -1267,45 +779,28 @@ export default function ShopPage() {
 													type="button"
 													aria-label="Close sort menu"
 													className="fixed inset-0 z-10 cursor-default"
-													onClick={() =>
-														setSortOpen(
-															false,
-														)
-													}
+													onClick={() => setSortOpen(false)}
 												/>
 
 												<div className="absolute right-0 top-full z-20 mt-2 w-52 overflow-hidden rounded-xl border border-[#E8DED7] bg-white p-1.5 shadow-xl">
-													{SORT_OPTIONS.map(
-														(
-															option,
-														) => (
-															<button
-																type="button"
-																key={
-																	option
-																}
-																onClick={() => {
-																	setSort(
-																		option,
-																	);
+													{SORT_OPTIONS.map((option) => (
+														<button
+															type="button"
+															key={option}
+															onClick={() => {
+																setSort(option);
 
-																	setSortOpen(
-																		false,
-																	);
-																}}
-																className={`block w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
-																	sort ===
-																	option
-																		? "bg-[#F7D6BF]/40 font-medium text-[#85161B]"
-																		: "text-[#2E2E2E]/70 hover:bg-[#FBF9F7]"
-																}`}
-															>
-																{
-																	option
-																}
-															</button>
-														),
-													)}
+																setSortOpen(false);
+															}}
+															className={`block w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
+																sort === option
+																	? "bg-[#F7D6BF]/40 font-medium text-[#85161B]"
+																	: "text-[#2E2E2E]/70 hover:bg-[#FBF9F7]"
+															}`}
+														>
+															{option}
+														</button>
+													))}
 												</div>
 											</>
 										)}
@@ -1318,123 +813,67 @@ export default function ShopPage() {
 							{loading ? (
 								<div className="flex min-h-[350px] items-center justify-center rounded-3xl border border-[#E8DED7] bg-white">
 									<div className="text-sm text-[#2E2E2E]/50">
-										Loading
-										products...
+										Loading products...
 									</div>
 								</div>
 							) : error ? (
 								<div className="flex min-h-[350px] flex-col items-center justify-center rounded-3xl border border-[#E8DED7] bg-white px-5 text-center">
 									<h3 className="text-lg font-semibold text-[#2E2E2E]">
-										Unable to
-										load
-										products
+										Unable to load products
 									</h3>
 
-									<p className="mt-2 text-sm text-[#2E2E2E]/50">
-										{error}
-									</p>
+									<p className="mt-2 text-sm text-[#2E2E2E]/50">{error}</p>
 
 									<button
 										type="button"
-										onClick={() =>
-											window.location.reload()
-										}
+										onClick={() => window.location.reload()}
 										className="mt-5 rounded-xl bg-[#85161B] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#721318]"
 									>
 										Try again
 									</button>
 								</div>
-							) : paginatedProducts.length >
-							  0 ? (
+							) : paginatedProducts.length > 0 ? (
 								<div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-7 xl:grid-cols-3">
-									{paginatedProducts.map(
-										(
-											product,
-										) => (
-											<ProductCard
-												key={
-													product.id
-												}
-												item={{
-													id: product.id,
-													name: product.name,
-													price: product.price,
-													original:
-														product.original,
+									{paginatedProducts.map((product) => (
+										<ProductCard
+											key={product.id}
+											item={{
+												id: product.id,
+												name: product.name,
+												price: product.price,
+												original: product.original,
+												image: product.image,
+												description: product.description,
 
-													/*
-													 * IMPORTANT FIX:
-													 *
-													 * ProductCard expects
-													 * its own VariantMap
-													 * type.
-													 *
-													 * Passing the object
-													 * directly can cause
-													 * TypeScript to see two
-													 * incompatible VariantMap
-													 * definitions.
-													 *
-													 * Convert parsed variants
-													 * back to JSON here.
-													 *
-													 * ProductCard already
-													 * supports JSON strings,
-													 * so variant prices and
-													 * images are preserved.
-													 */
-													varients:
-														product.varients ===
-														null
-															? null
-															: typeof product.varients ===
-															  "string"
-																? product.varients
-																: JSON.stringify(
-																		product.varients,
-																	),
-
-													image: product.image,
-
-													description:
-														product.description,
-
-													customizeReqs:
-														product.customizeReqs,
-												}}
-												showOriginal
-											/>
-										),
-									)}
+												/*
+												 * IMPORTANT:
+												 *
+												 * Pass the raw customization
+												 * requirement data through.
+												 */
+												customizeReqs: product.customizeReqs,
+											}}
+											showOriginal
+										/>
+									))}
 								</div>
 							) : (
 								<div className="flex min-h-[350px] flex-col items-center justify-center rounded-3xl border border-dashed border-[#DED6D0] bg-white px-5 text-center">
 									<div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[#F7D6BF]/40">
-										<Search
-											size={24}
-											className="text-[#85161B]"
-										/>
+										<Search size={24} className="text-[#85161B]" />
 									</div>
 
 									<h3 className="text-lg font-semibold text-[#2E2E2E]">
-										No products
-										found
+										No products found
 									</h3>
 
 									<p className="mt-2 max-w-sm text-sm text-[#2E2E2E]/50">
-										Try changing
-										your search
-										or
-										selecting
-										another
-										category.
+										Try changing your search or selecting another category.
 									</p>
 
 									<button
 										type="button"
-										onClick={
-											clearFilters
-										}
+										onClick={clearFilters}
 										className="mt-5 rounded-full bg-[#85161B] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#721318]"
 									>
 										Clear filters
@@ -1449,48 +888,30 @@ export default function ShopPage() {
 									<p className="text-sm text-[#2E2E2E]/50">
 										Showing{" "}
 										<span className="font-medium text-[#2E2E2E]">
-											{(currentPage -
-												1) *
-												PRODUCTS_PER_PAGE +
-												1}
+											{(currentPage - 1) * PRODUCTS_PER_PAGE + 1}
 										</span>{" "}
 										–{" "}
 										<span className="font-medium text-[#2E2E2E]">
 											{Math.min(
-												currentPage *
-													PRODUCTS_PER_PAGE,
+												currentPage * PRODUCTS_PER_PAGE,
 												filteredProducts.length,
 											)}
 										</span>{" "}
 										of{" "}
 										<span className="font-medium text-[#2E2E2E]">
-											{
-												filteredProducts.length
-											}
+											{filteredProducts.length}
 										</span>
 									</p>
 
 									<div className="flex items-center gap-1.5">
 										<button
 											type="button"
-											onClick={() =>
-												goToPage(
-													currentPage -
-														1,
-												)
-											}
-											disabled={
-												currentPage ===
-												1
-											}
+											onClick={() => goToPage(currentPage - 1)}
+											disabled={currentPage === 1}
 											aria-label="Previous page"
 											className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#DED6D0] bg-white text-[#2E2E2E] transition hover:border-[#85161B]/40 hover:text-[#85161B] disabled:cursor-not-allowed disabled:opacity-40"
 										>
-											<ChevronLeft
-												size={
-													17
-												}
-											/>
+											<ChevronLeft size={17} />
 										</button>
 
 										<div className="flex items-center gap-1.5">
@@ -1498,61 +919,31 @@ export default function ShopPage() {
 												{
 													length: totalPages,
 												},
-												(
-													_,
-													index,
-												) =>
-													index +
-													1,
-											).map(
-												(
-													page,
-												) => (
-													<button
-														type="button"
-														key={
-															page
-														}
-														onClick={() =>
-															goToPage(
-																page,
-															)
-														}
-														className={`flex h-9 min-w-9 items-center justify-center rounded-lg px-2 text-sm font-medium transition ${
-															currentPage ===
-															page
-																? "bg-[#85161B] text-white"
-																: "border border-[#DED6D0] bg-white text-[#2E2E2E]/70 hover:border-[#85161B]/40 hover:text-[#85161B]"
-														}`}
-													>
-														{
-															page
-														}
-													</button>
-												),
-											)}
+												(_, index) => index + 1,
+											).map((page) => (
+												<button
+													type="button"
+													key={page}
+													onClick={() => goToPage(page)}
+													className={`flex h-9 min-w-9 items-center justify-center rounded-lg px-2 text-sm font-medium transition ${
+														currentPage === page
+															? "bg-[#85161B] text-white"
+															: "border border-[#DED6D0] bg-white text-[#2E2E2E]/70 hover:border-[#85161B]/40 hover:text-[#85161B]"
+													}`}
+												>
+													{page}
+												</button>
+											))}
 										</div>
 
 										<button
 											type="button"
-											onClick={() =>
-												goToPage(
-													currentPage +
-														1,
-												)
-											}
-											disabled={
-												currentPage ===
-												totalPages
-											}
+											onClick={() => goToPage(currentPage + 1)}
+											disabled={currentPage === totalPages}
 											aria-label="Next page"
 											className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#DED6D0] bg-white text-[#2E2E2E] transition hover:border-[#85161B]/40 hover:text-[#85161B] disabled:cursor-not-allowed disabled:opacity-40"
 										>
-											<ChevronRight
-												size={
-													17
-												}
-											/>
+											<ChevronRight size={17} />
 										</button>
 									</div>
 								</div>
@@ -1561,93 +952,53 @@ export default function ShopPage() {
 					</div>
 				</section>
 
-				{/* =================================================
-				    MOBILE FILTER DRAWER
-				================================================= */}
+				{/* MOBILE FILTER DRAWER */}
 
 				{filtersOpen && (
 					<div className="fixed inset-0 z-50 lg:hidden">
 						<button
 							type="button"
 							aria-label="Close filters"
-							onClick={() =>
-								setFiltersOpen(
-									false,
-								)
-							}
+							onClick={() => setFiltersOpen(false)}
 							className="absolute inset-0 bg-black/30"
 						/>
 
 						<div className="absolute right-0 top-0 h-full w-[85%] max-w-sm overflow-y-auto bg-[#FBF9F7] shadow-2xl">
 							<div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#E8DED7] bg-white px-5 py-4">
 								<div>
-									<h2 className="font-semibold text-[#2E2E2E]">
-										Filters
-									</h2>
+									<h2 className="font-semibold text-[#2E2E2E]">Filters</h2>
 
 									<p className="mt-0.5 text-xs text-[#2E2E2E]/45">
-										Refine
-										your
-										products
+										Refine your products
 									</p>
 								</div>
 
 								<button
 									type="button"
-									onClick={() =>
-										setFiltersOpen(
-											false,
-										)
-									}
+									onClick={() => setFiltersOpen(false)}
 									className="flex h-9 w-9 items-center justify-center rounded-lg text-[#2E2E2E]/50 transition hover:bg-[#FBF9F7] hover:text-[#85161B]"
 								>
-									<X
-										size={
-											19
-										}
-									/>
+									<X size={19} />
 								</button>
 							</div>
 
 							<div className="p-5">
 								<CategoryFilters
-									categories={
-										categories
-									}
-									occasions={
-										occasions
-									}
-									selectedCategories={
-										selectedCategories
-									}
-									selectedOccasions={
-										selectedOccasions
-									}
-									onCategoryChange={
-										handleCategoryChange
-									}
-									onOccasionChange={
-										handleOccasionChange
-									}
-									onClear={
-										clearFilters
-									}
+									categories={categories}
+									occasions={occasions}
+									selectedCategories={selectedCategories}
+									selectedOccasions={selectedOccasions}
+									onCategoryChange={handleCategoryChange}
+									onOccasionChange={handleOccasionChange}
+									onClear={clearFilters}
 								/>
 
 								<button
 									type="button"
-									onClick={() =>
-										setFiltersOpen(
-											false,
-										)
-									}
+									onClick={() => setFiltersOpen(false)}
 									className="mt-5 w-full rounded-xl bg-[#85161B] py-3 text-sm font-semibold text-white transition hover:bg-[#721318]"
 								>
-									Show{" "}
-									{
-										filteredProducts.length
-									}{" "}
-									products
+									Show {filteredProducts.length} products
 								</button>
 							</div>
 						</div>
@@ -1680,20 +1031,15 @@ function CategoryFilters({
 	onClear: () => void;
 }) {
 	const hasFilters =
-		selectedCategories.length > 0 ||
-		selectedOccasions.length > 0;
+		selectedCategories.length > 0 || selectedOccasions.length > 0;
 
 	return (
 		<div className="rounded-2xl border border-[#E8DED7] bg-white p-5">
 			<div className="flex items-start justify-between gap-3">
 				<div>
-					<h3 className="text-sm font-semibold text-[#2E2E2E]">
-						Filters
-					</h3>
+					<h3 className="text-sm font-semibold text-[#2E2E2E]">Filters</h3>
 
-					<p className="mt-1 text-xs text-[#2E2E2E]/45">
-						Refine your products
-					</p>
+					<p className="mt-1 text-xs text-[#2E2E2E]/45">Refine your products</p>
 				</div>
 
 				{hasFilters && (
@@ -1709,9 +1055,7 @@ function CategoryFilters({
 
 			<div className="my-5 border-t border-[#E8DED7]" />
 
-			{/* =================================================
-			    CATEGORIES
-			================================================= */}
+			{/* CATEGORIES */}
 
 			<div>
 				<h4 className="text-xs font-semibold uppercase tracking-[0.12em] text-[#2E2E2E]/50">
@@ -1719,54 +1063,37 @@ function CategoryFilters({
 				</h4>
 
 				<div className="mt-4 space-y-3.5">
-					{categories.map(
-						(category) => {
-							const checked =
-								selectedCategories.includes(
-									category.id,
-								);
+					{categories.map((category) => {
+						const checked = selectedCategories.includes(category.id);
 
-							return (
-								<label
-									key={
-										category.id
-									}
-									className="group flex cursor-pointer items-center gap-3"
+						return (
+							<label
+								key={category.id}
+								className="group flex cursor-pointer items-center gap-3"
+							>
+								<input
+									type="checkbox"
+									checked={checked}
+									onChange={() => onCategoryChange(category.id)}
+									className="h-4 w-4 cursor-pointer rounded border-[#DED6D0] accent-[#85161B] focus:ring-[#85161B]/20"
+								/>
+
+								<span
+									className={`text-sm transition-colors ${
+										checked
+											? "font-medium text-[#85161B]"
+											: "text-[#2E2E2E]/70 group-hover:text-[#85161B]"
+									}`}
 								>
-									<input
-										type="checkbox"
-										checked={
-											checked
-										}
-										onChange={() =>
-											onCategoryChange(
-												category.id,
-											)
-										}
-										className="h-4 w-4 cursor-pointer rounded border-[#DED6D0] accent-[#85161B] focus:ring-[#85161B]/20"
-									/>
-
-									<span
-										className={`text-sm transition-colors ${
-											checked
-												? "font-medium text-[#85161B]"
-												: "text-[#2E2E2E]/70 group-hover:text-[#85161B]"
-										}`}
-									>
-										{
-											category.name
-										}
-									</span>
-								</label>
-							);
-						},
-					)}
+									{category.name}
+								</span>
+							</label>
+						);
+					})}
 				</div>
 			</div>
 
-			{/* =================================================
-			    OCCASIONS
-			================================================= */}
+			{/* OCCASIONS */}
 
 			{occasions.length > 0 && (
 				<>
@@ -1778,50 +1105,33 @@ function CategoryFilters({
 						</h4>
 
 						<div className="mt-4 space-y-3.5">
-							{occasions.map(
-								(
-									occasion,
-								) => {
-									const checked =
-										selectedOccasions.includes(
-											occasion.id,
-										);
+							{occasions.map((occasion) => {
+								const checked = selectedOccasions.includes(occasion.id);
 
-									return (
-										<label
-											key={
-												occasion.id
-											}
-											className="group flex cursor-pointer items-center gap-3"
+								return (
+									<label
+										key={occasion.id}
+										className="group flex cursor-pointer items-center gap-3"
+									>
+										<input
+											type="checkbox"
+											checked={checked}
+											onChange={() => onOccasionChange(occasion.id)}
+											className="h-4 w-4 cursor-pointer rounded border-[#DED6D0] accent-[#85161B] focus:ring-[#85161B]/20"
+										/>
+
+										<span
+											className={`text-sm transition-colors ${
+												checked
+													? "font-medium text-[#85161B]"
+													: "text-[#2E2E2E]/70 group-hover:text-[#85161B]"
+											}`}
 										>
-											<input
-												type="checkbox"
-												checked={
-													checked
-												}
-												onChange={() =>
-													onOccasionChange(
-														occasion.id,
-													)
-												}
-												className="h-4 w-4 cursor-pointer rounded border-[#DED6D0] accent-[#85161B] focus:ring-[#85161B]/20"
-											/>
-
-											<span
-												className={`text-sm transition-colors ${
-													checked
-														? "font-medium text-[#85161B]"
-														: "text-[#2E2E2E]/70 group-hover:text-[#85161B]"
-												}`}
-											>
-												{
-													occasion.name
-												}
-											</span>
-										</label>
-									);
-								},
-							)}
+											{occasion.name}
+										</span>
+									</label>
+								);
+							})}
 						</div>
 					</div>
 				</>
