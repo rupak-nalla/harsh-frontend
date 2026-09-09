@@ -4,10 +4,6 @@ const API_URL = "https://printinghouseujjain.in";
 
 export async function POST(request: NextRequest) {
 	try {
-		/*
-		 * The frontend (LoginPage) sends JSON:
-		 * { email, password }
-		 */
 		const body = await request.json().catch(() => null);
 
 		const email = body?.email;
@@ -24,26 +20,11 @@ export async function POST(request: NextRequest) {
 			);
 		}
 
-		/*
-		 * Backend expects FORM DATA, not JSON.
-		 */
+		// Backend expects multipart/form-data
 		const backendFormData = new FormData();
 
 		backendFormData.append("email", email.trim().toLowerCase());
 		backendFormData.append("password", password);
-
-		console.log("FORWARDING LOGIN FORM DATA:", {
-			email,
-			password: "[HIDDEN]",
-		});
-
-		/*
-		 * Browser
-		 *   ↓
-		 * /api/auth/login
-		 *   ↓
-		 * https://printinghouseujjain.in/api/login
-		 */
 
 		const response = await fetch(`${API_URL}/api/login`, {
 			method: "POST",
@@ -59,7 +40,6 @@ export async function POST(request: NextRequest) {
 		let data: unknown;
 
 		try {
-			console.log("BACKEND LOGIN RESPONSE TEXT:", text);
 			data = JSON.parse(text);
 		} catch {
 			data = {
@@ -67,22 +47,32 @@ export async function POST(request: NextRequest) {
 			};
 		}
 
-		console.log("BACKEND LOGIN RESPONSE:", data);
-
 		const nextResponse = NextResponse.json(data, {
 			status: response.status,
 		});
 
 		/*
-		 * Forward cookies from the backend.
-		 *
-		 * This is important if /api/login sets the
-		 * authenticated session using a Set-Cookie header.
+		 * Forward ALL Set-Cookie headers from the backend.
 		 */
-		const setCookie = response.headers.get("set-cookie");
+		const setCookies =
+			typeof response.headers.getSetCookie === "function"
+				? response.headers.getSetCookie()
+				: [];
 
-		if (setCookie) {
-			nextResponse.headers.set("set-cookie", setCookie);
+		if (setCookies.length > 0) {
+			for (const cookie of setCookies) {
+				nextResponse.headers.append("Set-Cookie", cookie);
+			}
+		} else {
+			/*
+			 * Fallback for environments where getSetCookie()
+			 * isn't available.
+			 */
+			const setCookie = response.headers.get("set-cookie");
+
+			if (setCookie) {
+				nextResponse.headers.set("Set-Cookie", setCookie);
+			}
 		}
 
 		return nextResponse;

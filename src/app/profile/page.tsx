@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { FormEvent, useEffect, useState } from "react";
@@ -25,7 +24,7 @@ import { useRouter } from "next/navigation";
 type Address = {
 	id: number;
 	user_id: number;
-	name: string; // Receiver's name
+	name: string;
 	phone: string;
 	flat_house_building: string;
 	road_area_colony: string;
@@ -47,7 +46,7 @@ type UserResponse = {
 };
 
 type AddressForm = {
-	name: string; // Receiver's name
+	name: string;
 	phone: string;
 	flat_house_building: string;
 	road_area_colony: string;
@@ -121,6 +120,48 @@ export default function ProfilePage() {
 	const [logoutLoading, setLogoutLoading] = useState(false);
 
 	/* =========================================================
+	   CLEAR INVALID SESSION
+	========================================================= */
+
+	const clearInvalidSession = async () => {
+		try {
+			/*
+			 * Call the init proxy.
+			 *
+			 * If the backend responds with:
+			 *
+			 * user_auth=deleted
+			 *
+			 * the /api/auth/user/init route clears the
+			 * browser's HttpOnly user_auth cookie.
+			 */
+			await fetch("/api/auth/user/init", {
+				method: "GET",
+				credentials: "include",
+				cache: "no-store",
+				headers: {
+					Accept: "application/json",
+				},
+			});
+		} catch (error) {
+			/*
+			 * Even if the cleanup request fails, we still
+			 * redirect the user to login.
+			 */
+			console.error(
+				"Failed to clear invalid authentication session:",
+				error,
+			);
+		}
+
+		/*
+		 * Redirect after the cleanup request finishes.
+		 */
+		router.replace("/login");
+		router.refresh();
+	};
+
+	/* =========================================================
 	   FETCH USER
 	========================================================= */
 
@@ -145,7 +186,10 @@ export default function ProfilePage() {
 			try {
 				data = text ? JSON.parse(text) : {};
 			} catch {
-				console.error("Invalid JSON from user API:", text);
+				console.error(
+					"Invalid JSON from user API:",
+					text,
+				);
 
 				throw new Error(
 					"The server returned an invalid response.",
@@ -154,20 +198,37 @@ export default function ProfilePage() {
 
 			console.log("USER RESPONSE:", data);
 
-			if (!response.ok) {
-				throw new Error(
-					data?.message || "Unable to load your profile.",
-				);
-			}
+			/* =====================================================
+			   INVALID / EXPIRED SESSION
+			===================================================== */
 
 			if (data.login_status === false) {
-				router.replace("/login");
+				console.log(
+					"LOGIN STATUS IS FALSE. CLEARING SESSION...",
+				);
+
+				await clearInvalidSession();
+
 				return;
+			}
+
+			/* =====================================================
+			   HTTP ERROR
+			===================================================== */
+
+			if (!response.ok) {
+				throw new Error(
+					data?.message ||
+						"Unable to load your profile.",
+				);
 			}
 
 			setUser(data);
 		} catch (error) {
-			console.error("Profile fetch failed:", error);
+			console.error(
+				"Profile fetch failed:",
+				error,
+			);
 
 			setError(
 				error instanceof Error
@@ -214,17 +275,26 @@ export default function ProfilePage() {
 
 			const formData = new FormData();
 
-			formData.append("name", profileName.trim());
+			formData.append(
+				"name",
+				profileName.trim(),
+			);
 
 			if (profilePhone.trim()) {
-				formData.append("phone", profilePhone.trim());
+				formData.append(
+					"phone",
+					profilePhone.trim(),
+				);
 			}
 
-			const response = await fetch("/api/auth/user/update-user", {
-				method: "POST",
-				body: formData,
-				credentials: "include",
-			});
+			const response = await fetch(
+				"/api/auth/user/update-user",
+				{
+					method: "POST",
+					body: formData,
+					credentials: "include",
+				},
+			);
 
 			const text = await response.text();
 
@@ -238,11 +308,24 @@ export default function ProfilePage() {
 				);
 			}
 
-			console.log("UPDATE USER RESPONSE:", data);
+			console.log(
+				"UPDATE USER RESPONSE:",
+				data,
+			);
+
+			/*
+			 * Backend may report an expired session even
+			 * when the HTTP status itself is successful.
+			 */
+			if (data.login_status === false) {
+				await clearInvalidSession();
+				return;
+			}
 
 			if (!response.ok) {
 				throw new Error(
-					data?.message || "Unable to update your profile.",
+					data?.message ||
+						"Unable to update your profile.",
 				);
 			}
 
@@ -250,7 +333,10 @@ export default function ProfilePage() {
 
 			await fetchUser();
 		} catch (error) {
-			console.error("Update user failed:", error);
+			console.error(
+				"Update user failed:",
+				error,
+			);
 
 			setError(
 				error instanceof Error
@@ -282,20 +368,24 @@ export default function ProfilePage() {
 	   OPEN EDIT ADDRESS
 	========================================================= */
 
-	const openEditAddressModal = (address: Address) => {
+	const openEditAddressModal = (
+		address: Address,
+	) => {
 		setEditingAddress(address);
 
 		setAddressForm({
-			// Receiver's name
 			name: address.name || "",
-
 			phone: address.phone || "",
-			flat_house_building: address.flat_house_building || "",
-			road_area_colony: address.road_area_colony || "",
+			flat_house_building:
+				address.flat_house_building || "",
+			road_area_colony:
+				address.road_area_colony || "",
 			landmark: address.landmark || "",
 			city: address.city || "",
 			state: address.state || "",
-			pincode: String(address.pincode || ""),
+			pincode: String(
+				address.pincode || "",
+			),
 		});
 
 		setError("");
@@ -325,10 +415,6 @@ export default function ProfilePage() {
 	) => {
 		event.preventDefault();
 
-		/*
-		 * Receiver's name is required.
-		 */
-
 		if (
 			!addressForm.name.trim() ||
 			!addressForm.phone.trim() ||
@@ -338,7 +424,9 @@ export default function ProfilePage() {
 			!addressForm.state.trim() ||
 			!addressForm.pincode.trim()
 		) {
-			setError("Please fill all required address fields.");
+			setError(
+				"Please fill all required address fields.",
+			);
 			return;
 		}
 
@@ -348,16 +436,15 @@ export default function ProfilePage() {
 
 			const formData = new FormData();
 
-			/*
-			 * IMPORTANT:
-			 *
-			 * Backend expects the field to be called "name".
-			 * Here "name" represents the RECEIVER'S NAME.
-			 */
+			formData.append(
+				"name",
+				addressForm.name.trim(),
+			);
 
-			formData.append("name", addressForm.name.trim());
-
-			formData.append("phone", addressForm.phone.trim());
+			formData.append(
+				"phone",
+				addressForm.phone.trim(),
+			);
 
 			formData.append(
 				"flat_house_building",
@@ -389,14 +476,12 @@ export default function ProfilePage() {
 				addressForm.pincode.trim(),
 			);
 
-			let endpoint = "/api/auth/address/add";
-
-			/* =====================================================
-			   EDIT ADDRESS
-			===================================================== */
+			let endpoint =
+				"/api/auth/address/add";
 
 			if (editingAddress) {
-				endpoint = "/api/auth/address/update";
+				endpoint =
+					"/api/auth/address/update";
 
 				formData.append(
 					"id",
@@ -404,11 +489,14 @@ export default function ProfilePage() {
 				);
 			}
 
-			const response = await fetch(endpoint, {
-				method: "POST",
-				body: formData,
-				credentials: "include",
-			});
+			const response = await fetch(
+				endpoint,
+				{
+					method: "POST",
+					body: formData,
+					credentials: "include",
+				},
+			);
 
 			const text = await response.text();
 
@@ -429,6 +517,11 @@ export default function ProfilePage() {
 				data,
 			);
 
+			if (data.login_status === false) {
+				await clearInvalidSession();
+				return;
+			}
+
 			if (!response.ok) {
 				throw new Error(
 					data?.message ||
@@ -444,7 +537,10 @@ export default function ProfilePage() {
 
 			await fetchUser();
 		} catch (error) {
-			console.error("Address operation failed:", error);
+			console.error(
+				"Address operation failed:",
+				error,
+			);
 
 			setError(
 				error instanceof Error
@@ -460,14 +556,19 @@ export default function ProfilePage() {
 	   SET PRIMARY
 	========================================================= */
 
-	const handleSetPrimary = async (addressId: number) => {
+	const handleSetPrimary = async (
+		addressId: number,
+	) => {
 		try {
 			setPrimaryLoading(addressId);
 			setError("");
 
 			const formData = new FormData();
 
-			formData.append("id", String(addressId));
+			formData.append(
+				"id",
+				String(addressId),
+			);
 
 			const response = await fetch(
 				"/api/auth/address/set-primary",
@@ -490,7 +591,15 @@ export default function ProfilePage() {
 				);
 			}
 
-			console.log("SET PRIMARY RESPONSE:", data);
+			console.log(
+				"SET PRIMARY RESPONSE:",
+				data,
+			);
+
+			if (data.login_status === false) {
+				await clearInvalidSession();
+				return;
+			}
 
 			if (!response.ok) {
 				throw new Error(
@@ -501,7 +610,10 @@ export default function ProfilePage() {
 
 			await fetchUser();
 		} catch (error) {
-			console.error("Set primary failed:", error);
+			console.error(
+				"Set primary failed:",
+				error,
+			);
 
 			setError(
 				error instanceof Error
@@ -517,7 +629,9 @@ export default function ProfilePage() {
 	   DELETE ADDRESS
 	========================================================= */
 
-	const openDeleteModal = (address: Address) => {
+	const openDeleteModal = (
+		address: Address,
+	) => {
 		setDeletingAddress(address);
 		setError("");
 		setShowDeleteModal(true);
@@ -558,7 +672,15 @@ export default function ProfilePage() {
 				);
 			}
 
-			console.log("DELETE ADDRESS RESPONSE:", data);
+			console.log(
+				"DELETE ADDRESS RESPONSE:",
+				data,
+			);
+
+			if (data.login_status === false) {
+				await clearInvalidSession();
+				return;
+			}
 
 			if (!response.ok) {
 				throw new Error(
@@ -572,7 +694,10 @@ export default function ProfilePage() {
 
 			await fetchUser();
 		} catch (error) {
-			console.error("Delete address failed:", error);
+			console.error(
+				"Delete address failed:",
+				error,
+			);
 
 			setError(
 				error instanceof Error
@@ -593,13 +718,16 @@ export default function ProfilePage() {
 			setLogoutLoading(true);
 			setError("");
 
-			const response = await fetch("/api/auth/logout", {
-				method: "POST",
-				credentials: "include",
-				headers: {
-					Accept: "application/json",
+			const response = await fetch(
+				"/api/auth/logout",
+				{
+					method: "POST",
+					credentials: "include",
+					headers: {
+						Accept: "application/json",
+					},
 				},
-			});
+			);
 
 			const text = await response.text();
 
@@ -613,7 +741,10 @@ export default function ProfilePage() {
 				);
 			}
 
-			console.log("LOGOUT RESPONSE:", data);
+			console.log(
+				"LOGOUT RESPONSE:",
+				data,
+			);
 
 			if (!response.ok) {
 				throw new Error(
@@ -627,7 +758,10 @@ export default function ProfilePage() {
 			router.replace("/login");
 			router.refresh();
 		} catch (error) {
-			console.error("Logout failed:", error);
+			console.error(
+				"Logout failed:",
+				error,
+			);
 
 			setError(
 				error instanceof Error
@@ -679,7 +813,9 @@ export default function ProfilePage() {
 							Unable to load profile
 						</h2>
 
-						<p className="mt-2 text-sm text-[#2E2E2E]/55">{error}</p>
+						<p className="mt-2 text-sm text-[#2E2E2E]/55">
+							{error}
+						</p>
 
 						<button
 							type="button"
@@ -694,12 +830,15 @@ export default function ProfilePage() {
 		);
 	}
 
-	const addresses: Address[] = Array.isArray(user?.addresses)
-		? user.addresses
-		: [];
+	const addresses: Address[] =
+		Array.isArray(user?.addresses)
+			? user.addresses
+			: [];
 
 	const primaryAddress =
-		addresses.find((address) => address.primary) || null;
+		addresses.find(
+			(address) => address.primary,
+		) || null;
 
 	return (
 		<main
@@ -719,7 +858,8 @@ export default function ProfilePage() {
 					</h1>
 
 					<p className="mt-2 text-sm text-[#2E2E2E]/55 sm:text-base">
-						Manage your personal information, addresses and account settings.
+						Manage your personal information,
+						addresses and account settings.
 					</p>
 				</div>
 
@@ -731,7 +871,9 @@ export default function ProfilePage() {
 
 						<button
 							type="button"
-							onClick={() => setError("")}
+							onClick={() =>
+								setError("")
+							}
 							className="shrink-0"
 						>
 							<X size={16} />
@@ -761,7 +903,9 @@ export default function ProfilePage() {
 
 								<button
 									type="button"
-									onClick={openProfileModal}
+									onClick={
+										openProfileModal
+									}
 									className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-[#85161B] transition hover:bg-[#F8F0EC]"
 								>
 									<Pencil size={14} />
@@ -777,36 +921,55 @@ export default function ProfilePage() {
 
 									<div>
 										<h3 className="text-lg font-semibold text-[#2E2E2E]">
-											{user?.name || "User"}
+											{user?.name ||
+												"User"}
 										</h3>
 
 										<p className="mt-1 text-xs text-[#2E2E2E]/50">
-											Printing House member
+											Printing House
+											member
 										</p>
 									</div>
 								</div>
 
 								<div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
 									<ProfileField
-										icon={<User size={17} />}
+										icon={
+											<User size={17} />
+										}
 										label="Full name"
-										value={user?.name || "Not available"}
+										value={
+											user?.name ||
+											"Not available"
+										}
 									/>
 
 									<ProfileField
-										icon={<Mail size={17} />}
+										icon={
+											<Mail size={17} />
+										}
 										label="Email address"
-										value={user?.email || "Not available"}
+										value={
+											user?.email ||
+											"Not available"
+										}
 									/>
 
 									<ProfileField
-										icon={<Phone size={17} />}
+										icon={
+											<Phone size={17} />
+										}
 										label="Phone number"
-										value={user?.phone || "Not available"}
+										value={
+											user?.phone ||
+											"Not available"
+										}
 									/>
 
 									<ProfileField
-										icon={<MapPin size={17} />}
+										icon={
+											<MapPin size={17} />
+										}
 										label="Primary location"
 										value={
 											primaryAddress
@@ -834,7 +997,9 @@ export default function ProfilePage() {
 
 								<button
 									type="button"
-									onClick={openAddAddressModal}
+									onClick={
+										openAddAddressModal
+									}
 									className="inline-flex items-center gap-1.5 rounded-lg bg-[#85161B] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#721318]"
 								>
 									<Plus size={14} />
@@ -843,32 +1008,50 @@ export default function ProfilePage() {
 							</div>
 
 							<div className="space-y-3 p-5 sm:p-6">
-								{addresses.length === 0 && (
+								{addresses.length ===
+									0 && (
 									<div className="rounded-xl border border-dashed border-[#DCCFC8] bg-[#FCFAF8] p-6 text-center">
 										<div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[#F8F1ED] text-[#85161B]">
 											<MapPin size={19} />
 										</div>
 
 										<p className="mt-3 text-sm font-semibold text-[#2E2E2E]">
-											No addresses saved
+											No addresses
+											saved
 										</p>
 
 										<p className="mt-1 text-xs text-[#2E2E2E]/50">
-											Add an address to make checkout faster.
+											Add an address to
+											make checkout
+											faster.
 										</p>
 									</div>
 								)}
 
-								{addresses.map((address) => (
-									<AddressCard
-										key={address.id}
-										address={address}
-										primaryLoading={primaryLoading}
-										onSetPrimary={handleSetPrimary}
-										onEdit={openEditAddressModal}
-										onDelete={openDeleteModal}
-									/>
-								))}
+								{addresses.map(
+									(address) => (
+										<AddressCard
+											key={
+												address.id
+											}
+											address={
+												address
+											}
+											primaryLoading={
+												primaryLoading
+											}
+											onSetPrimary={
+												handleSetPrimary
+											}
+											onEdit={
+												openEditAddressModal
+											}
+											onDelete={
+												openDeleteModal
+											}
+										/>
+									),
+								)}
 							</div>
 						</div>
 					</div>
@@ -887,21 +1070,26 @@ export default function ProfilePage() {
 								</h2>
 
 								<p className="mt-1 text-xs text-[#2E2E2E]/45">
-									Manage your Printing House account
+									Manage your Printing
+									House account
 								</p>
 							</div>
 
 							<div className="p-3">
 								<AccountLink
 									href="/orders"
-									icon={<Package size={18} />}
+									icon={
+										<Package size={18} />
+									}
 									title="My Orders"
 									subtitle="Track and view your orders"
 								/>
 
 								<AccountLink
 									href="/wishlist"
-									icon={<Heart size={18} />}
+									icon={
+										<Heart size={18} />
+									}
 									title="Wishlist"
 									subtitle="Your saved products"
 								/>
@@ -917,14 +1105,20 @@ export default function ProfilePage() {
 
 							<h3
 								className="mt-5 text-xl font-semibold"
-								style={{ color: "#FFFF" }}
+								style={{
+									color: "#FFFF",
+								}}
 							>
-								Your Printing House journey
+								Your Printing House
+								journey
 							</h3>
 
 							<p className="mt-2 text-sm leading-6 text-white/85">
-								Keep track of your orders and discover more personalized gifts
-								for the people you love.
+								Keep track of your
+								orders and discover
+								more personalized
+								gifts for the people
+								you love.
 							</p>
 
 							<Link
@@ -943,7 +1137,11 @@ export default function ProfilePage() {
 
 						<button
 							type="button"
-							onClick={() => setShowLogoutModal(true)}
+							onClick={() =>
+								setShowLogoutModal(
+									true,
+								)
+							}
 							className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#E9DED7] bg-white py-3 text-sm font-semibold text-[#85161B] transition hover:bg-[#FFF8F5]"
 						>
 							<LogOut size={17} />
@@ -960,32 +1158,62 @@ export default function ProfilePage() {
 			{showProfileModal && (
 				<Modal
 					title="Edit personal information"
-					onClose={() => setShowProfileModal(false)}
+					onClose={() =>
+						setShowProfileModal(
+							false,
+						)
+					}
 				>
-					<form onSubmit={handleUpdateUser} className="space-y-5">
+					<form
+						onSubmit={
+							handleUpdateUser
+						}
+						className="space-y-5"
+					>
 						<FormInput
 							label="Full name"
 							value={profileName}
-							onChange={setProfileName}
-							icon={<User size={17} />}
+							onChange={
+								setProfileName
+							}
+							icon={
+								<User size={17} />
+							}
 							required
 						/>
 
 						<FormInput
 							label="Phone number"
 							value={profilePhone}
-							onChange={(value) => setProfilePhone(value.replace(/\D/g, ""))}
-							icon={<Phone size={17} />}
+							onChange={(value) =>
+								setProfilePhone(
+									value.replace(
+										/\D/g,
+										"",
+									),
+								)
+							}
+							icon={
+								<Phone size={17} />
+							}
 						/>
 
 						<div className="rounded-xl bg-[#F8F1ED] px-4 py-3 text-xs text-[#2E2E2E]/55">
-							Your email address cannot be changed from here.
+							Your email address
+							cannot be changed from
+							here.
 						</div>
 
 						<ModalButtons
-							loading={profileLoading}
+							loading={
+								profileLoading
+							}
 							submitText="Save changes"
-							onCancel={() => setShowProfileModal(false)}
+							onCancel={() =>
+								setShowProfileModal(
+									false,
+								)
+							}
 						/>
 					</form>
 				</Modal>
@@ -997,123 +1225,203 @@ export default function ProfilePage() {
 
 			{showAddressModal && (
 				<Modal
-					title={editingAddress ? "Edit address" : "Add new address"}
+					title={
+						editingAddress
+							? "Edit address"
+							: "Add new address"
+					}
 					onClose={() => {
 						if (!addressLoading) {
-							setShowAddressModal(false);
-							setEditingAddress(null);
+							setShowAddressModal(
+								false,
+							);
+							setEditingAddress(
+								null,
+							);
 						}
 					}}
 					wide
 				>
-					<form onSubmit={handleAddressSubmit} className="space-y-4">
-						{/* RECEIVER'S NAME */}
-
+					<form
+						onSubmit={
+							handleAddressSubmit
+						}
+						className="space-y-4"
+					>
 						<FormInput
 							label="Receiver's name"
-							value={addressForm.name}
-							onChange={(value) => updateAddressField("name", value)}
-							icon={<User size={17} />}
+							value={
+								addressForm.name
+							}
+							onChange={(value) =>
+								updateAddressField(
+									"name",
+									value,
+								)
+							}
+							icon={
+								<User size={17} />
+							}
 							required
 						/>
 
 						<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-							{/* PHONE */}
-
 							<FormInput
 								label="Phone number"
-								value={addressForm.phone}
-								onChange={(value) =>
-									updateAddressField("phone", value.replace(/\D/g, ""))
+								value={
+									addressForm.phone
 								}
-								icon={<Phone size={17} />}
+								onChange={(
+									value,
+								) =>
+									updateAddressField(
+										"phone",
+										value.replace(
+											/\D/g,
+											"",
+										),
+									)
+								}
+								icon={
+									<Phone size={17} />
+								}
 								required
 							/>
-
-							{/* PINCODE */}
 
 							<FormInput
 								label="Pincode"
-								value={addressForm.pincode}
-								onChange={(value) =>
-									updateAddressField("pincode", value.replace(/\D/g, ""))
+								value={
+									addressForm.pincode
 								}
-								icon={<MapPin size={17} />}
+								onChange={(
+									value,
+								) =>
+									updateAddressField(
+										"pincode",
+										value.replace(
+											/\D/g,
+											"",
+										),
+									)
+								}
+								icon={
+									<MapPin size={17} />
+								}
 								required
 							/>
 						</div>
-
-						{/* FLAT / HOUSE / BUILDING */}
 
 						<FormInput
 							label="Flat / House / Building"
-							value={addressForm.flat_house_building}
-							onChange={(value) =>
-								updateAddressField("flat_house_building", value)
+							value={
+								addressForm.flat_house_building
 							}
-							icon={<MapPin size={17} />}
+							onChange={(value) =>
+								updateAddressField(
+									"flat_house_building",
+									value,
+								)
+							}
+							icon={
+								<MapPin size={17} />
+							}
 							required
 						/>
-
-						{/* ROAD / AREA / COLONY */}
 
 						<FormInput
 							label="Road / Area / Colony"
-							value={addressForm.road_area_colony}
-							onChange={(value) =>
-								updateAddressField("road_area_colony", value)
+							value={
+								addressForm.road_area_colony
 							}
-							icon={<MapPin size={17} />}
+							onChange={(value) =>
+								updateAddressField(
+									"road_area_colony",
+									value,
+								)
+							}
+							icon={
+								<MapPin size={17} />
+							}
 							required
 						/>
 
-						{/* LANDMARK */}
-
 						<FormInput
 							label="Landmark"
-							value={addressForm.landmark}
-							onChange={(value) => updateAddressField("landmark", value)}
-							icon={<MapPin size={17} />}
+							value={
+								addressForm.landmark
+							}
+							onChange={(value) =>
+								updateAddressField(
+									"landmark",
+									value,
+								)
+							}
+							icon={
+								<MapPin size={17} />
+							}
 						/>
 
 						<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-							{/* CITY */}
-
 							<FormInput
 								label="City"
-								value={addressForm.city}
-								onChange={(value) => updateAddressField("city", value)}
-								icon={<MapPin size={17} />}
+								value={
+									addressForm.city
+								}
+								onChange={(value) =>
+									updateAddressField(
+										"city",
+										value,
+									)
+								}
+								icon={
+									<MapPin size={17} />
+								}
 								required
 							/>
-
-							{/* STATE */}
 
 							<FormInput
 								label="State"
-								value={addressForm.state}
-								onChange={(value) => updateAddressField("state", value)}
-								icon={<MapPin size={17} />}
+								value={
+									addressForm.state
+								}
+								onChange={(value) =>
+									updateAddressField(
+										"state",
+										value,
+									)
+								}
+								icon={
+									<MapPin size={17} />
+								}
 								required
 							/>
 						</div>
-
-						{/* INFO */}
 
 						<div className="rounded-xl border border-[#E9DED7] bg-[#FCFAF8] px-4 py-3 text-xs text-[#2E2E2E]/55">
 							{editingAddress
 								? "Update the receiver and address details, then save your changes."
-								: addresses.length === 0
+								: addresses.length ===
+										0
 									? "This will automatically become your primary delivery address."
 									: "You can make this address primary after adding it."}
 						</div>
 
 						<ModalButtons
-							loading={addressLoading}
-							submitText={editingAddress ? "Update address" : "Save address"}
+							loading={
+								addressLoading
+							}
+							submitText={
+								editingAddress
+									? "Update address"
+									: "Save address"
+							}
 							onCancel={() => {
-								setShowAddressModal(false);
-								setEditingAddress(null);
+								setShowAddressModal(
+									false,
+								);
+								setEditingAddress(
+									null,
+								);
 							}}
 						/>
 					</form>
@@ -1124,85 +1432,138 @@ export default function ProfilePage() {
 			    DELETE MODAL
 			========================================================= */}
 
-			{showDeleteModal && deletingAddress && (
-				<Modal
-					title="Delete address"
-					onClose={() => {
-						if (!deleteLoading) {
-							setShowDeleteModal(false);
-							setDeletingAddress(null);
-						}
-					}}
-				>
-					<div className="text-center">
-						<div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
-							<Trash2 size={21} />
-						</div>
+			{showDeleteModal &&
+				deletingAddress && (
+					<Modal
+						title="Delete address"
+						onClose={() => {
+							if (
+								!deleteLoading
+							) {
+								setShowDeleteModal(
+									false,
+								);
+								setDeletingAddress(
+									null,
+								);
+							}
+						}}
+					>
+						<div className="text-center">
+							<div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
+								<Trash2
+									size={21}
+								/>
+							</div>
 
-						<h3 className="mt-4 text-base font-semibold text-[#2E2E2E]">
-							Delete this address?
-						</h3>
+							<h3 className="mt-4 text-base font-semibold text-[#2E2E2E]">
+								Delete this
+								address?
+							</h3>
 
-						<p className="mt-2 text-sm leading-6 text-[#2E2E2E]/55">
-							This address will be permanently removed from your account.
-						</p>
+							<p className="mt-2 text-sm leading-6 text-[#2E2E2E]/55">
+								This address will
+								be permanently
+								removed from
+								your account.
+							</p>
 
-						<div className="mt-5 rounded-xl bg-[#FCFAF8] p-4 text-left text-xs leading-5 text-[#2E2E2E]/60">
-							{/* RECEIVER NAME */}
-							<strong>{deletingAddress.name || "Receiver"}</strong>
-							<br />
-							{deletingAddress.phone && (
-								<>
-									Phone: {deletingAddress.phone}
-									<br />
-								</>
-							)}
-							{deletingAddress.flat_house_building}
-							<br />
-							{deletingAddress.road_area_colony}
-							<br />
-							{deletingAddress.landmark && (
-								<>
-									{deletingAddress.landmark}
-									<br />
-								</>
-							)}
-							{deletingAddress.city}, {deletingAddress.state} -{" "}
-							{deletingAddress.pincode}
-						</div>
+							<div className="mt-5 rounded-xl bg-[#FCFAF8] p-4 text-left text-xs leading-5 text-[#2E2E2E]/60">
+								<strong>
+									{deletingAddress.name ||
+										"Receiver"}
+								</strong>
+								<br />
 
-						<div className="mt-6 flex gap-3">
-							<button
-								type="button"
-								onClick={() => {
-									setShowDeleteModal(false);
-									setDeletingAddress(null);
-								}}
-								disabled={deleteLoading}
-								className="flex-1 rounded-xl border border-[#DED6D0] bg-white py-3 text-sm font-semibold text-[#2E2E2E] hover:bg-[#FCFAF8]"
-							>
-								Cancel
-							</button>
-
-							<button
-								type="button"
-								onClick={handleDeleteAddress}
-								disabled={deleteLoading}
-								className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
-							>
-								{deleteLoading ? (
+								{deletingAddress.phone && (
 									<>
-										<Loader2 size={16} className="animate-spin" />
-										Deleting...
+										Phone:{" "}
+										{
+											deletingAddress.phone
+										}
+										<br />
 									</>
-								) : (
-									"Delete"
 								)}
-							</button>
+
+								{
+									deletingAddress.flat_house_building
+								}
+								<br />
+
+								{
+									deletingAddress.road_area_colony
+								}
+								<br />
+
+								{deletingAddress.landmark && (
+									<>
+										{
+											deletingAddress.landmark
+										}
+										<br />
+									</>
+								)}
+
+								{
+									deletingAddress.city
+								}
+								,{" "}
+								{
+									deletingAddress.state
+								}{" "}
+								-{" "}
+								{
+									deletingAddress.pincode
+								}
+							</div>
+
+							<div className="mt-6 flex gap-3">
+								<button
+									type="button"
+									onClick={() => {
+										setShowDeleteModal(
+											false,
+										);
+										setDeletingAddress(
+											null,
+										);
+									}}
+									disabled={
+										deleteLoading
+									}
+									className="flex-1 rounded-xl border border-[#DED6D0] bg-white py-3 text-sm font-semibold text-[#2E2E2E] hover:bg-[#FCFAF8]"
+								>
+									Cancel
+								</button>
+
+								<button
+									type="button"
+									onClick={
+										handleDeleteAddress
+									}
+									disabled={
+										deleteLoading
+									}
+									className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 py-3 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+								>
+									{deleteLoading ? (
+										<>
+											<Loader2
+												size={
+													16
+												}
+												className="animate-spin"
+											/>
+											Deleting...
+										</>
+									) : (
+										"Delete"
+									)}
+								</button>
+							</div>
 						</div>
-					</div>
-				</Modal>
-			)}
+					</Modal>
+				)}
 
 			{/* =========================================================
 			    LOGOUT MODAL
@@ -1213,28 +1574,41 @@ export default function ProfilePage() {
 					title="Sign out"
 					onClose={() => {
 						if (!logoutLoading) {
-							setShowLogoutModal(false);
+							setShowLogoutModal(
+								false,
+							);
 						}
 					}}
 				>
 					<div className="text-center">
 						<div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#F8F1ED] text-[#85161B]">
-							<LogOut size={21} />
+							<LogOut
+								size={21}
+							/>
 						</div>
 
 						<h3 className="mt-4 text-base font-semibold text-[#2E2E2E]">
-							Are you sure you want to sign out?
+							Are you sure you
+							want to sign out?
 						</h3>
 
 						<p className="mt-2 text-sm leading-6 text-[#2E2E2E]/55">
-							You will need to sign in again to access your account.
+							You will need to
+							sign in again to
+							access your account.
 						</p>
 
 						<div className="mt-6 flex gap-3">
 							<button
 								type="button"
-								onClick={() => setShowLogoutModal(false)}
-								disabled={logoutLoading}
+								onClick={() =>
+									setShowLogoutModal(
+										false,
+									)
+								}
+								disabled={
+									logoutLoading
+								}
 								className="flex-1 rounded-xl border border-[#DED6D0] bg-white py-3 text-sm font-semibold text-[#2E2E2E] hover:bg-[#FCFAF8]"
 							>
 								Cancel
@@ -1242,13 +1616,22 @@ export default function ProfilePage() {
 
 							<button
 								type="button"
-								onClick={handleLogout}
-								disabled={logoutLoading}
+								onClick={
+									handleLogout
+								}
+								disabled={
+									logoutLoading
+								}
 								className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-[#85161B] py-3 text-sm font-semibold text-white hover:bg-[#721318] disabled:opacity-60"
 							>
 								{logoutLoading ? (
 									<>
-										<Loader2 size={16} className="animate-spin" />
+										<Loader2
+											size={
+												16
+											}
+											className="animate-spin"
+										/>
 										Signing out...
 									</>
 								) : (
@@ -1302,10 +1685,9 @@ function AddressCard({
 
 					<div className="min-w-0">
 						<div className="flex flex-wrap items-center gap-2">
-							{/* RECEIVER'S NAME */}
-
 							<p className="text-sm font-semibold text-[#2E2E2E]">
-								{address.name || "Receiver"}
+								{address.name ||
+									"Receiver"}
 							</p>
 
 							{address.primary && (
@@ -1317,40 +1699,50 @@ function AddressCard({
 						</div>
 
 						<p className="mt-2 text-xs leading-5 text-[#2E2E2E]/60">
-							{address.flat_house_building}
+							{
+								address.flat_house_building
+							}
 							<br />
 
-							{address.road_area_colony}
+							{
+								address.road_area_colony
+							}
 							<br />
 
 							{address.landmark && (
 								<>
-									{address.landmark}
+									{
+										address.landmark
+									}
 									<br />
 								</>
 							)}
 
-							{address.city}, {address.state}
+							{address.city},{" "}
+							{address.state}
 							<br />
 
-							India - {address.pincode}
+							India -{" "}
+							{address.pincode}
 						</p>
 
 						{address.phone && (
 							<p className="mt-2 flex items-center gap-1.5 text-xs text-[#2E2E2E]/55">
-								<Phone size={12} />
+								<Phone
+									size={12}
+								/>
 								{address.phone}
 							</p>
 						)}
-
-						{/* ACTIONS */}
 
 						<div className="mt-4 flex flex-wrap items-center gap-2">
 							{!address.primary && (
 								<button
 									type="button"
 									onClick={() =>
-										onSetPrimary(address.id)
+										onSetPrimary(
+											address.id,
+										)
 									}
 									disabled={
 										primaryLoading ===
@@ -1362,15 +1754,22 @@ function AddressCard({
 									address.id ? (
 										<>
 											<Loader2
-												size={12}
+												size={
+													12
+												}
 												className="animate-spin"
 											/>
 											Setting...
 										</>
 									) : (
 										<>
-											<Star size={12} />
-											Set as primary
+											<Star
+												size={
+													12
+												}
+											/>
+											Set as
+											primary
 										</>
 									)}
 								</button>
@@ -1378,8 +1777,13 @@ function AddressCard({
 
 							{address.primary && (
 								<span className="inline-flex items-center gap-1.5 rounded-lg bg-[#EDF8F0] px-3 py-1.5 text-[11px] font-semibold text-[#31824A]">
-									<Check size={12} />
-									Default delivery address
+									<Check
+										size={
+											12
+										}
+									/>
+									Default delivery
+									address
 								</span>
 							)}
 						</div>
@@ -1389,7 +1793,9 @@ function AddressCard({
 				<div className="flex shrink-0 items-center gap-1">
 					<button
 						type="button"
-						onClick={() => onEdit(address)}
+						onClick={() =>
+							onEdit(address)
+						}
 						className="rounded-lg p-2 text-[#2E2E2E]/35 transition hover:bg-[#F1E7E1] hover:text-[#85161B]"
 						aria-label="Edit address"
 					>
@@ -1398,7 +1804,9 @@ function AddressCard({
 
 					<button
 						type="button"
-						onClick={() => onDelete(address)}
+						onClick={() =>
+							onDelete(address)
+						}
 						className="rounded-lg p-2 text-[#2E2E2E]/35 transition hover:bg-red-50 hover:text-red-600"
 						aria-label="Delete address"
 					>
@@ -1429,14 +1837,19 @@ function Modal({
 		<div
 			className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
 			onMouseDown={(event) => {
-				if (event.target === event.currentTarget) {
+				if (
+					event.target ===
+					event.currentTarget
+				) {
 					onClose();
 				}
 			}}
 		>
 			<div
 				className={`max-h-[90vh] w-full overflow-y-auto rounded-2xl bg-white shadow-2xl ${
-					wide ? "max-w-2xl" : "max-w-md"
+					wide
+						? "max-w-2xl"
+						: "max-w-md"
 				}`}
 			>
 				<div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#EEE6E1] bg-white px-5 py-4 sm:px-6">
@@ -1453,7 +1866,9 @@ function Modal({
 					</button>
 				</div>
 
-				<div className="p-5 sm:p-6">{children}</div>
+				<div className="p-5 sm:p-6">
+					{children}
+				</div>
 			</div>
 		</div>
 	);
@@ -1482,7 +1897,9 @@ function FormInput({
 				{label}
 
 				{required && (
-					<span className="ml-1 text-[#85161B]">*</span>
+					<span className="ml-1 text-[#85161B]">
+						*
+					</span>
 				)}
 			</label>
 
@@ -1495,7 +1912,9 @@ function FormInput({
 					type="text"
 					value={value}
 					onChange={(event) =>
-						onChange(event.target.value)
+						onChange(
+							event.target.value,
+						)
 					}
 					className="w-full bg-transparent py-3 text-sm text-[#2E2E2E] outline-none placeholder:text-[#2E2E2E]/30"
 				/>
@@ -1622,4 +2041,3 @@ function AccountLink({
 		</Link>
 	);
 }
-
