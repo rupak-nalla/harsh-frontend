@@ -21,10 +21,39 @@ import {
 } from "lucide-react";
 
 /* ─────────────────────────────────────────
-   PRODUCT IMAGE URL
+   CONFIG
 ───────────────────────────────────────── */
 
 const PRODUCT_IMAGE_URL = "https://printinghouseujjain.in/assets/products/";
+
+const BRAND_COLOR = "#85161B";
+
+/* ─────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────── */
+
+const getImageUrl = (path?: string | null) => {
+	if (!path) return "";
+
+	if (path.startsWith("http://") || path.startsWith("https://")) {
+		return path;
+	}
+
+	return `${PRODUCT_IMAGE_URL}${path.replace(/^\/+/, "")}`;
+};
+
+const formatCurrency = (value?: string | number | null) => {
+	const amount = Number(value);
+
+	if (!Number.isFinite(amount)) {
+		return "₹0";
+	}
+
+	return `₹${amount.toLocaleString("en-IN", {
+		minimumFractionDigits: 0,
+		maximumFractionDigits: 2,
+	})}`;
+};
 
 /* ─────────────────────────────────────────
    TYPES
@@ -67,45 +96,36 @@ interface Reseller {
 	products: Product[];
 }
 
+/*
+ * IMPORTANT:
+ * API returns:
+ *
+ * {
+ *   status: 200,
+ *   data: {
+ *      user: {...},
+ *      products: [...]
+ *   }
+ * }
+ *
+ * So `data` is NOT an array.
+ */
 interface ResellerApiResponse {
 	status: number;
 	message?: string;
-	data?: Reseller[];
+	data?: Reseller;
 }
 
 interface ProductsApiResponse {
 	status?: number;
 	message?: string;
-	data?: Product[] | { products?: Product[] };
+	data?:
+		| Product[]
+		| {
+				products?: Product[];
+		  };
 	products?: Product[];
 }
-
-/* ─────────────────────────────────────────
-   HELPERS
-───────────────────────────────────────── */
-
-const getImageUrl = (path?: string | null) => {
-	if (!path) return "";
-
-	if (path.startsWith("http://") || path.startsWith("https://")) {
-		return path;
-	}
-
-	return `${PRODUCT_IMAGE_URL}${path.replace(/^\/+/, "")}`;
-};
-
-const formatCurrency = (value?: string | number | null) => {
-	const amount = Number(value);
-
-	if (!Number.isFinite(amount)) {
-		return "₹0";
-	}
-
-	return `₹${amount.toLocaleString("en-IN", {
-		minimumFractionDigits: 0,
-		maximumFractionDigits: 2,
-	})}`;
-};
 
 /* ─────────────────────────────────────────
    PAGE
@@ -117,11 +137,8 @@ export default function ResellerDetailsPage() {
 
 	const userId = String(params.userId || "");
 
-	/* ─────────────────────────────────────
-	   RESELLER STATE
-	───────────────────────────────────── */
-
 	const [reseller, setReseller] = useState<Reseller | null>(null);
+
 	const [loading, setLoading] = useState(true);
 	const [refreshing, setRefreshing] = useState(false);
 	const [error, setError] = useState("");
@@ -130,9 +147,7 @@ export default function ResellerDetailsPage() {
 	   MODAL STATE
 	───────────────────────────────────── */
 
-	const [showModal, setShowModal] = useState(false);
-
-	const [action, setAction] = useState<"add" | "change" | "remove">("add");
+	const [modal, setModal] = useState<"add" | "change" | "remove" | null>(null);
 
 	const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
@@ -141,7 +156,7 @@ export default function ResellerDetailsPage() {
 	const [updating, setUpdating] = useState(false);
 
 	/* ─────────────────────────────────────
-	   ALL PRODUCTS FOR ADD MODAL
+	   ALL PRODUCTS
 	───────────────────────────────────── */
 
 	const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -155,11 +170,15 @@ export default function ResellerDetailsPage() {
 	───────────────────────────────────── */
 
 	const fetchReseller = useCallback(
-		async (isRefresh = false) => {
-			if (!userId) return;
+		async (showRefresh = false) => {
+			if (!userId) {
+				setError("Invalid reseller ID.");
+				setLoading(false);
+				return;
+			}
 
 			try {
-				if (isRefresh) {
+				if (showRefresh) {
 					setRefreshing(true);
 				} else {
 					setLoading(true);
@@ -183,22 +202,35 @@ export default function ResellerDetailsPage() {
 				try {
 					data = JSON.parse(text);
 				} catch {
-					throw new Error(text || "Invalid server response.");
+					throw new Error("Invalid response from server.");
 				}
 
 				if (!response.ok) {
-					throw new Error(
-						data?.message || `Failed to fetch reseller (${response.status})`,
-					);
+					throw new Error(data?.message || "Unable to load reseller.");
 				}
 
 				if (data?.status !== 200) {
-					throw new Error(data?.message || "Failed to fetch reseller details.");
+					throw new Error(data?.message || "Unable to load reseller.");
 				}
 
-				const resellerData = data?.data?.[0];
+				/*
+				 * FIX:
+				 *
+				 * Old:
+				 * const resellerData = data?.data?.[0];
+				 *
+				 * API actually returns:
+				 * data.data = {
+				 *    user: {...},
+				 *    products: [...]
+				 * }
+				 *
+				 * Therefore use data.data directly.
+				 */
 
-				if (!resellerData) {
+				const resellerData = data?.data;
+
+				if (!resellerData?.user) {
 					throw new Error("Reseller not found.");
 				}
 
@@ -207,10 +239,10 @@ export default function ResellerDetailsPage() {
 					products: resellerData.products || [],
 				});
 			} catch (err) {
-				console.error("Fetch reseller error:", err);
+				console.error("Error fetching reseller:", err);
 
 				setError(
-					err instanceof Error ? err.message : "Failed to load reseller.",
+					err instanceof Error ? err.message : "Unable to load reseller.",
 				);
 			} finally {
 				setLoading(false);
@@ -225,10 +257,10 @@ export default function ResellerDetailsPage() {
 	}, [fetchReseller]);
 
 	/* ─────────────────────────────────────
-	   FETCH ALL PRODUCTS
+	   FETCH PRODUCTS
 	───────────────────────────────────── */
 
-	const fetchAllProducts = async () => {
+	const fetchAllProducts = useCallback(async () => {
 		try {
 			setLoadingProducts(true);
 
@@ -245,79 +277,101 @@ export default function ResellerDetailsPage() {
 			try {
 				data = JSON.parse(text);
 			} catch {
-				throw new Error(text || "Invalid products response.");
+				throw new Error("Invalid products response.");
 			}
 
 			if (!response.ok) {
-				throw new Error(
-					data?.message || `Failed to fetch products (${response.status})`,
-				);
-			}
-
-			if (typeof data?.status === "number" && data.status !== 200) {
-				throw new Error(data?.message || "Failed to fetch products.");
+				throw new Error(data?.message || "Unable to load products.");
 			}
 
 			let products: Product[] = [];
 
-			/*
-			 * Supports common response structures:
-			 *
-			 * { data: [...] }
-			 * { products: [...] }
-			 * { data: { products: [...] } }
-			 */
-
 			if (Array.isArray(data?.data)) {
 				products = data.data;
-			} else if (Array.isArray(data?.products)) {
-				products = data.products;
 			} else if (
 				data?.data &&
 				typeof data.data === "object" &&
 				Array.isArray(data.data.products)
 			) {
 				products = data.data.products;
+			} else if (Array.isArray(data?.products)) {
+				products = data.products;
 			}
 
 			setAllProducts(products);
 		} catch (err) {
-			console.error("Fetch all products error:", err);
+			console.error("Error fetching products:", err);
 
-			alert(err instanceof Error ? err.message : "Failed to load products.");
+			alert(err instanceof Error ? err.message : "Unable to load products.");
 		} finally {
 			setLoadingProducts(false);
 		}
-	};
+	}, []);
 
 	/* ─────────────────────────────────────
 	   AVAILABLE PRODUCTS
 	───────────────────────────────────── */
 
 	const availableProducts = useMemo(() => {
-		if (!reseller) return [];
-
-		const assignedIds = new Set(reseller.products.map((product) => product.id));
+		const assignedIds = new Set(
+			(reseller?.products || []).map((product) => product.id),
+		);
 
 		const search = productSearch.trim().toLowerCase();
 
 		return allProducts.filter((product) => {
-			/* Don't show already assigned products */
 			if (assignedIds.has(product.id)) {
 				return false;
 			}
 
-			/* No search */
 			if (!search) {
 				return true;
 			}
 
 			return (
 				String(product.id).includes(search) ||
-				(product.name || "").toLowerCase().includes(search)
+				product.name?.toLowerCase().includes(search)
 			);
 		});
-	}, [allProducts, reseller, productSearch]);
+	}, [allProducts, productSearch, reseller?.products]);
+
+	/* ─────────────────────────────────────
+	   OPEN ADD MODAL
+	───────────────────────────────────── */
+
+	const openAddModal = async () => {
+		setSelectedProduct(null);
+		setResellerPrice("");
+		setProductSearch("");
+		setModal("add");
+
+		if (allProducts.length === 0) {
+			await fetchAllProducts();
+		}
+	};
+
+	/* ─────────────────────────────────────
+	   OPEN CHANGE MODAL
+	───────────────────────────────────── */
+
+	const openChangeModal = (product: Product) => {
+		setSelectedProduct(product);
+
+		setResellerPrice(
+			product.custom_reseller_price || product.reseller_price || "",
+		);
+
+		setModal("change");
+	};
+
+	/* ─────────────────────────────────────
+	   OPEN REMOVE MODAL
+	───────────────────────────────────── */
+
+	const openRemoveModal = (product: Product) => {
+		setSelectedProduct(product);
+		setModal("remove");
+	};
 
 	/* ─────────────────────────────────────
 	   CLOSE MODAL
@@ -326,152 +380,47 @@ export default function ResellerDetailsPage() {
 	const closeModal = () => {
 		if (updating) return;
 
-		setShowModal(false);
+		setModal(null);
 		setSelectedProduct(null);
 		setResellerPrice("");
 		setProductSearch("");
-		setAction("add");
 	};
 
 	/* ─────────────────────────────────────
-	   OPEN ADD MODAL
+	   UPDATE RESELLER PRODUCT
 	───────────────────────────────────── */
 
-	const openAddModal = async () => {
-		setAction("add");
-		setSelectedProduct(null);
-		setResellerPrice("");
-		setProductSearch("");
-		setShowModal(true);
-
-		/*
-		 * Fetch all products when the modal opens.
-		 */
-		await fetchAllProducts();
-	};
-
-	/* ─────────────────────────────────────
-	   OPEN CHANGE MODAL
-	───────────────────────────────────── */
-
-	const openChangeModal = (product: Product) => {
-		setAction("change");
-		setSelectedProduct(product);
-
-		setResellerPrice(
-			product.custom_reseller_price || product.reseller_price || "",
-		);
-
-		setProductSearch("");
-
-		setShowModal(true);
-	};
-
-	/* ─────────────────────────────────────
-	   OPEN REMOVE MODAL
-	───────────────────────────────────── */
-
-	const openRemoveModal = (product: Product) => {
-		setAction("remove");
-		setSelectedProduct(product);
-		setResellerPrice("");
-		setProductSearch("");
-		setShowModal(true);
-	};
-
-	/* ─────────────────────────────────────
-	   SELECT PRODUCT FOR ADD
-	───────────────────────────────────── */
-
-	const selectProduct = (product: Product) => {
-		setSelectedProduct(product);
-
-		/*
-		 * Don't automatically use the normal reseller price
-		 * as the custom price.
-		 *
-		 * The admin explicitly enters the custom reseller price.
-		 */
-		setResellerPrice("");
-	};
-
-	/* ─────────────────────────────────────
-	   UPDATE RESELLER
-	───────────────────────────────────── */
-
-	const updateReseller = async () => {
-		if (!reseller) return;
+	const updateResellerProduct = async (action: "add" | "change" | "remove") => {
+		if (!reseller?.user?.id) {
+			alert("Invalid reseller.");
+			return;
+		}
 
 		if (!selectedProduct) {
 			alert("Please select a product.");
 			return;
 		}
 
-		const productId = String(selectedProduct.id);
-
-		if (!productId || Number(productId) <= 0) {
-			alert("Please select a valid product.");
+		if (
+			(action === "add" || action === "change") &&
+			(!resellerPrice || Number(resellerPrice) <= 0)
+		) {
+			alert("Please enter a valid reseller price.");
 			return;
-		}
-
-		/* ─────────────────────────────────
-		   PRICE VALIDATION
-		───────────────────────────────── */
-
-		if (action === "add" || action === "change") {
-			const price = resellerPrice.trim();
-
-			if (!price) {
-				alert("Please enter a reseller price.");
-				return;
-			}
-
-			const numericPrice = Number(price);
-
-			if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
-				alert("Reseller price must be greater than 0.");
-				return;
-			}
 		}
 
 		try {
 			setUpdating(true);
 
-			/* ─────────────────────────────
-			   BACKEND REQUEST
-			───────────────────────────── */
-
 			const formData = new FormData();
 
-			/*
-			 * Browser sends:
-			 *
-			 * action
-			 * user_id
-			 * product_id
-			 * reseller_price
-			 *
-			 * The Next.js proxy should add:
-			 *
-			 * command_type=admin
-			 */
-
 			formData.append("action", action);
-
 			formData.append("user_id", String(reseller.user.id));
-
-			formData.append("product_id", productId);
+			formData.append("product_id", String(selectedProduct.id));
 
 			if (action === "add" || action === "change") {
-				formData.append("reseller_price", resellerPrice.trim());
+				formData.append("reseller_price", resellerPrice);
 			}
-
-			console.log("UPDATE RESELLER REQUEST:", {
-				action,
-				user_id: String(reseller.user.id),
-				product_id: productId,
-				reseller_price: action === "remove" ? undefined : resellerPrice.trim(),
-			});
 
 			const response = await fetch("/api/admin/update_reseller", {
 				method: "POST",
@@ -484,50 +433,37 @@ export default function ResellerDetailsPage() {
 			let data: {
 				status?: number;
 				message?: string;
-				[key: string]: unknown;
 			};
 
 			try {
 				data = JSON.parse(text);
 			} catch {
-				throw new Error(text || "Invalid server response.");
+				throw new Error("Invalid response from server.");
 			}
 
 			if (!response.ok) {
-				throw new Error(data?.message || `Request failed (${response.status})`);
+				throw new Error(data?.message || "Unable to update reseller.");
 			}
 
 			if (data?.status !== 200) {
-				throw new Error(data?.message || "Failed to update reseller.");
+				throw new Error(data?.message || "Unable to update reseller.");
 			}
-
-			/* ─────────────────────────────
-			   REFRESH DATA
-			───────────────────────────── */
-
-			await fetchReseller(true);
 
 			closeModal();
 
-			/* ─────────────────────────────
-			   SUCCESS MESSAGE
-			───────────────────────────── */
+			await fetchReseller(true);
 
 			if (action === "add") {
-				alert("Product added successfully.");
+				alert("Product added to reseller successfully.");
 			} else if (action === "change") {
 				alert("Reseller price updated successfully.");
 			} else {
-				alert("Product removed successfully.");
+				alert("Product removed from reseller successfully.");
 			}
 		} catch (err) {
-			console.error("Update reseller error:", err);
+			console.error("Error updating reseller:", err);
 
-			alert(
-				err instanceof Error
-					? err.message
-					: "Something went wrong while updating the reseller.",
-			);
+			alert(err instanceof Error ? err.message : "Unable to update reseller.");
 		} finally {
 			setUpdating(false);
 		}
@@ -539,9 +475,9 @@ export default function ResellerDetailsPage() {
 
 	if (loading) {
 		return (
-			<div className="flex min-h-[70vh] items-center justify-center">
+			<div className="min-h-screen bg-[#faf7f5] flex items-center justify-center">
 				<div className="flex flex-col items-center gap-3">
-					<Loader2 className="h-8 w-8 animate-spin text-[#85161B]" />
+					<div className="w-10 h-10 rounded-full border-4 border-gray-200 border-t-[#85161B] animate-spin" />
 
 					<p className="text-sm text-gray-500">Loading reseller...</p>
 				</div>
@@ -555,754 +491,822 @@ export default function ResellerDetailsPage() {
 
 	if (error || !reseller) {
 		return (
-			<div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-				<button
-					onClick={() => router.push("/admin/resellers")}
-					className="mb-6 flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-[#85161B]"
-				>
-					<ArrowLeft className="h-4 w-4" />
-					Back to Resellers
-				</button>
+			<div className="min-h-screen bg-[#faf7f5] flex items-center justify-center px-4">
+				<div className="w-full max-w-md bg-white rounded-2xl border border-gray-200 shadow-sm p-8 text-center">
+					<div className="mx-auto mb-5 w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
+						<X className="w-7 h-7 text-red-600" />
+					</div>
 
-				<div className="rounded-2xl border border-red-100 bg-red-50 p-8 text-center">
-					<X className="mx-auto mb-3 h-8 w-8 text-red-500" />
-
-					<h2 className="text-lg font-semibold text-gray-900">
+					<h1 className="text-xl font-semibold text-gray-900">
 						Unable to load reseller
-					</h2>
+					</h1>
 
-					<p className="mt-2 text-sm text-gray-600">
-						{error || "Reseller not found."}
+					<p className="mt-2 text-sm text-gray-500">
+						{error || "Reseller information could not be found."}
 					</p>
 
-					<button
-						onClick={() => fetchReseller()}
-						className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#6f1217]"
-					>
-						<RefreshCw className="h-4 w-4" />
-						Try Again
-					</button>
+					<div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+						<Link
+							href="/admin/resellers"
+							className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition"
+						>
+							<ArrowLeft className="w-4 h-4" />
+							Back to Resellers
+						</Link>
+
+						<button
+							type="button"
+							onClick={() => fetchReseller()}
+							className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-medium hover:opacity-90 transition"
+							style={{
+								backgroundColor: BRAND_COLOR,
+							}}
+						>
+							<RefreshCw className="w-4 h-4" />
+							Try Again
+						</button>
+					</div>
 				</div>
 			</div>
 		);
 	}
 
+	const user = reseller.user;
+	const products = reseller.products || [];
+
+	const isActive = String(user.is_reseller_active).toLowerCase() === "yes";
+
+	const isCreditEligible =
+		String(user.credit_eligibility).toLowerCase() === "eligible";
+
 	/* ─────────────────────────────────────
-	   PAGE
+	   MAIN UI
 	───────────────────────────────────── */
 
 	return (
-		<div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-			{/* ─────────────────────────────
-			    HEADER
-			───────────────────────────── */}
+		<div className="min-h-screen bg-[#faf7f5]">
+			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+				{/* ─────────────────────────────
+				    HEADER
+				───────────────────────────── */}
 
-			<div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-				<div>
-					<Link
-						href="/admin/resellers"
-						className="mb-3 inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[#85161B]"
-					>
-						<ArrowLeft className="h-4 w-4" />
-						Back to Resellers
-					</Link>
-
-					<h1 className="text-2xl font-bold text-gray-900">
-						{reseller.user.name}
-					</h1>
-
-					<p className="mt-1 text-sm text-gray-500">
-						Reseller #{reseller.user.id}
-					</p>
-				</div>
-
-				<div className="flex items-center gap-2">
-					<button
-						type="button"
-						onClick={() => fetchReseller(true)}
-						disabled={refreshing}
-						className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-					>
-						<RefreshCw
-							className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-						/>
-						Refresh
-					</button>
-
-					<button
-						type="button"
-						onClick={openAddModal}
-						className="inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#6f1217]"
-					>
-						<Plus className="h-4 w-4" />
-						Add Product
-					</button>
-				</div>
-			</div>
-
-			{/* ─────────────────────────────
-			    RESELLER INFORMATION
-			───────────────────────────── */}
-
-			<div className="mb-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-				{/* Name */}
-
-				<div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-					<div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#85161B]/10">
-						<User className="h-5 w-5 text-[#85161B]" />
-					</div>
-
-					<p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-						Name
-					</p>
-
-					<p className="mt-1 font-semibold text-gray-900">
-						{reseller.user.name || "—"}
-					</p>
-				</div>
-
-				{/* Email */}
-
-				<div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-					<div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#85161B]/10">
-						<Mail className="h-5 w-5 text-[#85161B]" />
-					</div>
-
-					<p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-						Email
-					</p>
-
-					<p className="mt-1 truncate font-semibold text-gray-900">
-						{reseller.user.email || "—"}
-					</p>
-				</div>
-
-				{/* Phone */}
-
-				<div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-					<div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#85161B]/10">
-						<Phone className="h-5 w-5 text-[#85161B]" />
-					</div>
-
-					<p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-						Phone
-					</p>
-
-					<p className="mt-1 font-semibold text-gray-900">
-						{reseller.user.phone || "—"}
-					</p>
-				</div>
-
-				{/* Products */}
-
-				<div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-					<div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#85161B]/10">
-						<Boxes className="h-5 w-5 text-[#85161B]" />
-					</div>
-
-					<p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-						Assigned Products
-					</p>
-
-					<p className="mt-1 font-semibold text-gray-900">
-						{reseller.products.length}
-					</p>
-				</div>
-			</div>
-
-			{/* ─────────────────────────────
-			    STATUS
-			───────────────────────────── */}
-
-			<div className="mb-8 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-				<div className="flex flex-wrap items-center gap-3">
-					<div className="flex items-center gap-2">
-						<span
-							className={`h-2.5 w-2.5 rounded-full ${
-								reseller.user.is_reseller_active === "yes"
-									? "bg-green-500"
-									: "bg-gray-400"
-							}`}
-						/>
-
-						<span className="text-sm font-semibold text-gray-800">
-							{reseller.user.is_reseller_active === "yes"
-								? "Active Reseller"
-								: "Inactive Reseller"}
-						</span>
-					</div>
-
-					<span className="hidden h-4 w-px bg-gray-200 sm:block" />
-
-					<span className="text-sm text-gray-500">
-						Credit eligibility:{" "}
-						<span className="font-medium text-gray-700">
-							{reseller.user.credit_eligibility || "—"}
-						</span>
-					</span>
-				</div>
-			</div>
-
-			{/* ─────────────────────────────
-			    PRODUCTS HEADER
-			───────────────────────────── */}
-
-			<div className="mb-4 flex items-center justify-between">
-				<div>
-					<h2 className="text-xl font-bold text-gray-900">Assigned Products</h2>
-
-					<p className="mt-1 text-sm text-gray-500">
-						Products and custom reseller prices
-					</p>
-				</div>
-
-				<span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
-					{reseller.products.length} products
-				</span>
-			</div>
-
-			{/* ─────────────────────────────
-			    EMPTY PRODUCTS
-			───────────────────────────── */}
-
-			{reseller.products.length === 0 ? (
-				<div className="rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-14 text-center">
-					<div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-50">
-						<Package className="h-7 w-7 text-gray-300" />
-					</div>
-
-					<h3 className="mt-4 font-semibold text-gray-900">
-						No products assigned
-					</h3>
-
-					<p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
-						Add a product and set a custom reseller price for this reseller.
-					</p>
-
-					<button
-						type="button"
-						onClick={openAddModal}
-						className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#85161B] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#6f1217]"
-					>
-						<Plus className="h-4 w-4" />
-						Add Product
-					</button>
-				</div>
-			) : (
-				<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-					{reseller.products.map((product) => (
-						<div
-							key={product.id}
-							className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition hover:shadow-md"
+				<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 mb-7">
+					<div className="flex items-start gap-3">
+						<Link
+							href="/admin/resellers"
+							className="mt-1 w-10 h-10 shrink-0 rounded-xl border border-gray-200 bg-white flex items-center justify-center text-gray-600 hover:text-[#85161B] hover:border-[#85161B]/20 transition"
 						>
-							{/* Image */}
+							<ArrowLeft className="w-5 h-5" />
+						</Link>
 
-							<div className="relative aspect-square bg-gray-50">
-								{product.primary_photo_path ? (
-									<img
-										src={getImageUrl(product.primary_photo_path)}
-										alt={product.name || `Product #${product.id}`}
-										className="h-full w-full object-cover"
-										onError={(e) => {
-											e.currentTarget.style.display = "none";
-										}}
-									/>
+						<div>
+							<div className="flex flex-wrap items-center gap-2">
+								<h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
+									{user.name}
+								</h1>
+
+								{isActive ? (
+									<span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-xs font-semibold">
+										<span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+										Active
+									</span>
 								) : (
-									<div className="flex h-full items-center justify-center">
-										<Package className="h-12 w-12 text-gray-200" />
-									</div>
+									<span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-semibold">
+										<span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+										Inactive
+									</span>
 								)}
-
-								<div className="absolute left-3 top-3 rounded-lg bg-white/95 px-2.5 py-1 text-xs font-semibold text-gray-700 shadow-sm">
-									#{product.id}
-								</div>
 							</div>
 
-							{/* Details */}
+							<p className="mt-1 text-sm text-gray-500">
+								Reseller ID #{user.id}
+							</p>
+						</div>
+					</div>
 
-							<div className="p-4">
-								<h3 className="truncate font-semibold text-gray-900">
-									{product.name || `Product #${product.id}`}
-								</h3>
+					<div className="flex flex-col sm:flex-row gap-2">
+						<button
+							type="button"
+							onClick={() => fetchReseller(true)}
+							disabled={refreshing}
+							className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition disabled:opacity-60"
+						>
+							<RefreshCw
+								className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
+							/>
+							Refresh
+						</button>
 
-								<div className="mt-3 space-y-2">
-									<div className="flex items-center justify-between text-sm">
-										<span className="text-gray-500">Market price</span>
+						<button
+							type="button"
+							onClick={openAddModal}
+							className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold shadow-sm hover:opacity-90 transition"
+							style={{
+								backgroundColor: BRAND_COLOR,
+							}}
+						>
+							<Plus className="w-4 h-4" />
+							Add Product
+						</button>
+					</div>
+				</div>
 
-										<span className="font-medium text-gray-700">
-											{formatCurrency(product.market_price)}
-										</span>
-									</div>
+				{/* ─────────────────────────────
+				    USER INFO CARDS
+				───────────────────────────── */}
 
-									<div className="flex items-center justify-between text-sm">
-										<span className="text-gray-500">Selling price</span>
+				<div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+					{/* NAME */}
 
-										<span className="font-medium text-gray-700">
-											{formatCurrency(product.selling_price)}
-										</span>
-									</div>
+					<div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+						<div className="flex items-start justify-between">
+							<div>
+								<p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+									Name
+								</p>
 
-									<div className="flex items-center justify-between rounded-lg bg-[#85161B]/5 px-3 py-2">
-										<span className="text-sm font-medium text-[#85161B]">
-											Reseller price
-										</span>
+								<p className="mt-2 font-semibold text-gray-900">
+									{user.name || "—"}
+								</p>
+							</div>
 
-										<span className="font-bold text-[#85161B]">
-											{formatCurrency(
-												product.custom_reseller_price || product.reseller_price,
-											)}
-										</span>
-									</div>
-								</div>
-
-								{/* Actions */}
-
-								<div className="mt-4 grid grid-cols-2 gap-2">
-									<button
-										type="button"
-										onClick={() => openChangeModal(product)}
-										className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50"
-									>
-										<Edit3 className="h-3.5 w-3.5" />
-										Change Price
-									</button>
-
-									<button
-										type="button"
-										onClick={() => openRemoveModal(product)}
-										className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-100 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50"
-									>
-										<Trash2 className="h-3.5 w-3.5" />
-										Remove
-									</button>
-								</div>
+							<div className="w-10 h-10 rounded-xl bg-[#85161B]/10 flex items-center justify-center">
+								<User
+									className="w-5 h-5"
+									style={{
+										color: BRAND_COLOR,
+									}}
+								/>
 							</div>
 						</div>
-					))}
-				</div>
-			)}
+					</div>
 
-			{/* ─────────────────────────────────
-			    ADD / CHANGE / REMOVE MODAL
-			───────────────────────────────── */}
+					{/* EMAIL */}
 
-			{showModal && (
-				<div
-					className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm"
-					onClick={closeModal}
-				>
-					<div
-						className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl"
-						onClick={(e) => e.stopPropagation()}
-					>
-						{/* ─────────────────────────
-						    MODAL HEADER
-						───────────────────────── */}
+					<div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+						<div className="flex items-start justify-between">
+							<div className="min-w-0 pr-3">
+								<p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+									Email
+								</p>
 
-						<div className="flex items-start justify-between border-b border-gray-100 px-6 py-5">
+								<p className="mt-2 font-semibold text-gray-900 truncate">
+									{user.email || "—"}
+								</p>
+							</div>
+
+							<div className="w-10 h-10 shrink-0 rounded-xl bg-[#85161B]/10 flex items-center justify-center">
+								<Mail
+									className="w-5 h-5"
+									style={{
+										color: BRAND_COLOR,
+									}}
+								/>
+							</div>
+						</div>
+					</div>
+
+					{/* PHONE */}
+
+					<div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+						<div className="flex items-start justify-between">
 							<div>
-								<h2 className="text-xl font-semibold text-gray-900">
-									{action === "add"
-										? "Add Product"
-										: action === "change"
-											? "Change Reseller Price"
-											: "Remove Product"}
-								</h2>
+								<p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+									Phone
+								</p>
 
-								<p className="mt-1 text-sm text-gray-500">
-									{action === "add"
-										? "Select a product and set its reseller price"
-										: action === "change"
-											? "Update the custom price for this product"
-											: "Remove this product from the reseller"}
+								<p className="mt-2 font-semibold text-gray-900">
+									{user.phone || "—"}
+								</p>
+							</div>
+
+							<div className="w-10 h-10 rounded-xl bg-[#85161B]/10 flex items-center justify-center">
+								<Phone
+									className="w-5 h-5"
+									style={{
+										color: BRAND_COLOR,
+									}}
+								/>
+							</div>
+						</div>
+					</div>
+
+					{/* PRODUCTS */}
+
+					<div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+						<div className="flex items-start justify-between">
+							<div>
+								<p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+									Assigned Products
+								</p>
+
+								<p className="mt-2 text-2xl font-bold text-gray-900">
+									{products.length}
+								</p>
+							</div>
+
+							<div className="w-10 h-10 rounded-xl bg-[#85161B]/10 flex items-center justify-center">
+								<Boxes
+									className="w-5 h-5"
+									style={{
+										color: BRAND_COLOR,
+									}}
+								/>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				{/* ─────────────────────────────
+				    STATUS SECTION
+				───────────────────────────── */}
+
+				<div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:p-6 mb-6">
+					<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+						<div>
+							<h2 className="text-base font-semibold text-gray-900">
+								Reseller Status
+							</h2>
+
+							<p className="text-sm text-gray-500 mt-1">
+								Account status and credit eligibility
+							</p>
+						</div>
+
+						<div className="flex flex-wrap gap-3">
+							<div
+								className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium ${
+									isActive
+										? "bg-green-50 text-green-700"
+										: "bg-gray-100 text-gray-600"
+								}`}
+							>
+								{isActive ? (
+									<CheckCircle2 className="w-4 h-4" />
+								) : (
+									<X className="w-4 h-4" />
+								)}
+
+								{isActive ? "Reseller Active" : "Reseller Inactive"}
+							</div>
+
+							<div
+								className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium ${
+									isCreditEligible
+										? "bg-blue-50 text-blue-700"
+										: "bg-orange-50 text-orange-700"
+								}`}
+							>
+								<CheckCircle2 className="w-4 h-4" />
+
+								{isCreditEligible ? "Credit Eligible" : "Credit Not Eligible"}
+							</div>
+						</div>
+					</div>
+				</div>
+
+				{/* ─────────────────────────────
+				    PRODUCTS HEADER
+				───────────────────────────── */}
+
+				<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+					<div>
+						<h2 className="text-xl font-bold text-gray-900">
+							Assigned Products
+						</h2>
+
+						<p className="text-sm text-gray-500 mt-1">
+							Manage products and reseller-specific pricing.
+						</p>
+					</div>
+
+					<div className="inline-flex items-center gap-2 text-sm text-gray-500">
+						<Package className="w-4 h-4" />
+						{products.length} {products.length === 1 ? "product" : "products"}
+					</div>
+				</div>
+
+				{/* ─────────────────────────────
+				    EMPTY STATE
+				───────────────────────────── */}
+
+				{products.length === 0 ? (
+					<div className="bg-white rounded-2xl border border-dashed border-gray-300 p-10 sm:p-14 text-center">
+						<div className="mx-auto w-16 h-16 rounded-2xl bg-[#85161B]/10 flex items-center justify-center">
+							<Package
+								className="w-8 h-8"
+								style={{
+									color: BRAND_COLOR,
+								}}
+							/>
+						</div>
+
+						<h3 className="mt-5 text-lg font-semibold text-gray-900">
+							No products assigned
+						</h3>
+
+						<p className="mt-2 text-sm text-gray-500 max-w-md mx-auto">
+							This reseller doesn't have any products assigned yet. Add a
+							product to get started.
+						</p>
+
+						<button
+							type="button"
+							onClick={openAddModal}
+							className="mt-6 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold hover:opacity-90 transition"
+							style={{
+								backgroundColor: BRAND_COLOR,
+							}}
+						>
+							<Plus className="w-4 h-4" />
+							Add Product
+						</button>
+					</div>
+				) : (
+					/* ─────────────────────────────
+					   PRODUCT GRID
+					───────────────────────────── */
+
+					<div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+						{products.map((product) => {
+							const image = getImageUrl(product.primary_photo_path);
+
+							const resellerProductPrice =
+								product.custom_reseller_price || product.reseller_price;
+
+							return (
+								<div
+									key={product.id}
+									className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md transition"
+								>
+									{/* IMAGE */}
+
+									<div className="relative aspect-[4/3] bg-gray-100 overflow-hidden">
+										{image ? (
+											<img
+												src={image}
+												alt={product.name || "Product"}
+												className="w-full h-full object-cover"
+											/>
+										) : (
+											<div className="w-full h-full flex items-center justify-center">
+												<Package className="w-12 h-12 text-gray-300" />
+											</div>
+										)}
+
+										<div className="absolute top-3 left-3">
+											<span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/95 backdrop-blur text-xs font-semibold text-gray-700 shadow-sm">
+												#{product.id}
+											</span>
+										</div>
+									</div>
+
+									{/* CONTENT */}
+
+									<div className="p-5">
+										<div className="min-h-[52px]">
+											<h3 className="font-semibold text-gray-900 line-clamp-2">
+												{product.name || "Unnamed Product"}
+											</h3>
+										</div>
+
+										{/* PRICES */}
+
+										<div className="mt-4 grid grid-cols-3 gap-2">
+											<div className="rounded-xl bg-gray-50 p-3">
+												<p className="text-[10px] uppercase tracking-wide font-medium text-gray-400">
+													Market
+												</p>
+
+												<p className="mt-1 text-sm font-semibold text-gray-900">
+													{formatCurrency(product.market_price)}
+												</p>
+											</div>
+
+											<div className="rounded-xl bg-gray-50 p-3">
+												<p className="text-[10px] uppercase tracking-wide font-medium text-gray-400">
+													Selling
+												</p>
+
+												<p className="mt-1 text-sm font-semibold text-gray-900">
+													{formatCurrency(product.selling_price)}
+												</p>
+											</div>
+
+											<div className="rounded-xl bg-[#85161B]/5 p-3">
+												<p className="text-[10px] uppercase tracking-wide font-medium text-[#85161B]/70">
+													Reseller
+												</p>
+
+												<p
+													className="mt-1 text-sm font-bold"
+													style={{
+														color: BRAND_COLOR,
+													}}
+												>
+													{formatCurrency(resellerProductPrice)}
+												</p>
+											</div>
+										</div>
+
+										{/* ACTIONS */}
+
+										<div className="mt-5 grid grid-cols-2 gap-2">
+											<button
+												type="button"
+												onClick={() => openChangeModal(product)}
+												className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition"
+											>
+												<Edit3 className="w-4 h-4" />
+												Change Price
+											</button>
+
+											<button
+												type="button"
+												onClick={() => openRemoveModal(product)}
+												className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-red-100 bg-red-50 text-red-600 text-sm font-medium hover:bg-red-100 transition"
+											>
+												<Trash2 className="w-4 h-4" />
+												Remove
+											</button>
+										</div>
+									</div>
+								</div>
+							);
+						})}
+					</div>
+				)}
+			</div>
+
+			{/* ═════════════════════════════════
+			    ADD PRODUCT MODAL
+			═════════════════════════════════ */}
+
+			{modal === "add" && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+					<div
+						className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+						onClick={closeModal}
+					/>
+
+					<div className="relative w-full max-w-2xl max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+						{/* HEADER */}
+
+						<div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-gray-100">
+							<div>
+								<h2 className="text-lg font-bold text-gray-900">Add Product</h2>
+
+								<p className="text-sm text-gray-500 mt-0.5">
+									Select a product to assign to this reseller.
 								</p>
 							</div>
 
 							<button
 								type="button"
 								onClick={closeModal}
-								disabled={updating}
-								className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+								className="w-9 h-9 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
 							>
-								<X className="h-5 w-5" />
+								<X className="w-5 h-5" />
 							</button>
 						</div>
 
-						{/* ─────────────────────────
-						    MODAL BODY
-						───────────────────────── */}
+						{/* SEARCH */}
 
-						<div className="space-y-5 px-6 py-6">
-							{/* ═══════════════════════
-							    ADD PRODUCT
-							═══════════════════════ */}
+						<div className="px-5 sm:px-6 pt-4">
+							<div className="relative">
+								<Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
 
-							{action === "add" && (
-								<div>
-									<label
-										htmlFor="product-search"
-										className="mb-2 block text-sm font-semibold text-gray-700"
-									>
-										Select Product
-									</label>
+								<input
+									type="text"
+									value={productSearch}
+									onChange={(e) => setProductSearch(e.target.value)}
+									placeholder="Search by product name or ID..."
+									className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:bg-white focus:border-[#85161B]/40 focus:ring-2 focus:ring-[#85161B]/10 transition"
+								/>
+							</div>
+						</div>
 
-									{/* Search */}
+						{/* PRODUCT LIST */}
 
-									<div className="relative">
-										<Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+						<div className="flex-1 overflow-y-auto p-5 sm:p-6">
+							{loadingProducts ? (
+								<div className="flex flex-col items-center justify-center py-12">
+									<Loader2
+										className="w-7 h-7 animate-spin"
+										style={{
+											color: BRAND_COLOR,
+										}}
+									/>
 
-										<input
-											id="product-search"
-											type="text"
-											value={productSearch}
-											onChange={(e) => setProductSearch(e.target.value)}
-											placeholder="Search products by name or ID..."
-											disabled={updating || loadingProducts}
-											className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10 disabled:cursor-not-allowed disabled:bg-gray-50"
-										/>
-									</div>
-
-									{/* Product List */}
-
-									<div className="mt-3 max-h-64 overflow-y-auto rounded-xl border border-gray-100 bg-white p-2">
-										{loadingProducts ? (
-											<div className="flex flex-col items-center justify-center py-10">
-												<Loader2 className="h-6 w-6 animate-spin text-[#85161B]" />
-
-												<p className="mt-2 text-sm text-gray-500">
-													Loading products...
-												</p>
-											</div>
-										) : availableProducts.length === 0 ? (
-											<div className="py-10 text-center">
-												<Package className="mx-auto h-8 w-8 text-gray-300" />
-
-												<p className="mt-2 text-sm font-medium text-gray-700">
-													No products found
-												</p>
-
-												<p className="mt-1 px-4 text-xs text-gray-400">
-													{allProducts.length === 0
-														? "No products are available."
-														: productSearch
-															? "Try a different product name or ID."
-															: "All products are already assigned to this reseller."}
-												</p>
-											</div>
-										) : (
-											<div className="space-y-1">
-												{availableProducts.map((product) => {
-													const isSelected = selectedProduct?.id === product.id;
-
-													return (
-														<button
-															key={product.id}
-															type="button"
-															disabled={updating}
-															onClick={() => selectProduct(product)}
-															className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${
-																isSelected
-																	? "border-[#85161B] bg-[#85161B]/5"
-																	: "border-transparent hover:border-gray-100 hover:bg-gray-50"
-															}`}
-														>
-															{/* Product image */}
-
-															<div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-gray-100">
-																{product.primary_photo_path ? (
-																	<img
-																		src={getImageUrl(
-																			product.primary_photo_path,
-																		)}
-																		alt={
-																			product.name || `Product #${product.id}`
-																		}
-																		className="h-full w-full object-cover"
-																		onError={(e) => {
-																			e.currentTarget.style.display = "none";
-																		}}
-																	/>
-																) : (
-																	<div className="flex h-full w-full items-center justify-center">
-																		<Package className="h-6 w-6 text-gray-300" />
-																	</div>
-																)}
-															</div>
-
-															{/* Product details */}
-
-															<div className="min-w-0 flex-1">
-																<p className="truncate text-sm font-semibold text-gray-900">
-																	{product.name || `Product #${product.id}`}
-																</p>
-
-																<p className="mt-0.5 text-xs text-gray-400">
-																	Product #{product.id}
-																</p>
-
-																<div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-																	<span className="text-gray-500">
-																		Selling:{" "}
-																		<span className="font-medium text-gray-700">
-																			{formatCurrency(product.selling_price)}
-																		</span>
-																	</span>
-
-																	{product.reseller_price && (
-																		<span className="text-[#85161B]">
-																			Standard reseller:{" "}
-																			<span className="font-medium">
-																				{formatCurrency(product.reseller_price)}
-																			</span>
-																		</span>
-																	)}
-																</div>
-															</div>
-
-															{/* Selected icon */}
-
-															{isSelected && (
-																<CheckCircle2 className="h-5 w-5 shrink-0 text-[#85161B]" />
-															)}
-														</button>
-													);
-												})}
-											</div>
-										)}
-									</div>
-								</div>
-							)}
-
-							{/* ═══════════════════════
-							    CHANGE / REMOVE PRODUCT
-							═══════════════════════ */}
-
-							{action !== "add" && selectedProduct && (
-								<div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-									<div className="flex items-center gap-3">
-										<div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-white">
-											{selectedProduct.primary_photo_path ? (
-												<img
-													src={getImageUrl(selectedProduct.primary_photo_path)}
-													alt={
-														selectedProduct.name ||
-														`Product #${selectedProduct.id}`
-													}
-													className="h-full w-full object-cover"
-													onError={(e) => {
-														e.currentTarget.style.display = "none";
-													}}
-												/>
-											) : (
-												<div className="flex h-full w-full items-center justify-center">
-													<Package className="h-6 w-6 text-gray-300" />
-												</div>
-											)}
-										</div>
-
-										<div className="min-w-0">
-											<p className="text-xs font-medium text-gray-400">
-												Product #{selectedProduct.id}
-											</p>
-
-											<p className="truncate text-sm font-semibold text-gray-800">
-												{selectedProduct.name ||
-													`Product #${selectedProduct.id}`}
-											</p>
-										</div>
-									</div>
-								</div>
-							)}
-
-							{/* ═══════════════════════
-							    SELECTED PRODUCT FOR ADD
-							═══════════════════════ */}
-
-							{action === "add" && selectedProduct && (
-								<div className="rounded-xl border border-[#85161B]/20 bg-[#85161B]/5 p-4">
-									<div className="flex items-center gap-3">
-										<div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-white">
-											{selectedProduct.primary_photo_path ? (
-												<img
-													src={getImageUrl(selectedProduct.primary_photo_path)}
-													alt={
-														selectedProduct.name ||
-														`Product #${selectedProduct.id}`
-													}
-													className="h-full w-full object-cover"
-													onError={(e) => {
-														e.currentTarget.style.display = "none";
-													}}
-												/>
-											) : (
-												<div className="flex h-full w-full items-center justify-center">
-													<Package className="h-5 w-5 text-gray-300" />
-												</div>
-											)}
-										</div>
-
-										<div className="min-w-0 flex-1">
-											<p className="text-xs font-medium text-[#85161B]/70">
-												Selected Product #{selectedProduct.id}
-											</p>
-
-											<p className="truncate text-sm font-semibold text-gray-900">
-												{selectedProduct.name ||
-													`Product #${selectedProduct.id}`}
-											</p>
-										</div>
-
-										<button
-											type="button"
-											onClick={() => selectProduct(selectedProduct)}
-											disabled={updating}
-											className="shrink-0 text-xs font-medium text-gray-500 hover:text-[#85161B]"
-										>
-											Change
-										</button>
-									</div>
-								</div>
-							)}
-
-							{/* ═══════════════════════
-							    RESELLER PRICE
-							═══════════════════════ */}
-
-							{action !== "remove" && selectedProduct && (
-								<div>
-									<label
-										htmlFor="reseller-price"
-										className="mb-2 block text-sm font-semibold text-gray-700"
-									>
-										Reseller Price
-									</label>
-
-									<div className="relative">
-										<span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-gray-400">
-											₹
-										</span>
-
-										<input
-											id="reseller-price"
-											type="number"
-											min="0.01"
-											step="0.01"
-											value={resellerPrice}
-											onChange={(e) => setResellerPrice(e.target.value)}
-											placeholder="Enter custom reseller price"
-											disabled={updating}
-											className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-9 pr-4 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10 disabled:cursor-not-allowed disabled:bg-gray-50"
-										/>
-									</div>
-
-									<div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
-										{selectedProduct.selling_price && (
-											<span>
-												Selling price:{" "}
-												<span className="font-medium text-gray-600">
-													{formatCurrency(selectedProduct.selling_price)}
-												</span>
-											</span>
-										)}
-
-										{selectedProduct.reseller_price && (
-											<span>
-												Standard reseller:{" "}
-												<span className="font-medium text-gray-600">
-													{formatCurrency(selectedProduct.reseller_price)}
-												</span>
-											</span>
-										)}
-									</div>
-
-									<p className="mt-1 text-xs text-gray-400">
-										This is the custom price this reseller will pay.
+									<p className="mt-3 text-sm text-gray-500">
+										Loading products...
 									</p>
 								</div>
-							)}
+							) : availableProducts.length === 0 ? (
+								<div className="text-center py-12">
+									<Package className="mx-auto w-10 h-10 text-gray-300" />
 
-							{/* ═══════════════════════
-							    REMOVE WARNING
-							═══════════════════════ */}
+									<p className="mt-3 text-sm font-medium text-gray-700">
+										No products found
+									</p>
 
-							{action === "remove" && selectedProduct && (
-								<div className="rounded-xl border border-red-100 bg-red-50 p-4">
-									<div className="flex gap-3">
-										<div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-100">
-											<Trash2 className="h-4 w-4 text-red-600" />
-										</div>
+									<p className="mt-1 text-xs text-gray-400">
+										All matching products may already be assigned.
+									</p>
+								</div>
+							) : (
+								<div className="space-y-2">
+									{availableProducts.map((product) => {
+										const image = getImageUrl(product.primary_photo_path);
 
-										<div>
-											<p className="text-sm font-semibold text-red-800">
-												Remove this product?
-											</p>
+										return (
+											<button
+												key={product.id}
+												type="button"
+												onClick={() => {
+													setSelectedProduct(product);
 
-											<p className="mt-1 text-xs leading-5 text-red-600">
-												This will remove the custom reseller price and unassign
-												the product from this reseller.
-											</p>
-										</div>
-									</div>
+													setResellerPrice(product.reseller_price || "");
+												}}
+												className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition ${
+													selectedProduct?.id === product.id
+														? "border-[#85161B]/40 bg-[#85161B]/5"
+														: "border-gray-200 hover:bg-gray-50"
+												}`}
+											>
+												<div className="w-14 h-14 rounded-lg overflow-hidden bg-gray-100 shrink-0">
+													{image ? (
+														<img
+															src={image}
+															alt={product.name}
+															className="w-full h-full object-cover"
+														/>
+													) : (
+														<div className="w-full h-full flex items-center justify-center">
+															<Package className="w-6 h-6 text-gray-300" />
+														</div>
+													)}
+												</div>
+
+												<div className="min-w-0 flex-1">
+													<p className="font-medium text-sm text-gray-900 truncate">
+														{product.name}
+													</p>
+
+													<p className="text-xs text-gray-400 mt-0.5">
+														ID #{product.id}
+													</p>
+
+													<p className="text-xs text-gray-500 mt-1">
+														Selling:{" "}
+														<span className="font-medium text-gray-700">
+															{formatCurrency(product.selling_price)}
+														</span>
+													</p>
+												</div>
+
+												{selectedProduct?.id === product.id && (
+													<CheckCircle2
+														className="w-5 h-5 shrink-0"
+														style={{
+															color: BRAND_COLOR,
+														}}
+													/>
+												)}
+											</button>
+										);
+									})}
 								</div>
 							)}
 						</div>
 
-						{/* ─────────────────────────
-						    MODAL FOOTER
-						───────────────────────── */}
+						{/* SELECTED PRODUCT / PRICE */}
 
-						<div className="flex gap-3 border-t border-gray-100 px-6 py-5">
+						{selectedProduct && (
+							<div className="px-5 sm:px-6 py-4 border-t border-gray-100 bg-gray-50">
+								<div className="flex flex-col sm:flex-row sm:items-end gap-3">
+									<div className="flex-1">
+										<label className="block text-xs font-semibold text-gray-600 mb-1.5">
+											Reseller Price
+										</label>
+
+										<div className="relative">
+											<span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+												₹
+											</span>
+
+											<input
+												type="number"
+												min="0"
+												step="0.01"
+												value={resellerPrice}
+												onChange={(e) => setResellerPrice(e.target.value)}
+												placeholder="Enter reseller price"
+												className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-gray-200 bg-white text-sm outline-none focus:border-[#85161B]/40 focus:ring-2 focus:ring-[#85161B]/10"
+											/>
+										</div>
+									</div>
+
+									<button
+										type="button"
+										disabled={updating || !resellerPrice}
+										onClick={() => updateResellerProduct("add")}
+										className="sm:w-auto px-5 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-50 transition"
+										style={{
+											backgroundColor: BRAND_COLOR,
+										}}
+									>
+										{updating ? (
+											<span className="inline-flex items-center gap-2">
+												<Loader2 className="w-4 h-4 animate-spin" />
+												Adding...
+											</span>
+										) : (
+											"Add Product"
+										)}
+									</button>
+								</div>
+							</div>
+						)}
+					</div>
+				</div>
+			)}
+
+			{/* ═════════════════════════════════
+			    CHANGE PRICE MODAL
+			═════════════════════════════════ */}
+
+			{modal === "change" && selectedProduct && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+					<div
+						className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+						onClick={closeModal}
+					/>
+
+					<div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+						<div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-gray-100">
+							<div>
+								<h2 className="text-lg font-bold text-gray-900">
+									Change Reseller Price
+								</h2>
+
+								<p className="text-sm text-gray-500 mt-0.5">
+									Update the price for this reseller.
+								</p>
+							</div>
+
 							<button
 								type="button"
 								onClick={closeModal}
-								disabled={updating}
-								className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+								className="w-9 h-9 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition"
 							>
-								Cancel
+								<X className="w-5 h-5" />
 							</button>
+						</div>
 
-							<button
-								type="button"
-								onClick={updateReseller}
-								disabled={
-									updating ||
-									!selectedProduct ||
-									(action !== "remove" &&
-										(!resellerPrice.trim() || Number(resellerPrice) <= 0))
-								}
-								className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-gray-300 ${
-									action === "remove"
-										? "bg-red-600 hover:bg-red-700"
-										: "bg-[#85161B] hover:bg-[#6f1217]"
-								}`}
-							>
-								{updating ? (
-									<>
-										<Loader2 className="h-4 w-4 animate-spin" />
+						<div className="p-5 sm:p-6">
+							<div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 mb-5">
+								<div className="w-12 h-12 rounded-lg bg-white overflow-hidden shrink-0">
+									{getImageUrl(selectedProduct.primary_photo_path) ? (
+										<img
+											src={getImageUrl(selectedProduct.primary_photo_path)}
+											alt={selectedProduct.name}
+											className="w-full h-full object-cover"
+										/>
+									) : (
+										<div className="w-full h-full flex items-center justify-center">
+											<Package className="w-5 h-5 text-gray-300" />
+										</div>
+									)}
+								</div>
 
-										{action === "add"
-											? "Adding..."
-											: action === "change"
-												? "Updating..."
-												: "Removing..."}
-									</>
-								) : action === "add" ? (
-									<>
-										<Plus className="h-4 w-4" />
-										Add Product
-									</>
-								) : action === "change" ? (
-									<>
-										<CheckCircle2 className="h-4 w-4" />
-										Update Price
-									</>
-								) : (
-									<>
-										<Trash2 className="h-4 w-4" />
-										Remove Product
-									</>
-								)}
-							</button>
+								<div className="min-w-0">
+									<p className="text-sm font-semibold text-gray-900 truncate">
+										{selectedProduct.name}
+									</p>
+
+									<p className="text-xs text-gray-400 mt-0.5">
+										ID #{selectedProduct.id}
+									</p>
+								</div>
+							</div>
+
+							<div>
+								<label className="block text-sm font-semibold text-gray-700 mb-2">
+									Reseller Price
+								</label>
+
+								<div className="relative">
+									<span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">
+										₹
+									</span>
+
+									<input
+										type="number"
+										min="0"
+										step="0.01"
+										autoFocus
+										value={resellerPrice}
+										onChange={(e) => setResellerPrice(e.target.value)}
+										className="w-full pl-8 pr-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900 outline-none focus:border-[#85161B]/40 focus:ring-2 focus:ring-[#85161B]/10"
+									/>
+								</div>
+							</div>
+
+							<div className="mt-6 flex gap-2">
+								<button
+									type="button"
+									onClick={closeModal}
+									disabled={updating}
+									className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition"
+								>
+									Cancel
+								</button>
+
+								<button
+									type="button"
+									onClick={() => updateResellerProduct("change")}
+									disabled={updating || !resellerPrice}
+									className="flex-1 px-4 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-50 transition"
+									style={{
+										backgroundColor: BRAND_COLOR,
+									}}
+								>
+									{updating ? (
+										<span className="inline-flex items-center gap-2">
+											<Loader2 className="w-4 h-4 animate-spin" />
+											Updating...
+										</span>
+									) : (
+										"Update Price"
+									)}
+								</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* ═════════════════════════════════
+			    REMOVE PRODUCT MODAL
+			═════════════════════════════════ */}
+
+			{modal === "remove" && selectedProduct && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+					<div
+						className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+						onClick={closeModal}
+					/>
+
+					<div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+						<div className="p-5 sm:p-6">
+							<div className="mx-auto w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
+								<Trash2 className="w-6 h-6 text-red-600" />
+							</div>
+
+							<div className="text-center mt-4">
+								<h2 className="text-lg font-bold text-gray-900">
+									Remove Product?
+								</h2>
+
+								<p className="mt-2 text-sm text-gray-500 leading-relaxed">
+									Are you sure you want to remove{" "}
+									<span className="font-semibold text-gray-700">
+										{selectedProduct.name}
+									</span>{" "}
+									from this reseller?
+								</p>
+							</div>
+
+							<div className="mt-6 flex gap-2">
+								<button
+									type="button"
+									onClick={closeModal}
+									disabled={updating}
+									className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50 transition"
+								>
+									Cancel
+								</button>
+
+								<button
+									type="button"
+									onClick={() => updateResellerProduct("remove")}
+									disabled={updating}
+									className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50 transition"
+								>
+									{updating ? (
+										<>
+											<Loader2 className="w-4 h-4 animate-spin" />
+											Removing...
+										</>
+									) : (
+										<>
+											<Trash2 className="w-4 h-4" />
+											Remove
+										</>
+									)}
+								</button>
+							</div>
 						</div>
 					</div>
 				</div>
