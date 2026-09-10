@@ -995,7 +995,7 @@ export default function AdminPage() {
 								sm:text-4xl
 							"
 						>
-							Good morning, Admin.
+							Hello, Admin.
 						</h1>
 
 						<p
