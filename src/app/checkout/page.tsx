@@ -131,12 +131,7 @@ type CheckoutResponse = {
 /*
  * IMPORTANT:
  *
- * `name` here means RECEIVER'S NAME.
- *
- * It is NOT an "address name".
- *
- * This matches the address structure used by the
- * profile page / add_address / edit_address APIs.
+ * `name` is the receiver's full name and the single name field used at checkout.
  */
 
 type RawAddress = {
@@ -160,7 +155,7 @@ type RawAddress = {
 type Address = {
 	id: string;
 
-	receiverName: string;
+	name: string;
 	phone: string;
 
 	flatHouseBuilding: string;
@@ -230,11 +225,7 @@ function normalizeAddress(raw: RawAddress, index: number): Address {
 	return {
 		id: String(raw.id ?? `addr-${index}`),
 
-		/*
-		 * IMPORTANT:
-		 * Backend `name` = receiver's name.
-		 */
-		receiverName: raw.name ?? "",
+		name: raw.name ?? "",
 
 		phone: raw.phone ?? "",
 
@@ -340,26 +331,27 @@ function CheckoutView() {
 
 	const [formData, setFormData] = useState({
 		/*
-		 * CONTACT / ACCOUNT DETAILS
-		 */
-		firstName: "",
-		lastName: "",
-		email: "",
-		phone: "",
-
-		/*
-		 * ADDRESS DETAILS
+		 * CUSTOMER / ACCOUNT DETAILS
 		 *
 		 * IMPORTANT:
-		 * receiverName is the receiver's name.
+		 * `name` is the complete customer name.
 		 */
-		receiverName: "",
+		name: "",
+
+		email: "",
+
+		phone: "",
 
 		flatHouseBuilding: "",
+
 		roadAreaColony: "",
+
 		landmark: "",
+
 		city: "",
+
 		state: "",
+
 		pincode: "",
 	});
 
@@ -379,6 +371,7 @@ function CheckoutView() {
 
 	const fetchCart = async () => {
 		setLoadingCart(true);
+
 		setCartError("");
 
 		try {
@@ -478,12 +471,7 @@ function CheckoutView() {
 		setFormData((previous) => ({
 			...previous,
 
-			/*
-			 * IMPORTANT:
-			 * Apply receiver's name from
-			 * saved address.
-			 */
-			receiverName: addr.receiverName || previous.receiverName,
+			name: addr.name || previous.name,
 
 			phone: addr.phone || previous.phone,
 
@@ -531,18 +519,19 @@ function CheckoutView() {
 			   ACCOUNT DETAILS
 			================================================= */
 
-			const nameParts = (data.name ?? "").trim().split(/\s+/).filter(Boolean);
-
-			const firstName = nameParts[0] ?? "";
-
-			const lastName = nameParts.slice(1).join(" ");
+			/*
+			 * IMPORTANT:
+			 *
+			 * Do NOT split the name.
+			 *
+			 * Keep the complete customer name
+			 * as one value.
+			 */
 
 			setFormData((previous) => ({
 				...previous,
 
-				firstName: firstName || previous.firstName,
-
-				lastName: lastName || previous.lastName,
+				name: data.name || previous.name,
 
 				email: data.email || previous.email,
 
@@ -657,8 +646,6 @@ function CheckoutView() {
 			setFormData((previous) => ({
 				...previous,
 
-				receiverName: "",
-
 				flatHouseBuilding: "",
 
 				roadAreaColony: "",
@@ -692,56 +679,40 @@ function CheckoutView() {
 
 	const validateForm = () => {
 		/*
-		 * PICKUP
+		 * RECEIVER FULL NAME
 		 */
 
-		if (deliveryMethod === "pickup") {
-			if (!formData.firstName.trim()) {
-				return "Please enter your first name.";
-			}
-
-			if (!formData.lastName.trim()) {
-				return "Please enter your last name.";
-			}
-
-			if (!formData.email.trim()) {
-				return "Please enter your email address.";
-			}
-
-			if (!formData.phone.trim()) {
-				return "Please enter your phone number.";
-			}
-
-			return null;
+		if (!formData.name.trim()) {
+			return "Please enter the receiver's full name.";
 		}
 
 		/*
-		 * STANDARD DELIVERY
+		 * EMAIL
 		 */
-
-		if (!formData.firstName.trim()) {
-			return "Please enter your first name.";
-		}
-
-		if (!formData.lastName.trim()) {
-			return "Please enter your last name.";
-		}
 
 		if (!formData.email.trim()) {
 			return "Please enter your email address.";
 		}
+
+		/*
+		 * PHONE
+		 */
 
 		if (!formData.phone.trim()) {
 			return "Please enter your phone number.";
 		}
 
 		/*
-		 * RECEIVER NAME
+		 * PICKUP
 		 */
 
-		if (!formData.receiverName.trim()) {
-			return "Please enter the receiver's name.";
+		if (deliveryMethod === "pickup") {
+			return null;
 		}
+
+		/*
+		 * STANDARD DELIVERY
+		 */
 
 		if (!formData.flatHouseBuilding.trim()) {
 			return "Please enter your flat / house / building.";
@@ -777,12 +748,7 @@ function CheckoutView() {
 			);
 		}
 
-		/*
-		 * Payment/contact name.
-		 *
-		 * This is the logged-in customer's name.
-		 */
-		const fullName = `${formData.firstName} ${formData.lastName}`.trim();
+		const fullName = formData.name.trim();
 
 		const options: RazorpayOptions = {
 			key: apiKey,
@@ -794,11 +760,12 @@ function CheckoutView() {
 			description: "Personalized Gifts & Custom Printing",
 
 			prefill: {
-				name: formData.receiverName || fullName,
+				/* Single receiver full name. */
+				name: fullName,
 
-				email: formData.email,
+				email: formData.email.trim(),
 
-				contact: formData.phone,
+				contact: formData.phone.trim(),
 			},
 
 			theme: {
@@ -806,8 +773,8 @@ function CheckoutView() {
 			},
 
 			/* ===========================================
-			   SUCCESS
-			=========================================== */
+				   SUCCESS
+				=========================================== */
 
 			handler: async (response: RazorpayResponse) => {
 				console.log("RAZORPAY SUCCESS:", response);
@@ -867,8 +834,8 @@ function CheckoutView() {
 			},
 
 			/* ===========================================
-			   DISMISS
-			=========================================== */
+				   DISMISS
+				=========================================== */
 
 			modal: {
 				ondismiss: () => {
@@ -928,21 +895,17 @@ function CheckoutView() {
 		setIsProcessingPayment(true);
 
 		try {
-			const fullName = `${formData.firstName} ${formData.lastName}`.trim();
-
-			/* =================================================
-			   CHECKOUT PAYLOAD
-			================================================= */
+			/*
+			 * Send the customer's complete
+			 * name directly.
+			 */
 
 			const checkoutPayload: Record<string, unknown> = {
-				/*
-				 * Customer/contact details
-				 */
-				name: fullName,
+				name: formData.name.trim(),
 
-				email: formData.email,
+				email: formData.email.trim(),
 
-				phone: formData.phone,
+				phone: formData.phone.trim(),
 
 				delivery_method: deliveryMethod,
 			};
@@ -952,30 +915,19 @@ function CheckoutView() {
 			================================================= */
 
 			if (deliveryMethod === "standard") {
-				/*
-				 * IMPORTANT:
-				 *
-				 * `receiver_name` identifies the person
-				 * who will receive the order.
-				 *
-				 * This is separate from the customer's
-				 * account name above.
-				 */
-				checkoutPayload.receiver_name = formData.receiverName;
+				checkoutPayload.flat_house_building = formData.flatHouseBuilding.trim();
 
-				checkoutPayload.flat_house_building = formData.flatHouseBuilding;
-
-				checkoutPayload.road_area_colony = formData.roadAreaColony;
+				checkoutPayload.road_area_colony = formData.roadAreaColony.trim();
 
 				if (formData.landmark.trim()) {
-					checkoutPayload.landmark = formData.landmark;
+					checkoutPayload.landmark = formData.landmark.trim();
 				}
 
-				checkoutPayload.city = formData.city;
+				checkoutPayload.city = formData.city.trim();
 
-				checkoutPayload.state = formData.state;
+				checkoutPayload.state = formData.state.trim();
 
-				checkoutPayload.pincode = formData.pincode;
+				checkoutPayload.pincode = formData.pincode.trim();
 
 				/*
 				 * Saved address ID
@@ -1200,6 +1152,13 @@ function CheckoutView() {
 			savedAddresses.length === 0 ||
 			selectedAddressId === "new");
 
+	/*
+	 * Logged-in users have their account
+	 * details locked.
+	 *
+	 * Guest users get editable customer
+	 * details.
+	 */
 	const lockContactFields = isLoggedIn && !checkingAuth;
 
 	/* =======================================================
@@ -1428,6 +1387,41 @@ function CheckoutView() {
 
 								<div className="p-5 sm:p-6">
 									{/* =====================================
+									    CUSTOMER DETAILS
+									===================================== */}
+
+									{!lockContactFields && (
+										<div className="mb-6">
+											<p className="mb-4 text-xs font-semibold uppercase tracking-[0.15em] text-[#2E2E2E]/45">
+												Your Details
+											</p>
+
+											<div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+												<FormInput
+													label="Email address"
+													name="email"
+													type="email"
+													value={formData.email}
+													onChange={handleChange}
+													placeholder="you@example.com"
+													required
+													disabled={lockContactFields}
+												/>
+
+												<FormInput
+													label="Phone number"
+													name="phone"
+													type="tel"
+													value={formData.phone}
+													onChange={handleChange}
+													placeholder="10-digit mobile number"
+													required
+												/>
+											</div>
+										</div>
+									)}
+
+									{/* =====================================
 									    CUSTOMER / ACCOUNT DETAILS
 									===================================== */}
 
@@ -1439,7 +1433,7 @@ function CheckoutView() {
 												</p>
 
 												<p className="mt-1 text-sm font-semibold text-[#2E2E2E]">
-													{formData.firstName} {formData.lastName}
+													{formData.name || "Account"}
 												</p>
 
 												<p className="mt-0.5 text-xs text-[#2E2E2E]/50">
@@ -1519,7 +1513,7 @@ function CheckoutView() {
 
 																			<div className="flex flex-wrap items-center gap-2">
 																				<p className="text-sm font-semibold text-[#2E2E2E]">
-																					{addr.receiverName || "Receiver"}
+																					{addr.name || "Receiver"}
 																				</p>
 
 																				{addr.isDefault && (
@@ -1614,9 +1608,9 @@ function CheckoutView() {
 												<div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
 													<div className="sm:col-span-2">
 														<FormInput
-															label="Receiver's name"
-															name="receiverName"
-															value={formData.receiverName}
+															label="Receiver's Full Name"
+															name="name"
+															value={formData.name}
 															onChange={handleChange}
 															placeholder="Enter receiver's full name"
 															required
@@ -1762,25 +1756,21 @@ function CheckoutView() {
 									{/* CONTACT DETAILS */}
 
 									<div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
-										<FormInput
-											label="First name"
-											name="firstName"
-											value={formData.firstName}
-											onChange={handleChange}
-											placeholder="Enter first name"
-											required
-											disabled={lockContactFields}
-										/>
+										{/* FULL NAME */}
 
-										<FormInput
-											label="Last name"
-											name="lastName"
-											value={formData.lastName}
-											onChange={handleChange}
-											placeholder="Enter last name"
-											required
-											disabled={lockContactFields}
-										/>
+										<div className="sm:col-span-2">
+											<FormInput
+												label="Receiver's Full Name"
+												name="name"
+												value={formData.name}
+												onChange={handleChange}
+												placeholder="Enter receiver's full name"
+												required
+												disabled={lockContactFields}
+											/>
+										</div>
+
+										{/* EMAIL */}
 
 										<FormInput
 											label="Email address"
@@ -1792,6 +1782,8 @@ function CheckoutView() {
 											required
 											disabled={lockContactFields}
 										/>
+
+										{/* PHONE */}
 
 										<FormInput
 											label="Phone number"
