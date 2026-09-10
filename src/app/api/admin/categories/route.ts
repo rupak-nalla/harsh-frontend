@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
 
 		console.log("=================================");
 		console.log("ADMIN CATEGORIES PROXY (GET)");
-		console.log("Has Cookie:", Boolean(cookie));
+		console.log("Has Cookie:", cookie);
 		console.log("Client IP:", clientIp || "unknown");
 		console.log("=================================");
 
