@@ -12,6 +12,7 @@ import BulkOrderCTA from "../components/BulkOrderCTA";
 import Testimonials from "../components/Testimonials";
 import Container from "../components/Container";
 import OfferPopup from "../components/OfferPopup";
+import ExploreSocials from "@/components/ExploreSocials";
 
 // const API_URL = "https://printinghouseujjain.in";
 
@@ -67,6 +68,7 @@ export default function Home() {
 					<Features />
 					<BulkOrderCTA />
 					<Testimonials />
+					<ExploreSocials/>
 				</Container>
 			</main>
 		</>
