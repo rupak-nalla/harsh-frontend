@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+
 import {
 	ArrowLeft,
 	Package,
@@ -52,6 +53,12 @@ type Customization = {
 	photos: string[];
 };
 
+type SelectedVariant = {
+	key: string;
+	value: string;
+	image?: string;
+};
+
 type OrderItem = {
 	id: string;
 	name: string;
@@ -59,9 +66,11 @@ type OrderItem = {
 	qty: number;
 	price: number;
 	customizations: Customization[];
+	variants: SelectedVariant[];
 };
 
 type OrderAddress = {
+	name?: string;
 	flatHouseBuilding: string;
 	roadAreaColony: string;
 	landmark: string;
@@ -77,11 +86,9 @@ type Order = {
 	status: OrderStatus;
 	statusType: OrderStatusType;
 	paymentStatus: string;
-
 	totalPrice: number;
 	deliveryFee: number;
 	grandTotal: number;
-
 	items: OrderItem[];
 	address: OrderAddress | null;
 };
@@ -94,15 +101,28 @@ type RawCartItem = {
 	id?: string | number;
 	name?: string;
 	primary_photo_path?: string;
-
 	quantity?: string | number;
 	selling_price?: string | number;
+
+	/*
+	 * Example:
+	 * "{\"Color\":\"Red\"}"
+	 */
+	selected_variants?: string;
+
+	/*
+	 * Example:
+	 * "{\"Color\":{\"Red\":{\"price\":\"0\",\"image\":\"57_Color_Red.jpg\"}}}"
+	 */
+	variants?: string;
+
 	customization?: string;
 
 	[key: string]: unknown;
 };
 
 type RawAddress = {
+	name?: string;
 	flat_house_building?: string;
 	road_area_colony?: string;
 	landmark?: string;
@@ -115,19 +135,14 @@ type RawAddress = {
 type RawOrder = {
 	id?: string | number;
 	order_id?: string | number;
-
 	payment_status?: string;
 	order_status?: string;
-
 	address?: string;
 	cart?: string;
-
 	products_count?: string | number;
-
 	total_price?: string | number;
 	delivery_fee?: string | number;
 	grand_total?: string | number;
-
 	created_at?: string;
 };
 
@@ -171,6 +186,7 @@ function parseReviewPhotos(value?: unknown): string[] {
 
 	try {
 		const parsed = JSON.parse(String(value));
+
 		return Array.isArray(parsed)
 			? parsed.filter((photo): photo is string => typeof photo === "string")
 			: [];
@@ -200,7 +216,7 @@ function normalizeStatus(rawStatus?: string): {
 	status: OrderStatus;
 	statusType: OrderStatusType;
 } {
-	const key = (rawStatus ?? "").toLowerCase().replace(/[\s_-]+/g, "");
+	const key = (rawStatus ?? "").toLowerCase().replace(/[\s\_-]+/g, "");
 
 	if (key.includes("cancel")) {
 		return {
@@ -276,18 +292,166 @@ function toNumber(value: unknown): number {
 }
 
 /* ─────────────────────────────────────────
+   PARSE SELECTED VARIANTS
+───────────────────────────────────────── */
+
+/*
+ * Handles:
+ *
+ * "{\"Color\":\"Red\"}"
+ *
+ * and returns:
+ *
+ * [
+ *   {
+ *     key: "Color",
+ *     value: "Red",
+ *     image: "57_Color_Red.jpg"
+ *   }
+ * ]
+ *
+ * The image is resolved from the matching
+ * option inside the "variants" object.
+ */
+
+function parseSelectedVariants(
+	selectedValue?: string | Record<string, unknown>,
+	variantsValue?: string | Record<string, unknown>,
+): SelectedVariant[] {
+	if (!selectedValue) {
+		return [];
+	}
+
+	let selectedParsed: unknown = selectedValue;
+
+	if (typeof selectedValue === "string") {
+		try {
+			selectedParsed = JSON.parse(selectedValue);
+		} catch {
+			return [];
+		}
+	}
+
+	if (
+		!selectedParsed ||
+		typeof selectedParsed !== "object" ||
+		Array.isArray(selectedParsed)
+	) {
+		return [];
+	}
+
+	/* -----------------------------------------
+       Parse variant definitions
+    ----------------------------------------- */
+
+	let variantsParsed: unknown = variantsValue;
+
+	if (typeof variantsValue === "string") {
+		try {
+			variantsParsed = JSON.parse(variantsValue);
+		} catch {
+			variantsParsed = {};
+		}
+	}
+
+	if (
+		!variantsParsed ||
+		typeof variantsParsed !== "object" ||
+		Array.isArray(variantsParsed)
+	) {
+		variantsParsed = {};
+	}
+
+	const variantDefinitions = variantsParsed as Record<string, unknown>;
+
+	/* -----------------------------------------
+       Resolve selected variant + image
+    ----------------------------------------- */
+
+	return Object.entries(selectedParsed as Record<string, unknown>)
+		.filter(
+			([, rawValue]) =>
+				rawValue !== null &&
+				rawValue !== undefined &&
+				String(rawValue).trim() !== "",
+		)
+		.map(([key, rawValue]) => {
+			const value = String(rawValue);
+
+			let image: string | undefined;
+
+			/*
+			 * Example:
+			 *
+			 * variantDefinitions["Color"]
+			 *
+			 * {
+			 *   "Red": {
+			 *      price: "0",
+			 *      image: "57_Color_Red.jpg"
+			 *   },
+			 *   "Blue": {
+			 *      price: "50",
+			 *      image: "57_Color_Blue.png"
+			 *   }
+			 * }
+			 */
+
+			const variantGroup = variantDefinitions[key];
+
+			if (
+				variantGroup &&
+				typeof variantGroup === "object" &&
+				!Array.isArray(variantGroup)
+			) {
+				const selectedOption = (variantGroup as Record<string, unknown>)[value];
+
+				if (
+					selectedOption &&
+					typeof selectedOption === "object" &&
+					!Array.isArray(selectedOption)
+				) {
+					const optionData = selectedOption as Record<string, unknown>;
+
+					if (typeof optionData.image === "string") {
+						image = optionData.image;
+					}
+				}
+			}
+
+			return {
+				key,
+				value,
+				image,
+			};
+		});
+}
+
+/* ─────────────────────────────────────────
+   FORMAT VARIANT LABEL
+───────────────────────────────────────── */
+
+function formatVariantLabel(value: string) {
+	return value
+		.replace(/[_-]+/g, " ")
+		.replace(/\s+/g, " ")
+		.trim()
+		.replace(/^./, (char) => char.toUpperCase());
+}
+
+/* ─────────────────────────────────────────
    UPLOAD FILE PARSER
 ───────────────────────────────────────── */
 
 /*
-   Handles values such as:
-
-   "1Photo For = 20262517dd18144decd9df4545b00cdcc6e55351080755.jpg"
-
-   and
-
-   "Upload Up to 4 Photos = [\"file1.jpg\",\"file2.jpg\"]"
-*/
+ * Handles values such as:
+ *
+ * "1Photo For = 20262517dd18144decd9df4545b00cdcc6e55351080755.jpg"
+ *
+ * and
+ *
+ * "Upload Up to 4 Photos = [\"file1.jpg\",\"file2.jpg\"]"
+ */
 
 function extractUploadedPhotos(value: string): string[] {
 	if (!value) {
@@ -297,11 +461,9 @@ function extractUploadedPhotos(value: string): string[] {
 	const photos: string[] = [];
 
 	/* -----------------------------------------
-	   CASE 1:
-	   JSON array embedded inside the string
-
-	   Upload Up to 4 Photos = ["a.jpg","b.jpg"]
-	----------------------------------------- */
+       CASE 1:
+       JSON array embedded inside the string
+    ----------------------------------------- */
 
 	const arrayMatch = value.match(/\[[\s\S]*\]/);
 
@@ -322,11 +484,9 @@ function extractUploadedPhotos(value: string): string[] {
 	}
 
 	/* -----------------------------------------
-	   CASE 2:
-	   Single filename
-
-	   1Photo For = filename.jpg
-	----------------------------------------- */
+       CASE 2:
+       Single filename
+    ----------------------------------------- */
 
 	if (photos.length === 0) {
 		const filenameMatch = value.match(
@@ -347,11 +507,13 @@ function extractUploadedPhotos(value: string): string[] {
 
 function parseCustomizations(item: RawCartItem): Customization[] {
 	const customizations: Customization[] = [];
+
 	let values: Record<string, unknown> = {};
 
 	if (item.customization) {
 		try {
 			const parsed = JSON.parse(item.customization);
+
 			if (parsed && typeof parsed === "object") {
 				values = parsed as Record<string, unknown>;
 			}
@@ -367,10 +529,20 @@ function parseCustomizations(item: RawCartItem): Customization[] {
 			[
 				"id",
 				"name",
+				"description",
 				"primary_photo_path",
+				"other_photos_paths",
 				"quantity",
 				"selling_price",
+				"market_price",
 				"customization",
+				"selected_variants",
+				"variants",
+				"cart_item_id",
+				"created_at",
+				"updated_at",
+				"customize_reqs",
+				"keywords",
 			].includes(key)
 		) {
 			return;
@@ -382,22 +554,11 @@ function parseCustomizations(item: RawCartItem): Customization[] {
 
 		let value = String(rawValue);
 
-		/*
-		   Sometimes backend can return a JSON string such as:
-
-		   {
-		     "photosome": "1Photo For = filename.jpg",
-		     "uptofour": "Upload Up to 4 Photos = [...]",
-		     "custom": "Custom Text(optional) = fasdf"
-		   }
-
-		   We display the useful portion after "=".
-		*/
-
 		const equalsIndex = value.indexOf("=");
 
 		if (equalsIndex !== -1) {
 			const possibleLabel = value.slice(0, equalsIndex).trim();
+
 			const possibleValue = value.slice(equalsIndex + 1).trim();
 
 			if (possibleValue) {
@@ -441,8 +602,8 @@ function normalizeOrder(raw: RawOrder): Order {
 	const orderId = String(raw.order_id ?? raw.id ?? "");
 
 	/* -----------------------------------------
-	   CART
-	----------------------------------------- */
+       CART
+    ----------------------------------------- */
 
 	let rawItems: RawCartItem[] = [];
 
@@ -461,26 +622,81 @@ function normalizeOrder(raw: RawOrder): Order {
 	const items: OrderItem[] = rawItems.map((item, index) => {
 		const quantity = toNumber(item.quantity);
 
+		/*
+		 * Parse the variants selected by the
+		 * customer at the time of ordering.
+		 *
+		 * This now also resolves the image
+		 * belonging to the selected option.
+		 *
+		 * Example:
+		 *
+		 * selected_variants:
+		 * {"Color":"Red"}
+		 *
+		 * variants:
+		 * {
+		 *   "Color": {
+		 *      "Red": {
+		 *          "price":"0",
+		 *          "image":"57_Color_Red.jpg"
+		 *      }
+		 *   }
+		 * }
+		 */
+
+		const selectedVariants = parseSelectedVariants(
+			item.selected_variants,
+			item.variants,
+		);
+
+		/*
+		 * Find the image belonging to the
+		 * selected variant.
+		 *
+		 * If there are multiple variant groups,
+		 * the first available variant image
+		 * is used.
+		 */
+
+		const variantImage = selectedVariants.find((variant) =>
+			Boolean(variant.image),
+		)?.image;
+
 		return {
 			id: String(item.id ?? `${orderId}-item-${index}`),
 
 			name: item.name ?? "Untitled product",
 
-			image: item.primary_photo_path
-				? `${PRODUCT_IMAGE_URL}${item.primary_photo_path}`
-				: "",
+			/*
+			 * IMPORTANT:
+			 *
+			 * Use the selected variant image
+			 * when available.
+			 *
+			 * Otherwise fall back to the
+			 * normal product image.
+			 */
+
+			image: variantImage
+				? `${PRODUCT_IMAGE_URL}${variantImage}`
+				: item.primary_photo_path
+					? `${PRODUCT_IMAGE_URL}${item.primary_photo_path}`
+					: "",
 
 			qty: quantity > 0 ? Math.floor(quantity) : 1,
 
 			price: toNumber(item.selling_price),
 
 			customizations: parseCustomizations(item),
+
+			variants: selectedVariants,
 		};
 	});
 
 	/* -----------------------------------------
-	   ADDRESS
-	----------------------------------------- */
+       ADDRESS
+    ----------------------------------------- */
 
 	let address: OrderAddress | null = null;
 
@@ -489,21 +705,16 @@ function normalizeOrder(raw: RawOrder): Order {
 			const parsedAddress: RawAddress = JSON.parse(raw.address);
 
 			address = {
+				name: parsedAddress.name ?? "",
 				flatHouseBuilding: parsedAddress.flat_house_building ?? "",
-
 				roadAreaColony: parsedAddress.road_area_colony ?? "",
-
 				landmark: parsedAddress.landmark ?? "",
-
 				city: parsedAddress.city ?? "",
-
 				state: parsedAddress.state ?? "",
-
 				pincode:
 					parsedAddress.pincode !== undefined
 						? String(parsedAddress.pincode)
 						: "",
-
 				phone: parsedAddress.phone ?? "",
 			};
 		} catch (error) {
@@ -515,20 +726,13 @@ function normalizeOrder(raw: RawOrder): Order {
 
 	return {
 		id: orderId,
-
 		date: formatDate(raw.created_at),
-
 		status,
 		statusType,
-
 		paymentStatus: raw.payment_status ?? "",
-
 		totalPrice: toNumber(raw.total_price),
-
 		deliveryFee: toNumber(raw.delivery_fee),
-
 		grandTotal: toNumber(raw.grand_total),
-
 		items,
 		address,
 	};
@@ -540,6 +744,7 @@ function normalizeOrder(raw: RawOrder): Order {
 
 export default function OrderDetailsPage() {
 	const params = useParams<{ id: string }>();
+
 	const orderId = params?.id ? decodeURIComponent(params.id) : "";
 
 	const [order, setOrder] = useState<Order | null>(null);
@@ -547,7 +752,10 @@ export default function OrderDetailsPage() {
 	const [loading, setLoading] = useState(true);
 
 	const [error, setError] = useState("");
-	const [reviewStates, setReviewStates] = useState<Record<number, ReviewState>>({});
+
+	const [reviewStates, setReviewStates] = useState<Record<number, ReviewState>>(
+		{},
+	);
 
 	useEffect(() => {
 		if (!orderId) {
@@ -557,15 +765,19 @@ export default function OrderDetailsPage() {
 		}
 
 		console.log("Fetching order: in use Effect", orderId);
+
 		void fetchOrder();
 	}, [orderId]);
 
 	async function fetchOrder() {
 		setLoading(true);
 		setError("");
+
 		console.log("Fetching order from fetch Order:", orderId);
+
 		try {
 			const formData = new FormData();
+
 			formData.append("order_id", orderId);
 
 			const response = await fetch("/api/orders", {
@@ -582,16 +794,21 @@ export default function OrderDetailsPage() {
 			}
 
 			const rawOrders = data.wishlist ?? data.orders ?? data.result ?? [];
-			const rawOrder = data.order ?? (Array.isArray(rawOrders)
-				? rawOrders.find(
-						(item) => String(item.order_id ?? item.id ?? "") === orderId,
-				  )
-				: rawOrders);
+
+			const rawOrder =
+				data.order ??
+				(Array.isArray(rawOrders)
+					? rawOrders.find(
+							(item) => String(item.order_id ?? item.id ?? "") === orderId,
+						)
+					: rawOrders);
 
 			if (!rawOrder) {
 				throw new Error("Order not found.");
 			}
+
 			console.log("Raw order fetched:", rawOrder);
+
 			setOrder(normalizeOrder(rawOrder));
 		} catch (error) {
 			console.error("Failed to fetch order:", error);
@@ -603,6 +820,10 @@ export default function OrderDetailsPage() {
 			setLoading(false);
 		}
 	}
+
+	/* ─────────────────────────────────────────
+       REVIEWS
+    ───────────────────────────────────────── */
 
 	useEffect(() => {
 		if (!order) {
@@ -616,7 +837,7 @@ export default function OrderDetailsPage() {
 				order.items.map(async (item, cartIndex) => {
 					const base: ReviewState = {
 						available: false,
-							reviewed: false,
+						reviewed: false,
 						message: "",
 						reviews: [],
 						description: "",
@@ -629,50 +850,75 @@ export default function OrderDetailsPage() {
 
 					try {
 						const checkData = new FormData();
+
 						checkData.append("order_id", order.id);
+
 						checkData.append("cart_index", String(cartIndex));
+
 						const checkResponse = await fetch("/api/check_review", {
 							method: "POST",
 							credentials: "include",
 							body: checkData,
 							cache: "no-store",
 						});
-						const checkResult = (await checkResponse.json().catch(() => ({}))) as {
+
+						const checkResult = (await checkResponse
+							.json()
+							.catch(() => ({}))) as {
 							message?: string;
 							review?: ReviewApiRecord;
 						};
+
 						base.reviewed = Boolean(checkResult.review);
-						base.available = Boolean(checkResult.message?.trim()) && !base.reviewed;
+
+						base.available =
+							Boolean(checkResult.message?.trim()) && !base.reviewed;
+
 						base.message = checkResult.message ?? "";
 
 						if (checkResult.review) {
 							base.reviews.push({
 								id: String(checkResult.review.id ?? `review-${cartIndex}`),
 								name: checkResult.review.name ?? "You",
-								rating: Math.min(5, Math.max(1, Number(checkResult.review.star_count ?? 0))),
+								rating: Math.min(
+									5,
+									Math.max(1, Number(checkResult.review.star_count ?? 0)),
+								),
 								description: checkResult.review.description ?? "",
 								date: checkResult.review.created_at ?? "",
 								isOwner: true,
 								photos: parseReviewPhotos(
-									checkResult.review.photos_path ?? checkResult.review.photo_path,
+									checkResult.review.photos_path ??
+										checkResult.review.photo_path,
 								),
 							});
 						}
 
 						const reviewsData = new FormData();
+
 						reviewsData.append("product_id", item.id);
+
 						const reviewsResponse = await fetch("/api/reviews", {
 							method: "POST",
 							credentials: "include",
 							body: reviewsData,
 							cache: "no-store",
 						});
-						const reviewsResult = (await reviewsResponse.json().catch(() => ({}))) as {
-						reviews?: ReviewApiRecord[];
+
+						const reviewsResult = (await reviewsResponse
+							.json()
+							.catch(() => ({}))) as {
+							reviews?: ReviewApiRecord[];
 							result?: ReviewApiRecord[];
 							data?: ReviewApiRecord[];
 						};
-						const rawReviews = reviewsResult.reviews ?? reviewsResult.result ?? reviewsResult.data ?? [];
+
+						const rawReviews =
+							reviewsResult.reviews ??
+							reviewsResult.result ??
+							reviewsResult.data ??
+							[];
+
 						const publicReviews = rawReviews.map((review, index) => ({
 							id: String(review.id ?? `review-${index}`),
 							name: review.name ?? "Customer",
@@ -687,8 +933,11 @@ export default function OrderDetailsPage() {
 								String(review.id) === String(checkResult.review.id),
 							),
 						}));
+
 						const ownerReview = base.reviews[0];
+
 						base.reviews = publicReviews;
+
 						if (
 							checkResult.review &&
 							ownerReview &&
@@ -697,7 +946,10 @@ export default function OrderDetailsPage() {
 							base.reviews.unshift(ownerReview);
 						}
 					} catch (reviewError) {
-						base.error = reviewError instanceof Error ? reviewError.message : "Unable to load reviews.";
+						base.error =
+							reviewError instanceof Error
+								? reviewError.message
+								: "Unable to load reviews.";
 					} finally {
 						base.loading = false;
 						nextStates[cartIndex] = base;
@@ -711,26 +963,42 @@ export default function OrderDetailsPage() {
 		void loadReviews();
 	}, [order]);
 
-	const updateReviewState = (cartIndex: number, update: Partial<ReviewState>) => {
+	const updateReviewState = (
+		cartIndex: number,
+		update: Partial<ReviewState>,
+	) => {
 		setReviewStates((current) => ({
 			...current,
-			[cartIndex]: { ...current[cartIndex], ...update },
+			[cartIndex]: {
+				...current[cartIndex],
+				...update,
+			},
 		}));
 	};
 
 	const submitReview = async (cartIndex: number) => {
 		const review = reviewStates[cartIndex];
+
 		if (!review || !review.description.trim()) {
 			return;
 		}
 
-		updateReviewState(cartIndex, { submitting: true, error: "" });
+		updateReviewState(cartIndex, {
+			submitting: true,
+			error: "",
+		});
+
 		try {
 			const formData = new FormData();
+
 			formData.append("order_id", orderId);
+
 			formData.append("cart_index", String(cartIndex));
+
 			formData.append("description", review.description.trim());
+
 			formData.append("star_count", String(review.rating));
+
 			review.photos.forEach((photo) => formData.append("photos", photo));
 
 			const response = await fetch("/api/make_reviews", {
@@ -738,10 +1006,15 @@ export default function OrderDetailsPage() {
 				credentials: "include",
 				body: formData,
 			});
-			const result = (await response.json().catch(() => ({}))) as { message?: string };
+
+			const result = (await response.json().catch(() => ({}))) as {
+				message?: string;
+			};
+
 			if (!response.ok) {
 				throw new Error(result.message || "Unable to submit review.");
 			}
+
 			updateReviewState(cartIndex, {
 				available: false,
 				reviewed: true,
@@ -760,16 +1033,23 @@ export default function OrderDetailsPage() {
 			});
 		} catch (submitError) {
 			updateReviewState(cartIndex, {
-				error: submitError instanceof Error ? submitError.message : "Unable to submit review.",
+				error:
+					submitError instanceof Error
+						? submitError.message
+						: "Unable to submit review.",
 			});
 		} finally {
-			updateReviewState(cartIndex, { submitting: false });
+			updateReviewState(cartIndex, {
+				submitting: false,
+			});
 		}
 	};
 
 	const deleteReview = async (cartIndex: number) => {
 		const formData = new FormData();
+
 		formData.append("order_id", orderId);
+
 		formData.append("cart_index", String(cartIndex));
 
 		try {
@@ -779,6 +1059,7 @@ export default function OrderDetailsPage() {
 				body: formData,
 				cache: "no-store",
 			});
+
 			const result = (await response.json().catch(() => ({}))) as {
 				message?: string;
 			};
@@ -809,9 +1090,9 @@ export default function OrderDetailsPage() {
 		}
 	};
 
-	/* ─────────────────────────────────────
-	   LOADING
-	───────────────────────────────────── */
+	/* ─────────────────────────────────────────
+       LOADING
+    ────────────────────────────────────────── */
 
 	if (loading) {
 		return (
@@ -819,7 +1100,6 @@ export default function OrderDetailsPage() {
 				<div className="flex min-h-screen items-center justify-center">
 					<div className="flex flex-col items-center gap-3">
 						<span className="h-8 w-8 animate-spin rounded-full border-2 border-[#85161B]/20 border-t-[#85161B]" />
-
 						<p className="text-sm text-[#2E2E2E]/50">Loading order...</p>
 					</div>
 				</div>
@@ -827,9 +1107,9 @@ export default function OrderDetailsPage() {
 		);
 	}
 
-	/* ─────────────────────────────────────
-	   ERROR
-	───────────────────────────────────── */
+	/* ─────────────────────────────────────────
+       ERROR
+    ────────────────────────────────────────── */
 
 	if (error || !order) {
 		return (
@@ -862,14 +1142,9 @@ export default function OrderDetailsPage() {
 	}
 
 	return (
-		<main
-			className="min-h-screen bg-[#FBF9F7] pt-[112px]
-					sm:pt-[120px]"
-		>
+		<main className="min-h-screen bg-[#FBF9F7] pt-[112px] sm:pt-[120px]">
 			<section className="mx-auto max-w-6xl px-5 py-8 sm:px-6 lg:px-8 lg:py-12">
-				{/* ─────────────────────────
-				    BACK
-				───────────────────────── */}
+				{/* BACK */}
 
 				<Link
 					href="/orders"
@@ -879,9 +1154,7 @@ export default function OrderDetailsPage() {
 					Back to Orders
 				</Link>
 
-				{/* ─────────────────────────
-				    HEADER
-				───────────────────────── */}
+				{/* HEADER */}
 
 				<div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
 					<div>
@@ -908,15 +1181,11 @@ export default function OrderDetailsPage() {
 					<StatusBadge status={order.status} type={order.statusType} />
 				</div>
 
-				{/* ─────────────────────────
-				    STATUS TRACKER
-				───────────────────────── */}
+				{/* STATUS TRACKER */}
 
 				<StatusTimeline order={order} />
 
-				{/* ─────────────────────────
-				    MAIN GRID
-				───────────────────────── */}
+				{/* MAIN GRID */}
 
 				<div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
 					{/* LEFT */}
@@ -946,10 +1215,13 @@ export default function OrderDetailsPage() {
 								{order.items.map((item, cartIndex) => (
 									<React.Fragment key={item.id}>
 										<OrderProduct item={item} />
+
 										<ReviewSection
 											cartIndex={cartIndex}
 											state={reviewStates[cartIndex]}
-											onChange={(update) => updateReviewState(cartIndex, update)}
+											onChange={(update) =>
+												updateReviewState(cartIndex, update)
+											}
 											onSubmit={() => submitReview(cartIndex)}
 											onDelete={() => deleteReview(cartIndex)}
 										/>
@@ -1027,6 +1299,8 @@ function OrderProduct({ item }: { item: OrderItem }) {
 	return (
 		<div className="p-5 sm:p-6">
 			<div className="flex gap-4">
+				{/* PRODUCT IMAGE */}
+
 				<div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-[#F5F1ED] sm:h-28 sm:w-28">
 					{item.image ? (
 						<img
@@ -1041,12 +1315,37 @@ function OrderProduct({ item }: { item: OrderItem }) {
 					)}
 				</div>
 
+				{/* PRODUCT DETAILS */}
+
 				<div className="min-w-0 flex-1">
 					<h3 className="text-sm font-bold text-[#2E2E2E] sm:text-base">
 						{item.name}
 					</h3>
 
 					<p className="mt-1 text-xs text-[#2E2E2E]/50">Quantity: {item.qty}</p>
+
+					{/* ─────────────────────────
+                       SELECTED VARIANTS
+                    ───────────────────────── */}
+
+					{item.variants.length > 0 && (
+						<div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+							{item.variants.map((variant) => (
+								<div
+									key={`${variant.key}-${variant.value}`}
+									className="flex items-center gap-1.5 text-xs"
+								>
+									<span className="font-semibold text-[#2E2E2E]/50">
+										{formatVariantLabel(variant.key)}:
+									</span>
+
+									<span className="font-semibold text-[#85161B]">
+										{formatVariantLabel(variant.value)}
+									</span>
+								</div>
+							))}
+						</div>
+					)}
 
 					<p className="mt-3 text-sm font-bold text-[#85161B]">
 						₹{item.price.toFixed(2)}
@@ -1073,7 +1372,7 @@ function OrderProduct({ item }: { item: OrderItem }) {
 									{custom.label}
 								</p>
 
-								{/* Uploaded photos */}
+								{/* UPLOADED PHOTOS */}
 
 								{custom.photos.length > 0 ? (
 									<div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -1107,6 +1406,10 @@ function OrderProduct({ item }: { item: OrderItem }) {
 	);
 }
 
+/* ─────────────────────────────────────────
+   REVIEW SECTION
+───────────────────────────────────────── */
+
 function ReviewSection({
 	cartIndex,
 	state,
@@ -1129,51 +1432,69 @@ function ReviewSection({
 			<div className="flex items-center justify-between gap-3">
 				<div>
 					<h3 className="text-sm font-bold text-[#2E2E2E]">Product reviews</h3>
+
 					<p className="mt-1 text-xs text-[#2E2E2E]/50">
-						{state.reviews.length ? `${state.reviews.length} review${state.reviews.length === 1 ? "" : "s"}` : "No reviews yet"}
+						{state.reviews.length
+							? `${state.reviews.length} review${
+									state.reviews.length === 1 ? "" : "s"
+								}`
+							: "No reviews yet"}
 					</p>
 				</div>
+
 				<Star size={18} className="fill-[#F5A623] text-[#F5A623]" />
 			</div>
 
 			{state.reviews.length > 0 && (
 				<div className="mt-4 space-y-3">
 					{state.reviews.map((review) => (
-						<div key={review.id} className="rounded-xl border border-[#E9DED7] bg-white p-4">
+						<div
+							key={review.id}
+							className="rounded-xl border border-[#E9DED7] bg-white p-4"
+						>
 							<div className="flex items-center justify-between gap-3">
 								<div>
-											<p className="text-xs font-semibold text-[#2E2E2E]">
-												{review.name}{review.isOwner ? " (Your review)" : ""}
-											</p>
+									<p className="text-xs font-semibold text-[#2E2E2E]">
+										{review.name}
+										{review.isOwner ? " (Your review)" : ""}
+									</p>
+
 									<StarRating rating={review.rating} />
 								</div>
-									{review.isOwner && (
-										<button
-											type="button"
-											onClick={onDelete}
-											className="text-xs font-semibold text-red-600 hover:text-red-700"
-										>
-											Delete review
-										</button>
-									)}
+
+								{review.isOwner && (
+									<button
+										type="button"
+										onClick={onDelete}
+										className="text-xs font-semibold text-red-600 hover:text-red-700"
+									>
+										Delete review
+									</button>
+								)}
 							</div>
-							{review.description && <p className="mt-2 text-sm text-[#2E2E2E]/65">{review.description}</p>}
-										{review.photos && review.photos.length > 0 && (
-											<div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
-												{review.photos.map((photo) => (
-													<div
-														key={photo}
-														className="aspect-square overflow-hidden rounded-lg border border-[#E9DED7]"
-													>
-														<img
-															src={`${REVIEW_IMAGE_URL}${photo}`}
-															alt="Review photo"
-															className="h-full w-full object-cover"
-														/>
-													</div>
-												))}
-											</div>
-										)}
+
+							{review.description && (
+								<p className="mt-2 text-sm text-[#2E2E2E]/65">
+									{review.description}
+								</p>
+							)}
+
+							{review.photos && review.photos.length > 0 && (
+								<div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+									{review.photos.map((photo) => (
+										<div
+											key={photo}
+											className="aspect-square overflow-hidden rounded-lg border border-[#E9DED7]"
+										>
+											<img
+												src={`${REVIEW_IMAGE_URL}${photo}`}
+												alt="Review photo"
+												className="h-full w-full object-cover"
+											/>
+										</div>
+									))}
+								</div>
+							)}
 						</div>
 					))}
 				</div>
@@ -1181,46 +1502,96 @@ function ReviewSection({
 
 			{state.available && !state.reviewed && (
 				<div className="mt-5 rounded-xl border border-[#E9DED7] bg-white p-4">
-					<p className="text-xs font-semibold text-[#85161B]">{state.message}</p>
-					<div className="mt-3 flex items-center gap-1" aria-label="Choose rating">
+					<p className="text-xs font-semibold text-[#85161B]">
+						{state.message}
+					</p>
+
+					<div
+						className="mt-3 flex items-center gap-1"
+						aria-label="Choose rating"
+					>
 						{[1, 2, 3, 4, 5].map((rating) => (
-							<button key={rating} type="button" onClick={() => onChange({ rating })} aria-label={`${rating} stars`}>
-								<Star size={22} className={rating <= state.rating ? "fill-[#F5A623] text-[#F5A623]" : "text-[#D8C9C0]"} />
+							<button
+								key={rating}
+								type="button"
+								onClick={() =>
+									onChange({
+										rating,
+									})
+								}
+								aria-label={`${rating} stars`}
+							>
+								<Star
+									size={22}
+									className={
+										rating <= state.rating
+											? "fill-[#F5A623] text-[#F5A623]"
+											: "text-[#D8C9C0]"
+									}
+								/>
 							</button>
 						))}
 					</div>
+
 					<textarea
 						value={state.description}
-						onChange={(event) => onChange({ description: event.target.value })}
+						onChange={(event) =>
+							onChange({
+								description: event.target.value,
+							})
+						}
 						placeholder="Share your experience"
 						rows={3}
 						className="mt-3 w-full resize-none rounded-lg border border-[#E9DED7] px-3 py-2 text-sm outline-none focus:border-[#85161B]"
 					/>
+
 					<div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 						<input
 							type="file"
 							accept="image/*"
 							multiple
-							onChange={(event) => onChange({ photos: Array.from(event.target.files ?? []).slice(0, 5) })}
-							className="max-w-full text-xs text-[#2E2E2E]/60 border rounded-2xl border-[#E9DED7] px-3 py-2 file:mr-4 file:rounded-full file:border-0 file:bg-[#F8F3F0] file:px-3 file:py-1 file:text-xs file:font-semibold file:text-[#85161B] hover:file:bg-[#F5F1ED]"
+							onChange={(event) =>
+								onChange({
+									photos: Array.from(event.target.files ?? []).slice(0, 5),
+								})
+							}
+							className="max-w-full rounded-2xl border border-[#E9DED7] px-3 py-2 text-xs text-[#2E2E2E]/60 file:mr-4 file:rounded-full file:border-0 file:bg-[#F8F3F0] file:px-3 file:py-1 file:text-xs file:font-semibold file:text-[#85161B] hover:file:bg-[#F5F1ED]"
 						/>
-						<button type="button" disabled={state.submitting || !state.description.trim()} onClick={onSubmit} className="rounded-lg bg-[#85161B] px-4 py-2.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">
+
+						<button
+							type="button"
+							disabled={state.submitting || !state.description.trim()}
+							onClick={onSubmit}
+							className="rounded-lg bg-[#85161B] px-4 py-2.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+						>
 							{state.submitting ? "Submitting..." : "Submit review"}
 						</button>
 					</div>
 				</div>
 			)}
 
-			{state.error && <p className="mt-3 text-xs text-red-600">{state.error}</p>}
+			{state.error && (
+				<p className="mt-3 text-xs text-red-600">{state.error}</p>
+			)}
 		</section>
 	);
 }
+
+/* ─────────────────────────────────────────
+   STAR RATING
+───────────────────────────────────────── */
 
 function StarRating({ rating }: { rating: number }) {
 	return (
 		<div className="flex items-center gap-0.5">
 			{[1, 2, 3, 4, 5].map((value) => (
-				<Star key={value} size={13} className={value <= rating ? "fill-[#F5A623] text-[#F5A623]" : "text-[#D8C9C0]"} />
+				<Star
+					key={value}
+					size={13}
+					className={
+						value <= rating ? "fill-[#F5A623] text-[#F5A623]" : "text-[#D8C9C0]"
+					}
+				/>
 			))}
 		</div>
 	);
@@ -1248,17 +1619,23 @@ function AddressCard({ address }: { address: OrderAddress }) {
 			</div>
 
 			<div className="mt-5 space-y-2 text-sm text-[#2E2E2E]/70">
+				{address.name && (
+					<p className="font-semibold text-[#2E2E2E]">{address.name}</p>
+				)}
+
 				{address.flatHouseBuilding && <p>{address.flatHouseBuilding}</p>}
 
 				{address.roadAreaColony && <p>{address.roadAreaColony}</p>}
 
 				{address.landmark && <p>Landmark: {address.landmark}</p>}
 
-				<p>
-					{[address.city, address.state, address.pincode]
-						.filter(Boolean)
-						.join(", ")}
-				</p>
+				{(address.city || address.state || address.pincode) && (
+					<p>
+						{[address.city, address.state, address.pincode]
+							.filter(Boolean)
+							.join(", ")}
+					</p>
+				)}
 
 				{address.phone && (
 					<div className="mt-4 flex items-center gap-2 border-t border-[#EEE6E1] pt-4 text-xs font-medium">
@@ -1316,6 +1693,7 @@ function PriceSummary({ order }: { order: Order }) {
 /* ─────────────────────────────────────────
    STATUS TIMELINE
 ───────────────────────────────────────── */
+
 function StatusTimeline({ order }: { order: Order }) {
 	const statuses: {
 		label: OrderStatus;
@@ -1348,14 +1726,10 @@ function StatusTimeline({ order }: { order: Order }) {
 			return -1;
 		}
 
-		return statuses.findIndex(
-			(item) => item.label === order.status,
-		);
+		return statuses.findIndex((item) => item.label === order.status);
 	}, [order.status]);
 
-	/* ─────────────────────────────────────────
-	   CANCELLED
-	───────────────────────────────────────── */
+	/* CANCELLED */
 
 	if (order.status === "Cancelled") {
 		return (
@@ -1366,9 +1740,7 @@ function StatusTimeline({ order }: { order: Order }) {
 					</div>
 
 					<div>
-						<h3 className="text-sm font-bold text-red-600">
-							Order cancelled
-						</h3>
+						<h3 className="text-sm font-bold text-red-600">Order cancelled</h3>
 
 						<p className="mt-1 text-xs text-[#2E2E2E]/50">
 							This order has been cancelled.
@@ -1379,76 +1751,67 @@ function StatusTimeline({ order }: { order: Order }) {
 		);
 	}
 
-	/* ─────────────────────────────────────────
-	   STATUS TIMELINE
-	───────────────────────────────────────── */
-
 	return (
 		<div className="rounded-2xl border border-[#E9DED7] bg-white p-5 sm:p-6">
 			<div className="overflow-x-auto">
 				<div className="min-w-[650px]">
 					<div className="flex items-start">
 						{statuses.map((item, index) => {
-							const completed =
-								index <= currentIndex;
+							const completed = index <= currentIndex;
 
-							const active =
-								index === currentIndex;
+							const active = index === currentIndex;
 
-							const connectorCompleted =
-								index < currentIndex;
+							const connectorCompleted = index < currentIndex;
 
 							return (
 								<React.Fragment key={item.label}>
-									{/* STATUS */}
 									<div className="flex min-w-0 flex-1 flex-col items-center">
 										<div
 											className={`
-												flex h-11 w-11 items-center justify-center
-												rounded-full border-2
-												transition-all duration-300
-												${
-													completed
-														? "border-[#85161B] bg-[#85161B] text-white"
-														: "border-[#E5DCD6] bg-white text-[#2E2E2E]/25"
-												}
-												${
-													active
-														? "ring-4 ring-[#85161B]/10 scale-105"
-														: ""
-												}
-											`}
+                                                    flex h-11 w-11 items-center justify-center
+                                                    rounded-full border-2
+                                                    transition-all duration-300
+                                                    ${
+																											completed
+																												? "border-[#85161B] bg-[#85161B] text-white"
+																												: "border-[#E5DCD6] bg-white text-[#2E2E2E]/25"
+																										}
+                                                    ${
+																											active
+																												? "scale-105 ring-4 ring-[#85161B]/10"
+																												: ""
+																										}
+                                                `}
 										>
 											{item.icon}
 										</div>
 
 										<p
 											className={`
-												mt-2 text-center text-[10px]
-												font-semibold sm:text-xs
-												${
-													completed
-														? "text-[#85161B]"
-														: "text-[#2E2E2E]/35"
-												}
-											`}
+                                                    mt-2 text-center text-[10px]
+                                                    font-semibold sm:text-xs
+                                                    ${
+																											completed
+																												? "text-[#85161B]"
+																												: "text-[#2E2E2E]/35"
+																										}
+                                                `}
 										>
 											{item.label}
 										</p>
 									</div>
 
-									{/* CONNECTOR */}
 									{index < statuses.length - 1 && (
 										<div
 											className={`
-												mt-[22px] h-0.5 flex-1
-												transition-colors duration-300
-												${
-													connectorCompleted
-														? "bg-[#85161B]"
-														: "bg-[#E9DED7]"
-												}
-											`}
+                                                    mt-[22px] h-0.5 flex-1
+                                                    transition-colors duration-300
+                                                    ${
+																											connectorCompleted
+																												? "bg-[#85161B]"
+																												: "bg-[#E9DED7]"
+																										}
+                                                `}
 										/>
 									)}
 								</React.Fragment>
@@ -1499,28 +1862,25 @@ function StatusBadge({
 
 	const styles = {
 		delivered: "bg-[#EDF8F0] text-[#31824A]",
-
 		shipping: "bg-[#EEF5FF] text-[#3973B9]",
-
 		processing: "bg-[#FFF3E8] text-[#B56B27]",
-
 		cancelled: "bg-red-50 text-red-600",
 	};
 
 	return (
 		<span
 			className={`
-				inline-flex
-				w-fit
-				items-center
-				gap-1.5
-				rounded-full
-				px-3
-				py-1.5
-				text-xs
-				font-semibold
-				${styles[type]}
-			`}
+                inline-flex
+                w-fit
+                items-center
+                gap-1.5
+                rounded-full
+                px-3
+                py-1.5
+                text-xs
+                font-semibold
+                ${styles[type]}
+            `}
 		>
 			{getIcon()}
 			{status}

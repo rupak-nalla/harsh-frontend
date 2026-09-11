@@ -36,6 +36,26 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
    TYPES
 ============================================================================ */
 
+type ProductVariant = {
+	id?: number;
+	product_id?: number;
+	name: string;
+	values: string | string[];
+	required?: number | string | boolean;
+	sort_order?: number;
+	is_active?: number | string | boolean;
+	created_at?: string;
+	updated_at?: string;
+	image?: string | null;
+};
+
+type VariantOption = {
+	price: number;
+	image: string | null;
+};
+
+type VariantMap = Record<string, Record<string, VariantOption>>;
+
 type CustomizeRequirement = {
 	key: string;
 	type: "text" | "photo" | "photos";
@@ -48,20 +68,19 @@ type Product = {
 	id: string;
 	name: string;
 	description: string;
+
 	sellingPrice: number;
 	marketPrice: number;
 	delivery: number;
+
 	inStock: boolean;
 	sold: number;
+
 	images: string[];
 
-	/*
-	 * Kept raw (same shape ProductCard receives) so it can be run
-	 * through the exact same parseCustomizeRequirements() used on
-	 * the shop grid — text / photo / photos, both new and old
-	 * backend formats.
-	 */
 	customizeReqs?: string | string[] | null;
+
+	variants: VariantMap;
 
 	options?: string[];
 
@@ -76,22 +95,39 @@ type RawProduct = {
 	id?: string | number;
 	name?: string;
 	description?: string;
+
 	primary_photo_path?: string;
 	other_photos_paths?: string;
+
 	market_price?: string | number;
 	selling_price?: string | number;
 	reseller_price?: string | number;
+
 	in_stock?: string;
 	sold?: string | number;
+
 	customize_reqs?: string | string[] | null;
+
+	/*
+	 * Backend may use either:
+	 *
+	 * variants
+	 * varients
+	 */
+	variants?: string | VariantMap | ProductVariant[] | null;
+	varients?: string | VariantMap | ProductVariant[] | null;
+
 	options?: string[];
+
 	no_customization?: string | boolean;
+
 	delivery?: string | number;
 };
 
 type ProductResponse = {
 	status?: number;
 	message?: string;
+
 	result?: RawProduct;
 	product?: RawProduct;
 	data?: RawProduct;
@@ -99,30 +135,29 @@ type ProductResponse = {
 
 /* ============================================================================
    REVIEWS
-
-   NOTE:
-   The exact response shape for /api/reviews isn't confirmed, so
-   this checks a few likely field names for each review (name,
-   rating, comment, date) and falls back gracefully if a field is
-   missing rather than breaking the whole section.
 ============================================================================ */
 
 type RawReview = {
 	id?: string | number;
 	tracker?: string;
+
 	name?: string;
 	customer_name?: string;
 	user_name?: string;
+
 	rating?: string | number;
 	stars?: string | number;
 	star_count?: string | number;
+
 	comment?: string;
 	review?: string;
 	review_text?: string;
 	description?: string;
 	message?: string;
+
 	photos_path?: string;
 	photo_path?: string | string[];
+
 	created_at?: string;
 	date?: string;
 };
@@ -130,6 +165,7 @@ type RawReview = {
 type RawReviewsResponse = {
 	status?: number;
 	message?: string;
+
 	reviews?: RawReview[];
 	result?: RawReview[];
 	data?: RawReview[];
@@ -144,6 +180,54 @@ type Review = {
 	photos: string[];
 };
 
+/* ============================================================================
+   HELPERS
+============================================================================ */
+
+function toNumber(value: unknown, fallback = 0): number {
+	const number = Number(value);
+
+	return Number.isFinite(number) ? number : fallback;
+}
+
+function getProductImage(photoPath?: string | null): string | undefined {
+	if (!photoPath) {
+		return undefined;
+	}
+
+	if (photoPath.startsWith("http://") || photoPath.startsWith("https://")) {
+		return photoPath;
+	}
+
+	return `${PRODUCT_IMAGE_BASE_URL}${photoPath.replace(/^\/+/, "")}`;
+}
+
+function parseJsonArray(value?: string | string[] | null): string[] {
+	if (!value) {
+		return [];
+	}
+
+	if (Array.isArray(value)) {
+		return value.filter((item): item is string => typeof item === "string");
+	}
+
+	try {
+		const parsed = JSON.parse(value);
+
+		if (Array.isArray(parsed)) {
+			return parsed.filter((item): item is string => typeof item === "string");
+		}
+	} catch (error) {
+		console.error("Failed to parse JSON array:", error, value);
+	}
+
+	return [];
+}
+
+/* ============================================================================
+   PARSE REVIEW PHOTOS
+============================================================================ */
+
 function parseReviewPhotos(value?: unknown): string[] {
 	if (!value) {
 		return [];
@@ -155,6 +239,7 @@ function parseReviewPhotos(value?: unknown): string[] {
 
 	try {
 		const parsed = JSON.parse(String(value));
+
 		return Array.isArray(parsed)
 			? parsed.filter((photo): photo is string => typeof photo === "string")
 			: [];
@@ -162,6 +247,10 @@ function parseReviewPhotos(value?: unknown): string[] {
 		return [];
 	}
 }
+
+/* ============================================================================
+   NORMALIZE REVIEW
+============================================================================ */
 
 function normalizeReview(raw: RawReview, index: number): Review {
 	const rating = toNumber(raw.star_count ?? raw.rating ?? raw.stars, 0);
@@ -182,8 +271,11 @@ function normalizeReview(raw: RawReview, index: number): Review {
 
 	return {
 		id: String(raw.id ?? `review-${index}`),
+
 		name: raw.name ?? raw.customer_name ?? raw.user_name ?? "Customer",
+
 		rating: Math.min(5, Math.max(0, rating)),
+
 		comment:
 			raw.description ??
 			raw.comment ??
@@ -191,61 +283,23 @@ function normalizeReview(raw: RawReview, index: number): Review {
 			raw.review_text ??
 			raw.message ??
 			"",
+
 		date,
+
 		photos: parseReviewPhotos(raw.photos_path ?? raw.photo_path),
 	};
 }
 
 /* ============================================================================
-   HELPERS
-============================================================================ */
-
-function toNumber(value: unknown, fallback = 0): number {
-	const number = Number(value);
-	return Number.isFinite(number) ? number : fallback;
-}
-
-function getProductImage(photoPath?: string): string | undefined {
-	if (!photoPath) {
-		return undefined;
-	}
-
-	if (photoPath.startsWith("http://") || photoPath.startsWith("https://")) {
-		return photoPath;
-	}
-
-	return `${PRODUCT_IMAGE_BASE_URL}${photoPath.replace(/^\/+/, "")}`;
-}
-
-function parseJsonArray(value?: string): string[] {
-	if (!value) {
-		return [];
-	}
-
-	try {
-		const parsed = JSON.parse(value);
-
-		if (Array.isArray(parsed)) {
-			return parsed.filter((item): item is string => typeof item === "string");
-		}
-	} catch (err) {
-		console.error("Failed to parse JSON array:", err, value);
-	}
-
-	return [];
-}
-
-/* ============================================================================
    PARSE CUSTOMIZATION REQUIREMENTS
 
-   Ported as-is from ProductCard so the product page and the shop
-   grid card always agree on the same customize_reqs formats:
+   Supported:
 
    1. text:10:Enter your custom name
    2. photo:Upload Photo
    3. photos:5:Upload Photos
 
-   Also supports the older format:
+   Older format:
 
    4. key:text:10:Enter your custom name
    5. key:photo:1:Upload Photo
@@ -268,6 +322,7 @@ function parseCustomizeRequirements(
 			parsed = JSON.parse(value);
 		} catch (error) {
 			console.error("Failed to parse customize_reqs:", value, error);
+
 			return [];
 		}
 	}
@@ -293,6 +348,10 @@ function parseCustomizeRequirements(
 			let max = 1;
 			let placeholder = "";
 
+			/* -------------------------------------------------------------
+			   NEW FORMAT
+			------------------------------------------------------------- */
+
 			if (
 				parts[0] === "text" ||
 				parts[0] === "photo" ||
@@ -309,9 +368,11 @@ function parseCustomizeRequirements(
 
 					if (Number.isFinite(possibleMax) && possibleMax >= 1) {
 						max = possibleMax;
+
 						placeholder = parts.slice(2).join(":").trim();
 					} else {
 						max = type === "text" ? 100 : 1;
+
 						placeholder = parts.slice(1).join(":").trim();
 					}
 
@@ -327,19 +388,26 @@ function parseCustomizeRequirements(
 									.slice(0, 30)}`;
 				}
 			} else if (
+
+			/* -------------------------------------------------------------
+			   OLD FORMAT
+			------------------------------------------------------------- */
 				parts.length >= 3 &&
 				(parts[1] === "text" || parts[1] === "photo" || parts[1] === "photos")
 			) {
 				key = parts[0];
+
 				type = parts[1];
 
 				const possibleMax = Number(parts[2]);
 
 				if (Number.isFinite(possibleMax) && possibleMax >= 1) {
 					max = possibleMax;
+
 					placeholder = parts.slice(3).join(":").trim();
 				} else {
 					max = type === "photo" ? 1 : 100;
+
 					placeholder = parts.slice(2).join(":").trim();
 				}
 			} else {
@@ -368,6 +436,246 @@ function parseCustomizeRequirements(
 }
 
 /* ============================================================================
+   PARSE VARIANTS
+
+   Compatible with ProductCard.
+
+   Supports:
+
+   {
+       "Size": {
+           "Small": 0,
+           "Medium": 20,
+           "Large": 40
+       }
+   }
+
+   and:
+
+   {
+       "Size": {
+           "Small": {
+               "price": 0,
+               "image": "..."
+           }
+       }
+   }
+============================================================================ */
+
+function parseVariants(
+	value?: string | VariantMap | ProductVariant[] | null,
+): VariantMap {
+	if (!value) {
+		return {};
+	}
+
+	let parsed: unknown = value;
+
+	if (typeof value === "string") {
+		try {
+			parsed = JSON.parse(value);
+		} catch (error) {
+			console.error("Failed to parse variants:", value, error);
+
+			return {};
+		}
+	}
+
+	/*
+	 * ProductCard/backend compatibility:
+	 *
+	 * 1. Array format:
+	 *    [
+	 *      {
+	 *        "name": "Color",
+	 *        "values": "Red, Blue, Green",
+	 *        "required": 1
+	 *      }
+	 *    ]
+	 *
+	 * 2. Map format:
+	 *    {
+	 *      "Color": {
+	 *        "Red": 0,
+	 *        "Blue": {
+	 *          "price": 20,
+	 *          "image": "blue.jpg"
+	 *        }
+	 *      }
+	 *    }
+	 *
+	 * Normalize both into the same VariantMap used by the page.
+	 */
+
+	if (Array.isArray(parsed)) {
+		const result: VariantMap = {};
+
+		parsed.forEach((rawVariant) => {
+			if (
+				!rawVariant ||
+				typeof rawVariant !== "object" ||
+				Array.isArray(rawVariant)
+			) {
+				return;
+			}
+
+			const variant = rawVariant as Record<string, unknown>;
+			const rawName = variant.name;
+
+			if (typeof rawName !== "string" || !rawName.trim()) {
+				return;
+			}
+
+			const variantName = rawName.trim();
+			const rawValues = variant.values;
+
+			let values: unknown[] = [];
+
+			if (Array.isArray(rawValues)) {
+				values = rawValues;
+			} else if (typeof rawValues === "string") {
+				try {
+					const parsedValues = JSON.parse(rawValues);
+
+					if (Array.isArray(parsedValues)) {
+						values = parsedValues;
+					} else {
+						values = rawValues
+							.split(",")
+							.map((item) => item.trim())
+							.filter(Boolean);
+					}
+				} catch {
+					values = rawValues
+						.split(",")
+						.map((item) => item.trim())
+						.filter(Boolean);
+				}
+			}
+
+			const parsedOptions: Record<string, VariantOption> = {};
+
+			values.forEach((rawOption) => {
+				/*
+				 * Also accept an extended option object if the backend sends
+				 * price/image alongside the option name.
+				 */
+				if (
+					rawOption &&
+					typeof rawOption === "object" &&
+					!Array.isArray(rawOption)
+				) {
+					const optionObject = rawOption as Record<string, unknown>;
+
+					const rawOptionName =
+						optionObject.name ?? optionObject.value ?? optionObject.label;
+
+					if (typeof rawOptionName !== "string" || !rawOptionName.trim()) {
+						return;
+					}
+
+					const price = Number(optionObject.price ?? 0);
+
+					parsedOptions[rawOptionName.trim()] = {
+						price: Number.isFinite(price) ? price : 0,
+						image:
+							typeof optionObject.image === "string" &&
+							optionObject.image.trim()
+								? (getProductImage(optionObject.image) ?? null)
+								: null,
+					};
+
+					return;
+				}
+
+				if (typeof rawOption !== "string" && typeof rawOption !== "number") {
+					return;
+				}
+
+				const optionName = String(rawOption).trim();
+
+				if (!optionName) {
+					return;
+				}
+
+				parsedOptions[optionName] = {
+					price: 0,
+					image: null,
+				};
+			});
+
+			if (Object.keys(parsedOptions).length > 0) {
+				result[variantName] = parsedOptions;
+			}
+		});
+
+		return result;
+	}
+
+	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+		return {};
+	}
+
+	const result: VariantMap = {};
+
+	Object.entries(parsed as Record<string, unknown>).forEach(
+		([variantName, options]) => {
+			if (
+				!variantName.trim() ||
+				!options ||
+				typeof options !== "object" ||
+				Array.isArray(options)
+			) {
+				return;
+			}
+
+			const parsedOptions: Record<string, VariantOption> = {};
+
+			Object.entries(options as Record<string, unknown>).forEach(
+				([optionName, optionValue]) => {
+					if (!optionName.trim()) {
+						return;
+					}
+
+					const isObject =
+						optionValue &&
+						typeof optionValue === "object" &&
+						!Array.isArray(optionValue);
+
+					const rawPrice = isObject
+						? (optionValue as { price?: unknown }).price
+						: optionValue;
+
+					const rawImage = isObject
+						? (optionValue as { image?: unknown }).image
+						: null;
+
+					const price = Number(rawPrice);
+
+					if (!Number.isFinite(price)) {
+						return;
+					}
+
+					parsedOptions[optionName.trim()] = {
+						price,
+						image:
+							typeof rawImage === "string" && rawImage.trim()
+								? (getProductImage(rawImage) ?? null)
+								: null,
+					};
+				},
+			);
+
+			if (Object.keys(parsedOptions).length > 0) {
+				result[variantName.trim()] = parsedOptions;
+			}
+		},
+	);
+
+	return result;
+}
+
+/* ============================================================================
    NORMALIZE PRODUCT
 ============================================================================ */
 
@@ -386,16 +694,37 @@ function normalizeProduct(raw: RawProduct): Product {
 
 	return {
 		id,
+
 		name: raw.name ?? "Untitled product",
+
 		description: raw.description ?? "",
+
 		sellingPrice: toNumber(raw.selling_price, 0),
+
 		marketPrice: toNumber(raw.market_price, 0),
+
 		delivery: toNumber(raw.delivery, 0),
+
 		inStock: (raw.in_stock ?? "available").toLowerCase() === "available",
+
 		sold: toNumber(raw.sold, 0),
+
 		images,
+
 		customizeReqs: raw.customize_reqs ?? null,
+
+		/*
+		 * IMPORTANT:
+		 *
+		 * ProductCard uses `varients`.
+		 * Some product responses may use `variants`.
+		 *
+		 * Support both.
+		 */
+		variants: parseVariants(raw.varients ?? raw.variants ?? null),
+
 		options: Array.isArray(raw.options) ? raw.options : undefined,
+
 		noCustomization:
 			raw.no_customization === true ||
 			String(raw.no_customization ?? "").toLowerCase() === "true" ||
@@ -409,19 +738,22 @@ function normalizeProduct(raw: RawProduct): Product {
 
 export default function ProductPage() {
 	const params = useParams<{ id: string }>();
+
 	const router = useRouter();
 
 	const productId = params?.id;
 
 	const [product, setProduct] = useState<Product | null>(null);
+
 	const [loading, setLoading] = useState(true);
+
 	const [error, setError] = useState("");
 
 	const [activeImage, setActiveImage] = useState(0);
 
-	/* =====================================================
-	   CUSTOMIZATION (mirrors ProductCard)
-	===================================================== */
+	/* ==========================================================================
+	   CUSTOMIZATION
+	========================================================================== */
 
 	const [customizationValues, setCustomizationValues] = useState<
 		Record<string, string>
@@ -438,17 +770,118 @@ export default function ProductPage() {
 
 	const [selectedOption, setSelectedOption] = useState("");
 
+	/* ==========================================================================
+	   VARIANTS
+	========================================================================== */
+
+	const [selectedVariants, setSelectedVariants] = useState<
+		Record<string, string>
+	>({});
+
+	/* ==========================================================================
+	   CART
+	========================================================================== */
+
 	const [addingToCart, setAddingToCart] = useState(false);
+
 	const [addError, setAddError] = useState("");
+
 	const [addedToCart, setAddedToCart] = useState(false);
 
-	/* =====================================================
+	/* ==========================================================================
 	   REVIEWS
-	===================================================== */
+	========================================================================== */
 
 	const [reviews, setReviews] = useState<Review[]>([]);
+
 	const [reviewsLoading, setReviewsLoading] = useState(true);
+
 	const [reviewsError, setReviewsError] = useState("");
+
+	/* ==========================================================================
+	   VARIANT CALCULATIONS
+	========================================================================== */
+
+	/*
+	 * Keep the normal product gallery and any variant-option images in one
+	 * gallery. Variant images are only added when the backend actually
+	 * provides an image for that option.
+	 */
+	const galleryImages = useMemo(() => {
+		if (!product) {
+			return [];
+		}
+
+		const images = [...product.images];
+
+		Object.values(product.variants).forEach((options) => {
+			Object.values(options).forEach((option) => {
+				if (option.image && !images.includes(option.image)) {
+					images.push(option.image);
+				}
+			});
+		});
+
+		return images;
+	}, [product]);
+
+	const variantNames = useMemo(
+		() => Object.keys(product?.variants ?? {}),
+		[product?.variants],
+	);
+
+	const variantPriceAddition = useMemo(
+		() =>
+			variantNames.reduce((total, variantName) => {
+				const optionName = selectedVariants[variantName];
+
+				if (!optionName) {
+					return total;
+				}
+
+				return (
+					total + (product?.variants?.[variantName]?.[optionName]?.price ?? 0)
+				);
+			}, 0),
+		[product?.variants, selectedVariants, variantNames],
+	);
+
+	const currentSellingPrice =
+		(product?.sellingPrice ?? 0) + variantPriceAddition;
+
+	const currentMarketPrice = (product?.marketPrice ?? 0) + variantPriceAddition;
+
+	const allVariantsSelected = variantNames.every((variantName) =>
+		Boolean(selectedVariants[variantName]),
+	);
+
+	/* ==========================================================================
+	   VARIANT CHANGE
+	========================================================================== */
+
+	const handleVariantChange = (variantName: string, optionName: string) => {
+		setSelectedVariants((previous) => ({
+			...previous,
+			[variantName.trim()]: optionName.trim(),
+		}));
+
+		/* If this option has an image, immediately show it in the gallery. */
+		const variantImage = product?.variants?.[variantName]?.[optionName]?.image;
+
+		if (variantImage) {
+			const imageIndex = galleryImages.indexOf(variantImage);
+			if (imageIndex >= 0) {
+				setActiveImage(imageIndex);
+			}
+		}
+
+		setCustomizationValidationError("");
+		setAddError("");
+	};
+
+	/* ==========================================================================
+	   CUSTOMIZATION REQUIREMENTS
+	========================================================================== */
 
 	const customizeRequirements = useMemo(
 		() => parseCustomizeRequirements(product?.customizeReqs),
@@ -480,6 +913,7 @@ export default function ProductPage() {
 
 		try {
 			const formData = new FormData();
+
 			formData.append("product_id", String(productId));
 
 			const response = await fetch(`/api/product/${productId}`, {
@@ -497,6 +931,10 @@ export default function ProductPage() {
 				throw new Error(data?.message || "Unable to load this product.");
 			}
 
+			/*
+			 * Support the different response
+			 * shapes used by the backend.
+			 */
 			const rawProduct = data.result ?? data.product ?? data.data ?? data;
 
 			const normalized = normalizeProduct(rawProduct);
@@ -504,7 +942,9 @@ export default function ProductPage() {
 			console.log("NORMALIZED PRODUCT:", normalized);
 
 			setProduct(normalized);
+
 			setActiveImage(0);
+
 			resetCustomization();
 		} catch (err) {
 			console.error("Fetch product failed:", err);
@@ -519,6 +959,7 @@ export default function ProductPage() {
 
 	useEffect(() => {
 		fetchProduct();
+
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [productId]);
 
@@ -536,6 +977,7 @@ export default function ProductPage() {
 
 		try {
 			const formData = new FormData();
+
 			formData.append("product_id", String(productId));
 
 			const response = await fetch("/api/reviews", {
@@ -559,8 +1001,6 @@ export default function ProductPage() {
 				normalizeReview(raw, index),
 			);
 
-			console.log("NORMALIZED REVIEWS:", normalized);
-
 			setReviews(normalized);
 		} catch (err) {
 			console.error("Fetch reviews failed:", err);
@@ -575,6 +1015,7 @@ export default function ProductPage() {
 
 	useEffect(() => {
 		fetchReviews();
+
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [productId]);
 
@@ -583,15 +1024,18 @@ export default function ProductPage() {
 	========================================================================== */
 
 	const discountPercent = useMemo(() => {
-		if (!product || product.marketPrice <= product.sellingPrice) {
+		if (!product || currentMarketPrice <= currentSellingPrice) {
 			return 0;
 		}
 
 		return Math.round(
-			((product.marketPrice - product.sellingPrice) / product.marketPrice) *
-				100,
+			((currentMarketPrice - currentSellingPrice) / currentMarketPrice) * 100,
 		);
-	}, [product]);
+	}, [product, currentMarketPrice, currentSellingPrice]);
+
+	/* ==========================================================================
+	   AVERAGE RATING
+	========================================================================== */
 
 	const averageRating = useMemo(() => {
 		if (reviews.length === 0) {
@@ -608,43 +1052,51 @@ export default function ProductPage() {
 	========================================================================== */
 
 	const showPreviousImage = () => {
-		if (!product || product.images.length <= 1) return;
+		if (galleryImages.length <= 1) {
+			return;
+		}
+
 		setActiveImage((current) =>
-			current === 0 ? product.images.length - 1 : current - 1,
+			current === 0 ? galleryImages.length - 1 : current - 1,
 		);
 	};
 
 	const showNextImage = () => {
-		if (!product || product.images.length <= 1) return;
+		if (galleryImages.length <= 1) {
+			return;
+		}
+
 		setActiveImage((current) =>
-			current === product.images.length - 1 ? 0 : current + 1,
+			current === galleryImages.length - 1 ? 0 : current + 1,
 		);
 	};
 
-	/* =====================================================
+	/* ==========================================================================
 	   RESET CUSTOMIZATION
-	===================================================== */
+	========================================================================== */
 
 	const resetCustomization = () => {
 		setCustomizationValues({});
 		setCustomizationFiles({});
 		setCustomizationValidationError("");
 		setSelectedOption("");
+		setSelectedVariants({});
 		setRawOrder(false);
 	};
 
-	/* =====================================================
+	/* ==========================================================================
 	   TOGGLE RAW ORDER
-	===================================================== */
+	========================================================================== */
 
 	const handleToggleRawOrder = () => {
 		setCustomizationValidationError("");
+
 		setRawOrder((previous) => !previous);
 	};
 
-	/* =====================================================
+	/* ==========================================================================
 	   TEXT CHANGE
-	===================================================== */
+	========================================================================== */
 
 	const handleTextChange = (key: string, value: string, max: number) => {
 		setCustomizationValues((previous) => ({
@@ -655,15 +1107,17 @@ export default function ProductPage() {
 		setCustomizationValidationError("");
 	};
 
-	/* =====================================================
+	/* ==========================================================================
 	   SINGLE PHOTO
-	===================================================== */
+	========================================================================== */
 
 	const handleSinglePhotoChange = (
 		requirement: CustomizeRequirement,
 		file: File | undefined,
 	) => {
-		if (!file) return;
+		if (!file) {
+			return;
+		}
 
 		setCustomizationValidationError("");
 
@@ -671,6 +1125,7 @@ export default function ProductPage() {
 			setCustomizationValidationError(
 				`${requirement.placeholder}: Please select an image file.`,
 			);
+
 			return;
 		}
 
@@ -678,6 +1133,7 @@ export default function ProductPage() {
 			setCustomizationValidationError(
 				`${requirement.placeholder}: Image must be 10 MB or smaller.`,
 			);
+
 			return;
 		}
 
@@ -687,21 +1143,17 @@ export default function ProductPage() {
 		}));
 	};
 
-	/* =====================================================
+	/* ==========================================================================
 	   MULTIPLE PHOTOS
-
-	   This is the piece the product page was missing — a
-	   "photos" requirement (unlike "photo") allows the buyer
-	   to pick several images, up to requirement.max, each
-	   validated for type and size, all stored under the same
-	   field key as a File[].
-	===================================================== */
+	========================================================================== */
 
 	const handleMultiplePhotoChange = (
 		requirement: CustomizeRequirement,
 		fileList: FileList | null,
 	) => {
-		if (!fileList) return;
+		if (!fileList) {
+			return;
+		}
 
 		setCustomizationValidationError("");
 
@@ -711,6 +1163,7 @@ export default function ProductPage() {
 			setCustomizationValidationError(
 				`${requirement.placeholder}: Please select up to ${requirement.max} photos.`,
 			);
+
 			return;
 		}
 
@@ -722,6 +1175,7 @@ export default function ProductPage() {
 			setCustomizationValidationError(
 				`${requirement.placeholder}: Only image files are allowed.`,
 			);
+
 			return;
 		}
 
@@ -733,6 +1187,7 @@ export default function ProductPage() {
 			setCustomizationValidationError(
 				`${requirement.placeholder}: Each image must be 10 MB or smaller.`,
 			);
+
 			return;
 		}
 
@@ -742,9 +1197,9 @@ export default function ProductPage() {
 		}));
 	};
 
-	/* =====================================================
+	/* ==========================================================================
 	   REMOVE PHOTO
-	===================================================== */
+	========================================================================== */
 
 	const removePhoto = (key: string, index: number) => {
 		setCustomizationFiles((previous) => ({
@@ -755,15 +1210,39 @@ export default function ProductPage() {
 		}));
 	};
 
-	/* =====================================================
+	/* ==========================================================================
 	   VALIDATE CUSTOMIZATION
-	===================================================== */
+
+	   Variants are validated FIRST because they are
+	   required purchase configuration, just like ProductCard.
+	========================================================================== */
 
 	const validateCustomization = (): boolean => {
-		if (hasOptions && !selectedOption.trim()) {
-			setCustomizationValidationError("Please select an option.");
+		/* -------------------------------------------------------------
+			   REQUIRED VARIANTS
+			------------------------------------------------------------- */
+
+		if (variantNames.length > 0 && !allVariantsSelected) {
+			setCustomizationValidationError(
+				"Please select an option for every variant.",
+			);
+
 			return false;
 		}
+
+		/* -------------------------------------------------------------
+			   PRODUCT OPTIONS
+			------------------------------------------------------------- */
+
+		if (hasOptions && !selectedOption.trim()) {
+			setCustomizationValidationError("Please select an option.");
+
+			return false;
+		}
+
+		/* -------------------------------------------------------------
+			   CUSTOMIZATION REQUIREMENTS
+			------------------------------------------------------------- */
 
 		for (const requirement of customizeRequirements) {
 			if (requirement.type === "text") {
@@ -773,6 +1252,7 @@ export default function ProductPage() {
 					setCustomizationValidationError(
 						`${requirement.placeholder} is required.`,
 					);
+
 					return false;
 				}
 
@@ -780,6 +1260,7 @@ export default function ProductPage() {
 					setCustomizationValidationError(
 						`${requirement.placeholder}: Maximum ${requirement.max} characters allowed.`,
 					);
+
 					return false;
 				}
 			}
@@ -791,6 +1272,7 @@ export default function ProductPage() {
 					setCustomizationValidationError(
 						`${requirement.placeholder} is required.`,
 					);
+
 					return false;
 				}
 			}
@@ -802,6 +1284,7 @@ export default function ProductPage() {
 					setCustomizationValidationError(
 						`${requirement.placeholder} is required.`,
 					);
+
 					return false;
 				}
 
@@ -809,6 +1292,7 @@ export default function ProductPage() {
 					setCustomizationValidationError(
 						`${requirement.placeholder}: Maximum ${requirement.max} photos allowed.`,
 					);
+
 					return false;
 				}
 			}
@@ -818,12 +1302,29 @@ export default function ProductPage() {
 	};
 
 	/* ==========================================================================
-	   ADD TO CART (customized / option-based)
+	   APPEND VARIANTS TO CART REQUEST
 
-	   Text fields append directly, single photo appends under its
-	   key, multiple photos append under "key[]" — same shape
-	   ProductCard sends.
-	========================================================== */
+	   The cart backend expects the PHP-style nested field names:
+
+	   variant[Color] = Red
+	   variant[Size]  = Large
+
+	   Build these fields from variantNames rather than from arbitrary state
+	   keys so the exact product variant names are always used.
+	========================================================================== */
+
+	const appendSelectedVariants = (formData: FormData) => {
+		for (const variantName of variantNames) {
+			const cleanVariantName = variantName.trim();
+			const optionName = selectedVariants[cleanVariantName]?.trim();
+
+			if (!cleanVariantName || !optionName) {
+				continue;
+			}
+
+			formData.append(`variant[${cleanVariantName}]`, optionName);
+		}
+	};
 
 	const addToCart = async (
 		values: Record<string, string>,
@@ -841,25 +1342,47 @@ export default function ProductPage() {
 		try {
 			const formData = new FormData();
 
+			/* -------------------------------------------------------------
+			   PRODUCT
+			------------------------------------------------------------- */
+
 			formData.append("product_id", product.id);
+
+			/* -------------------------------------------------------------
+			   VARIANTS
+			------------------------------------------------------------- */
+
+			appendSelectedVariants(formData);
+
+			/* -------------------------------------------------------------
+			   OPTION
+			------------------------------------------------------------- */
 
 			if (!product.noCustomization && option?.trim()) {
 				formData.append("option", option.trim());
 			}
 
+			/* -------------------------------------------------------------
+			   TEXT + FILE CUSTOMIZATION
+			------------------------------------------------------------- */
+
 			if (!product.noCustomization) {
 				Object.entries(values).forEach(([key, value]) => {
 					const trimmedValue = value.trim();
+
 					if (trimmedValue) {
 						formData.append(key, trimmedValue);
 					}
 				});
 
 				Object.entries(files).forEach(([key, fileList]) => {
-					if (!fileList.length) return;
+					if (!fileList.length) {
+						return;
+					}
 
 					if (fileList.length === 1) {
 						formData.append(key, fileList[0]);
+
 						return;
 					}
 
@@ -869,21 +1392,56 @@ export default function ProductPage() {
 				});
 			}
 
+			/* -------------------------------------------------------------
+			   DEBUG
+			------------------------------------------------------------- */
+
+			console.log("========== ADD TO CART ==========");
+
+			for (const [key, value] of formData.entries()) {
+				if (value instanceof File) {
+					console.log(key, value.name, value.size, value.type);
+				} else {
+					console.log(key, value);
+				}
+			}
+
+			console.log("=================================");
+
+			/* -------------------------------------------------------------
+			   API
+			------------------------------------------------------------- */
+
 			const response = await fetch("/api/cart/add", {
 				method: "POST",
 				credentials: "include",
 				body: formData,
 			});
 
-			const data = await response.json().catch(() => ({}));
+			const responseText = await response.text();
+
+			let data: any;
+
+			try {
+				data = JSON.parse(responseText);
+			} catch {
+				data = {
+					message: responseText || "Invalid response from server.",
+				};
+			}
+
+			console.log("ADD TO CART STATUS:", response.status);
 
 			console.log("ADD TO CART RESPONSE:", data);
 
 			if (!response.ok) {
-				throw new Error(data?.message || "Unable to add this to your cart.");
+				throw new Error(
+					data?.message || `Unable to add product to cart (${response.status})`,
+				);
 			}
 
 			setAddedToCart(true);
+
 			resetCustomization();
 
 			setTimeout(() => setAddedToCart(false), 1800);
@@ -899,8 +1457,11 @@ export default function ProductPage() {
 	};
 
 	/* ==========================================================================
-	   ADD TO CART (raw / no customization)
-	========================================================== */
+	   RAW ORDER
+
+	   Variants are still sent because the selected
+	   variant is part of the product being purchased.
+	========================================================================== */
 
 	const addRawToCart = async () => {
 		if (!product || !product.inStock || addingToCart) {
@@ -913,8 +1474,24 @@ export default function ProductPage() {
 
 		try {
 			const formData = new FormData();
+
 			formData.append("product_id", product.id);
+
 			formData.append("customize", "raw");
+
+			/* -------------------------------------------------------------
+			   VARIANTS
+			------------------------------------------------------------- */
+
+			appendSelectedVariants(formData);
+
+			console.log("========== ADD TO CART (RAW) ==========");
+
+			for (const [key, value] of formData.entries()) {
+				console.log(key, value);
+			}
+
+			console.log("========================================");
 
 			const response = await fetch("/api/cart/add", {
 				method: "POST",
@@ -922,32 +1499,45 @@ export default function ProductPage() {
 				body: formData,
 			});
 
-			const data = await response.json().catch(() => ({}));
+			const responseText = await response.text();
 
-			console.log("ADD TO CART (RAW) RESPONSE:", data);
+			let data: any;
+
+			try {
+				data = JSON.parse(responseText);
+			} catch {
+				data = {
+					message: responseText || "Invalid response from server.",
+				};
+			}
 
 			if (!response.ok) {
-				throw new Error(data?.message || "Unable to add this to your cart.");
+				throw new Error(
+					data?.message || `Unable to add product to cart (${response.status})`,
+				);
 			}
 
 			setAddedToCart(true);
+
 			resetCustomization();
 
 			setTimeout(() => setAddedToCart(false), 1800);
 		} catch (err) {
-			console.error("Add to cart failed:", err);
+			console.error("Add raw product failed:", err);
 
 			setAddError(
-				err instanceof Error ? err.message : "Unable to add this to your cart.",
+				err instanceof Error
+					? err.message
+					: "Unable to add this product to your cart.",
 			);
 		} finally {
 			setAddingToCart(false);
 		}
 	};
 
-	/* =====================================================
+	/* ==========================================================================
 	   HANDLE ADD TO CART
-	===================================================== */
+	========================================================================== */
 
 	const handleAddToCart = async () => {
 		if (!product || !product.inStock || addingToCart) {
@@ -957,23 +1547,57 @@ export default function ProductPage() {
 		setAddError("");
 		setCustomizationValidationError("");
 
-		if (product.noCustomization) {
-			await addToCart({}, {});
+		/* -------------------------------------------------------------
+		   VARIANTS FIRST
+		------------------------------------------------------------- */
+
+		if (variantNames.length > 0 && !allVariantsSelected) {
+			setCustomizationValidationError(
+				"Please select an option for every variant.",
+			);
+
 			return;
 		}
+
+		/* -------------------------------------------------------------
+		   NO CUSTOMIZATION PRODUCT
+		------------------------------------------------------------- */
+
+		if (product.noCustomization) {
+			await addToCart({}, {});
+
+			return;
+		}
+
+		/* -------------------------------------------------------------
+		   NORMAL PRODUCT
+		------------------------------------------------------------- */
 
 		if (!hasCustomization) {
 			await addToCart({}, {});
+
 			return;
 		}
+
+		/* -------------------------------------------------------------
+		   RAW ORDER
+		------------------------------------------------------------- */
 
 		if (rawOrder) {
 			await addRawToCart();
+
 			return;
 		}
 
+		/* -------------------------------------------------------------
+		   CUSTOMIZATION VALIDATION
+		------------------------------------------------------------- */
+
 		const valid = validateCustomization();
-		if (!valid) return;
+
+		if (!valid) {
+			return;
+		}
 
 		await addToCart(customizationValues, customizationFiles, selectedOption);
 	};
@@ -988,6 +1612,7 @@ export default function ProductPage() {
 				<div className="mx-auto flex min-h-screen max-w-4xl items-center justify-center px-5 py-12">
 					<div className="flex flex-col items-center gap-4">
 						<span className="h-10 w-10 animate-spin rounded-full border-[3px] border-[#85161B]/25 border-t-[#85161B]" />
+
 						<p className="text-base text-[#2E2E2E]/55">Loading product...</p>
 					</div>
 				</div>
@@ -996,7 +1621,7 @@ export default function ProductPage() {
 	}
 
 	/* ==========================================================================
-	   ERROR / NOT FOUND
+	   ERROR
 	========================================================================== */
 
 	if (error || !product) {
@@ -1031,7 +1656,7 @@ export default function ProductPage() {
 
 							<Link
 								href="/shop"
-								className="inline-flex items-center gap-2 rounded-xl border border-[#DED6D0] px-7 py-4 text-base font-semibold text-[#2E2E2E]/70 transition hover:border-[#85161B]/30 hover:text-[#85161B]"
+								className="inline-flex items-center gap-2 rounded-xl border border-[#DED6D0] px-7 py-4 text-sm font-semibold text-[#2E2E2E]/70 transition hover:border-[#85161B]/30 hover:text-[#85161B]"
 							>
 								Back to Shop
 							</Link>
@@ -1042,7 +1667,7 @@ export default function ProductPage() {
 		);
 	}
 
-	const heroImage = product.images[activeImage];
+	const heroImage = galleryImages[activeImage];
 
 	return (
 		<main className="min-h-screen bg-[#FBF9F7] pt-[112px] sm:pt-[120px]">
@@ -1071,7 +1696,7 @@ export default function ProductPage() {
 					===================================================== */}
 
 					<div>
-						<div className="group relative aspect-square overflow-hidden rounded-3xl border border-[#E8DED7] bg-white shadow-[0_8px_30px_rgba(80,40,20,0.05)]">
+						<div className="group relative mx-auto aspect-square w-full max-w-[520px] overflow-hidden rounded-3xl border border-[#E8DED7] bg-white shadow-[0_8px_30px_rgba(80,40,20,0.05)]">
 							{heroImage ? (
 								<img
 									src={heroImage}
@@ -1087,7 +1712,7 @@ export default function ProductPage() {
 								</div>
 							)}
 
-							{product.images.length > 1 && (
+							{galleryImages.length > 1 && (
 								<button
 									type="button"
 									aria-label="Previous image"
@@ -1098,7 +1723,7 @@ export default function ProductPage() {
 								</button>
 							)}
 
-							{product.images.length > 1 && (
+							{galleryImages.length > 1 && (
 								<button
 									type="button"
 									aria-label="Next image"
@@ -1109,16 +1734,16 @@ export default function ProductPage() {
 								</button>
 							)}
 
-							{product.images.length > 1 && (
+							{galleryImages.length > 1 && (
 								<div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-3.5 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
-									{activeImage + 1} / {product.images.length}
+									{activeImage + 1} / {galleryImages.length}
 								</div>
 							)}
 						</div>
 
-						{product.images.length > 1 && (
+						{galleryImages.length > 1 && (
 							<div className="mt-5 flex gap-3 overflow-x-auto pb-1">
-								{product.images.map((img, index) => (
+								{galleryImages.map((img, index) => (
 									<button
 										key={img + index}
 										type="button"
@@ -1176,25 +1801,29 @@ export default function ProductPage() {
 							)}
 						</div>
 
-						<h1 className="font-display mt-4 text-4xl font-semibold leading-[1.1] text-[#2E2E2E] sm:text-5xl">
+						<h1 className="font-display mt-4 text-3xl font-semibold leading-[1.1] text-[#2E2E2E] sm:text-4xl">
 							{product.name}
 						</h1>
 
 						{product.description && (
-							<p className="mt-5 whitespace-pre-line text-lg leading-8 text-[#2E2E2E]/65">
+							<p className="mt-4 whitespace-pre-line text-base leading-7 text-[#2E2E2E]/65">
 								{product.description}
 							</p>
 						)}
 
+						{/* =====================================================
+						    PRICE
+						===================================================== */}
+
 						<div className="mt-7 flex flex-wrap items-end gap-3.5">
-							<span className="text-4xl font-bold text-[#85161B] sm:text-5xl">
-								₹{product.sellingPrice.toFixed(2)}
+							<span className="text-3xl font-bold text-[#85161B] sm:text-4xl">
+								₹{currentSellingPrice.toFixed(2)}
 							</span>
 
-							{product.marketPrice > product.sellingPrice && (
+							{currentMarketPrice > currentSellingPrice && (
 								<>
 									<span className="text-xl text-[#2E2E2E]/35 line-through">
-										₹{product.marketPrice.toFixed(2)}
+										₹{currentMarketPrice.toFixed(2)}
 									</span>
 
 									<span className="rounded-full bg-[#F7D6BF]/50 px-3 py-1.5 text-sm font-semibold text-[#85161B]">
@@ -1211,12 +1840,90 @@ export default function ProductPage() {
 							</p>
 						)}
 
-						{/* ==========================================================================
+						{/* =====================================================
+						    VARIANTS
+						===================================================== */}
+
+						{variantNames.length > 0 && (
+							<div className="mt-7 rounded-2xl border border-[#E8DED7] bg-white p-4 sm:p-5">
+								<div className="flex items-center justify-between gap-3">
+									<div>
+										<h2 className="text-sm font-semibold text-[#2E2E2E]">
+											Choose your variant
+										</h2>
+
+										<p className="mt-1 text-sm text-[#2E2E2E]/50">
+											Select one option from each variant.
+										</p>
+									</div>
+
+									<span className="text-sm font-semibold text-[#85161B]">
+										Required
+									</span>
+								</div>
+
+								<div className="mt-5 space-y-5">
+									{variantNames.map((variantName) => (
+										<div key={variantName}>
+											<div className="mb-2.5 flex items-center justify-between gap-3">
+												<h3 className="text-sm font-semibold text-[#2E2E2E]">
+													{variantName}
+												</h3>
+
+												<span className="text-xs text-[#2E2E2E]/40">
+													Choose one
+												</span>
+											</div>
+
+											<div className="flex flex-wrap gap-2.5">
+												{Object.entries(
+													product.variants[variantName] ?? {},
+												).map(([optionName, option]) => {
+													const selected =
+														selectedVariants[variantName] === optionName;
+
+													return (
+														<button
+															key={optionName}
+															type="button"
+															onClick={() =>
+																handleVariantChange(variantName, optionName)
+															}
+															className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+																selected
+																	? "border-[#85161B] bg-[#85161B] text-white shadow-sm"
+																	: "border-[#DED6D0] bg-white text-[#2E2E2E]/70 hover:border-[#85161B]/40 hover:text-[#85161B]"
+															}`}
+														>
+															{optionName}
+
+															{option.price > 0 && (
+																<span
+																	className={
+																		selected
+																			? "ml-1.5 text-white/80"
+																			: "ml-1.5 text-[#85161B]"
+																	}
+																>
+																	+ ₹{option.price.toFixed(0)}
+																</span>
+															)}
+														</button>
+													);
+												})}
+											</div>
+										</div>
+									))}
+								</div>
+							</div>
+						)}
+
+						{/* =====================================================
 						    PERSONALIZATION TICKET
-						========================================================================== */}
+						===================================================== */}
 
 						{hasCustomization && (
-							<div className="relative mt-9 rounded-2xl border-2 border-dashed border-[#D9BBAE] bg-[#FFFBF8] p-7">
+							<div className="relative mt-7 rounded-2xl border-2 border-dashed border-[#D9BBAE] bg-[#FFFBF8] p-7">
 								<div className="absolute -top-3 left-1/2 h-6 w-6 -translate-x-1/2 rounded-full border-2 border-dashed border-[#D9BBAE] bg-[#FBF9F7]" />
 
 								<p className="font-display text-lg font-semibold text-[#85161B]">
@@ -1227,7 +1934,82 @@ export default function ProductPage() {
 									Tell us how to make this one yours.
 								</p>
 
-								{/* RAW ORDER TOGGLE */}
+								{/* =================================================
+								    SELECTED VARIANT SUMMARY
+								================================================= */}
+
+								{variantNames.length > 0 && (
+									<div className="mt-5 rounded-xl border border-[#E8DED7] bg-[#FDF9F6] p-4">
+										<div className="flex items-start justify-between gap-3">
+											<div>
+												<p className="text-sm font-semibold text-[#85161B]">
+													Product variants
+												</p>
+
+												<p className="mt-1 text-xs leading-5 text-[#2E2E2E]/50">
+													Your selected variants will be included with this
+													order.
+												</p>
+											</div>
+
+											<span
+												className={`text-xs font-semibold ${
+													allVariantsSelected
+														? "text-[#31824A]"
+														: "text-[#85161B]"
+												}`}
+											>
+												{Object.keys(selectedVariants).length}/
+												{variantNames.length} selected
+											</span>
+										</div>
+
+										<div className="mt-4 space-y-2.5">
+											{variantNames.map((variantName) => {
+												const selected = selectedVariants[variantName];
+
+												return (
+													<div
+														key={variantName}
+														className="flex items-center justify-between gap-4 rounded-lg border border-[#EEE5DF] bg-white px-4 py-3"
+													>
+														<span className="text-sm font-medium text-[#2E2E2E]/65">
+															{variantName}
+														</span>
+
+														<span
+															className={`text-sm font-semibold ${
+																selected
+																	? "text-[#85161B]"
+																	: "text-[#2E2E2E]/35"
+															}`}
+														>
+															{selected || "Not selected"}
+														</span>
+													</div>
+												);
+											})}
+										</div>
+
+										{!allVariantsSelected && (
+											<div className="mt-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+												<AlertTriangle
+													size={15}
+													className="mt-0.5 shrink-0 text-amber-600"
+												/>
+
+												<p className="text-xs leading-5 text-amber-800">
+													Please select an option for every variant before
+													adding this product to your cart.
+												</p>
+											</div>
+										)}
+									</div>
+								)}
+
+								{/* =================================================
+								    RAW ORDER TOGGLE
+								================================================= */}
 
 								<div className="mt-6 rounded-xl border border-[#DED6D0] bg-white p-5">
 									<label className="flex cursor-pointer items-start gap-3.5">
@@ -1242,6 +2024,7 @@ export default function ProductPage() {
 											<span className="text-base font-semibold text-[#202020]">
 												No customization — send raw product
 											</span>
+
 											<p className="mt-1.5 text-sm leading-6 text-black/50">
 												Skip personalization and receive the plain product
 												as-is.
@@ -1256,9 +2039,11 @@ export default function ProductPage() {
 												strokeWidth={2}
 												className="mt-0.5 shrink-0 text-amber-600"
 											/>
+
 											<p className="text-sm leading-6 text-amber-800">
 												A raw product will be delivered without any
-												customization applied — preferably suited for resellers.
+												customization applied. Your selected variants, if any,
+												will still be included.
 											</p>
 										</div>
 									)}
@@ -1266,17 +2051,20 @@ export default function ProductPage() {
 
 								{!rawOrder && (
 									<div className="mt-7 space-y-7">
-										{/* OPTION */}
+										{/* =================================================
+										    OPTION
+										================================================= */}
 
 										{hasOptions && (
 											<div>
 												<label
 													htmlFor={`option-${product.id}`}
-													className="mb-3 flex items-center justify-between gap-3"
+													className="mb-2.5 flex items-center justify-between gap-3"
 												>
-													<span className="text-base font-semibold text-[#2E2E2E]">
+													<span className="text-sm font-semibold text-[#2E2E2E]">
 														Select option
 													</span>
+
 													<span className="text-sm font-semibold text-[#85161B]">
 														Required
 													</span>
@@ -1288,11 +2076,13 @@ export default function ProductPage() {
 														value={selectedOption}
 														onChange={(e) => {
 															setSelectedOption(e.target.value);
+
 															setCustomizationValidationError("");
 														}}
 														className="w-full appearance-none rounded-xl border border-[#DED6D0] bg-white px-4 py-3.5 pr-11 text-base text-[#2E2E2E] outline-none transition focus:border-[#85161B] focus:ring-2 focus:ring-[#85161B]/10"
 													>
 														<option value="">Select an option</option>
+
 														{product.options?.map((option, index) => (
 															<option key={`${option}-${index}`} value={option}>
 																{option}
@@ -1308,7 +2098,9 @@ export default function ProductPage() {
 											</div>
 										)}
 
-										{/* CUSTOMIZATION REQUIREMENTS */}
+										{/* =================================================
+										    CUSTOMIZATION REQUIREMENTS
+										================================================= */}
 
 										{customizeRequirements.map((requirement) => {
 											const textValue =
@@ -1318,9 +2110,10 @@ export default function ProductPage() {
 
 											return (
 												<div key={requirement.key}>
-													<div className="mb-3 flex items-center justify-between gap-3">
+													<div className="mb-2.5 flex items-center justify-between gap-3">
 														<label className="text-base font-semibold leading-6 text-[#2E2E2E]">
 															{requirement.placeholder}
+
 															{!requirement.optional && (
 																<span className="ml-1 text-[#85161B]">*</span>
 															)}
@@ -1358,9 +2151,11 @@ export default function ProductPage() {
 														<div>
 															<label className="flex cursor-pointer items-center justify-center gap-2.5 rounded-xl border border-[#DED6D0] bg-white px-4 py-3.5 text-base font-medium text-[#2E2E2E]/65 transition hover:border-[#85161B]/40 hover:text-[#85161B]">
 																<Upload size={17} />
+
 																<span className="max-w-[80%] truncate">
 																	{files[0] ? files[0].name : "Choose a photo"}
 																</span>
+
 																<input
 																	type="file"
 																	accept="image/*"
@@ -1379,6 +2174,7 @@ export default function ProductPage() {
 																	<span className="max-w-[80%] truncate text-sm text-black/65">
 																		{files[0].name}
 																	</span>
+
 																	<button
 																		type="button"
 																		onClick={() =>
@@ -1393,19 +2189,22 @@ export default function ProductPage() {
 														</div>
 													)}
 
-													{/* MULTIPLE PHOTOS — the piece that was missing */}
+													{/* MULTIPLE PHOTOS */}
 
 													{requirement.type === "photos" && (
 														<div>
 															<label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[#DED6D0] bg-white px-4 py-7 text-center transition hover:border-[#85161B]/50 hover:bg-[#85161B]/[0.02]">
 																<Upload size={20} className="text-[#85161B]" />
+
 																<span className="text-base font-medium text-[#2E2E2E]">
 																	Select photos
 																</span>
+
 																<span className="text-sm text-black/45">
 																	Up to {requirement.max} photos • Each max 10
 																	MB
 																</span>
+
 																<input
 																	type="file"
 																	accept="image/*"
@@ -1430,6 +2229,7 @@ export default function ProductPage() {
 																			<span className="max-w-[80%] truncate text-sm text-black/65">
 																				{file.name}
 																			</span>
+
 																			<button
 																				type="button"
 																				onClick={() =>
@@ -1451,17 +2251,24 @@ export default function ProductPage() {
 									</div>
 								)}
 
+								{/* =================================================
+								    VALIDATION ERROR
+								================================================= */}
+
 								{customizationValidationError && (
-									<div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm font-medium text-red-600">
+									<div
+										role="alert"
+										className="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5 text-sm font-medium text-red-600"
+									>
 										{customizationValidationError}
 									</div>
 								)}
 							</div>
 						)}
 
-						{/* ==========================================================================
+						{/* =====================================================
 						    ADD TO CART
-						========================================================================== */}
+						===================================================== */}
 
 						<div className="mt-9">
 							<button
@@ -1483,7 +2290,11 @@ export default function ProductPage() {
 								) : (
 									<>
 										<ShoppingBag size={19} />
-										{hasCustomization ? "Customize & Add" : "Add to Cart"}
+
+										{hasCustomization || variantNames.length > 0
+											? "Choose Options & Add"
+											: "Add to Cart"}
+
 										<ArrowRight
 											size={17}
 											className="transition-transform group-hover:translate-x-1"
@@ -1502,6 +2313,7 @@ export default function ProductPage() {
 						<div className="mt-8 space-y-3.5">
 							<div className="flex items-center gap-3 text-base font-medium text-[#2E2E2E]/60">
 								<ShieldCheck size={18} className="shrink-0 text-[#85161B]" />
+
 								<span>Secure checkout · Made to order</span>
 							</div>
 
@@ -1510,6 +2322,7 @@ export default function ProductPage() {
 									size={17}
 									className="mt-0.5 shrink-0 text-[#85161B]"
 								/>
+
 								<span>
 									Your photos are used only for your order and deleted after
 									processing.
@@ -1538,9 +2351,11 @@ export default function ProductPage() {
 							{!reviewsLoading && !reviewsError && reviews.length > 0 && (
 								<div className="mt-2.5 flex items-center gap-2.5">
 									<StarRating rating={averageRating} />
-									<span className="text-base font-semibold text-[#2E2E2E]">
+
+									<span className="text-sm font-semibold text-[#2E2E2E]">
 										{averageRating.toFixed(1)}
 									</span>
+
 									<span className="text-base text-[#2E2E2E]/50">
 										· {reviews.length} review
 										{reviews.length === 1 ? "" : "s"}
@@ -1555,6 +2370,7 @@ export default function ProductPage() {
 					{reviewsLoading && (
 						<div className="mt-9 flex items-center justify-center gap-3 py-12">
 							<span className="h-7 w-7 animate-spin rounded-full border-2 border-[#85161B]/25 border-t-[#85161B]" />
+
 							<p className="text-base text-[#2E2E2E]/55">Loading reviews...</p>
 						</div>
 					)}
@@ -1564,7 +2380,9 @@ export default function ProductPage() {
 					{!reviewsLoading && reviewsError && (
 						<div className="mt-9 flex flex-col items-center gap-3.5 py-12 text-center">
 							<AlertCircle size={28} className="text-red-500" />
+
 							<p className="text-base text-[#2E2E2E]/60">{reviewsError}</p>
+
 							<button
 								type="button"
 								onClick={fetchReviews}
@@ -1582,6 +2400,7 @@ export default function ProductPage() {
 							<div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#F7D6BF]/40">
 								<MessageSquare size={26} className="text-[#85161B]" />
 							</div>
+
 							<p className="text-base text-[#2E2E2E]/60">
 								No reviews yet for this product.
 							</p>
@@ -1598,9 +2417,9 @@ export default function ProductPage() {
 									className="flex h-full flex-col rounded-2xl border border-[#E8DED7] bg-[#FFFCFA] p-6 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#D9C8BE] hover:shadow-[0_10px_30px_rgba(80,40,20,0.06)]"
 								>
 									{/* HEADER */}
+
 									<div className="flex items-start justify-between gap-3">
 										<div className="flex min-w-0 items-center gap-3.5">
-											{/* Avatar */}
 											<div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#F7D6BF]/50 text-sm font-bold text-[#85161B]">
 												{review.name
 													.split(" ")
@@ -1610,9 +2429,8 @@ export default function ProductPage() {
 													.toUpperCase()}
 											</div>
 
-											{/* Name + Rating */}
 											<div className="min-w-0">
-												<p className="truncate text-base font-semibold text-[#2E2E2E]">
+												<p className="truncate text-sm font-semibold text-[#2E2E2E]">
 													{review.name}
 												</p>
 
@@ -1622,7 +2440,6 @@ export default function ProductPage() {
 											</div>
 										</div>
 
-										{/* DATE */}
 										{review.date && (
 											<span className="shrink-0 text-sm text-[#2E2E2E]/45">
 												{review.date}
@@ -1631,6 +2448,7 @@ export default function ProductPage() {
 									</div>
 
 									{/* REVIEW TEXT */}
+
 									{review.comment && (
 										<p className="mt-4 line-clamp-4 text-base leading-7 text-[#2E2E2E]/70">
 											{review.comment}
@@ -1638,6 +2456,7 @@ export default function ProductPage() {
 									)}
 
 									{/* REVIEW PHOTOS */}
+
 									{review.photos.length > 0 && (
 										<div className="mt-4 grid grid-cols-3 gap-2.5">
 											{review.photos.map((photo, index) => (
@@ -1659,6 +2478,7 @@ export default function ProductPage() {
 									)}
 
 									{/* FOOTER */}
+
 									<div className="mt-auto pt-4">
 										<div className="border-t border-[#EEE6E1] pt-3.5">
 											<span className="inline-flex items-center gap-2 text-sm font-medium text-[#2E2E2E]/45">
@@ -1689,7 +2509,9 @@ function StarRating({ rating, size = 16 }: { rating: number; size?: number }) {
 			className="flex items-center gap-0.5"
 			aria-label={`${rating} out of 5 stars`}
 		>
-			{Array.from({ length: 5 }).map((_, index) => (
+			{Array.from({
+				length: 5,
+			}).map((_, index) => (
 				<Star
 					key={index}
 					size={size}
