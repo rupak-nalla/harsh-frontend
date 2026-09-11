@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -8,7 +9,11 @@ import {
 
 import Image from "next/image";
 
-import { motion } from "framer-motion";
+import {
+	animate,
+	motion,
+	useMotionValue,
+} from "framer-motion";
 
 import {
 	Quote,
@@ -96,32 +101,24 @@ function TestimonialCard({
 					group-hover:scale-110
 				"
 			>
-				<Quote
-					size={54}
-					strokeWidth={1.5}
-					fill="currentColor"
-				/>
+				<Quote size={54} strokeWidth={1.5} fill="currentColor" />
 			</div>
 
 			<div className="relative z-10 min-h-0">
 				<div className="mb-3 flex items-center gap-1">
 					{Array.from({
 						length: starCount,
-					}).map(
-						(_, starIndex) => (
-							<span
-								key={
-									starIndex
-								}
-								className="
+					}).map((_, starIndex) => (
+						<span
+							key={starIndex}
+							className="
 									text-sm
 									text-[#D89A3D]
 								"
-							>
-								★
-							</span>
-						),
-					)}
+						>
+							★
+						</span>
+					))}
 				</div>
 
 				<p
@@ -138,80 +135,23 @@ function TestimonialCard({
 				</p>
 
 				{photos.length > 0 && (
-					<div className="mt-4 flex items-center gap-2">
-						<div
-							className="
-								relative
-								h-16
-								w-16
-								overflow-hidden
-								rounded-xl
-								bg-[#F7D6BF]/30
-							"
-						>
-							<Image
-								src={assetUrl(
-									photos[
-										photoIndex
-									],
-								)}
-								alt={`${testimonial.name} review photo ${
-									photoIndex + 1
-								}`}
-								fill
-								sizes="64px"
-								className="object-cover"
-							/>
-						</div>
-
-						{photos.length > 1 && (
-							<div className="flex gap-1.5">
-								{photos.map(
-									(
-										photo,
-										index,
-									) => (
-										<button
-											key={`${photo}-${index}`}
-											type="button"
-											onClick={() =>
-												setPhotoIndex(
-													index,
-												)
-											}
-											aria-label={`Show review photo ${
-												index +
-												1
-											}`}
-											className={`
-												relative
-												h-10
-												w-10
-												overflow-hidden
-												rounded-lg
-												border-2
-												${
-													index ===
-													photoIndex
-														? "border-[#85161B]"
-														: "border-transparent"
-												}
-											`}
-										>
-											<Image
-												src={assetUrl(
-													photo,
-												)}
-												alt=""
-												fill
-												sizes="40px"
-												className="object-cover"
-											/>
-										</button>
-									),
-								)}
+					<div className="mt-4 flex flex-wrap gap-2">
+						{" "}
+						{photos.map((photo, index) => (
+							<div
+								key={`${photo}-${index}`}
+								className=" relative h-16 w-16 min-h-16 min-w-16 shrink-0 aspect-square overflow-hidden rounded-xl bg-[#F7D6BF]/30 "
+							>
+								{" "}
+								<Image
+									src={assetUrl(photo)}
+									alt={`${testimonial.name} review photo ${index + 1}`}
+									fill
+									sizes="64px"
+									className="object-cover"
+								/>{" "}
 							</div>
-						)}
+						))}{" "}
 					</div>
 				)}
 			</div>
@@ -255,11 +195,7 @@ function TestimonialCard({
 							text-[#2E2E2E]
 						"
 					>
-						<span className="truncate">
-							{
-								testimonial.name
-							}
-						</span>
+						<span className="truncate">{testimonial.name}</span>
 
 						<BadgeCheck
 							size={15}
@@ -291,6 +227,23 @@ export default function Testimonials() {
 		useState<SiteReview[]>(
 			FALLBACK_TESTIMONIALS,
 		);
+
+	/*
+	 * Keep the marquee position in a motion value.
+	 *
+	 * This is important because when the user hovers,
+	 * we stop the current animation without changing
+	 * the current x position.
+	 */
+	const x = useMotionValue("0%");
+
+	/*
+	 * Keep track of the currently running animation.
+	 * This allows us to stop it cleanly on unmount
+	 * or when the testimonials change.
+	 */
+	const [isPaused, setIsPaused] =
+		useState(false);
 
 	useEffect(() => {
 		let mounted = true;
@@ -328,6 +281,134 @@ export default function Testimonials() {
 			],
 			[testimonials],
 		);
+
+	/*
+	 * Start the marquee.
+	 *
+	 * The important difference from the previous
+	 * implementation is that we animate the existing
+	 * motion value instead of starting a new
+	 * ["0%", "-50%"] animation.
+	 */
+	useEffect(() => {
+		if (testimonials.length === 0) {
+			return;
+		}
+
+		const animation = animate(
+			x,
+			"-50%",
+			{
+				duration: 100,
+				ease: "linear",
+				repeat: Infinity,
+				repeatType: "loop",
+			},
+		);
+
+		return () => {
+			animation.stop();
+		};
+	}, [
+		testimonials.length,
+		x,
+	]);
+
+	/*
+	 * Pause without resetting the current position.
+	 */
+	const handleMouseEnter = () => {
+		setIsPaused(true);
+		x.stop();
+	};
+
+	/*
+	 * Resume from the CURRENT position.
+	 *
+	 * We calculate the remaining distance and use
+	 * the same proportional speed as the original
+	 * 100 second animation.
+	 */
+	const handleMouseLeave = () => {
+		setIsPaused(false);
+
+		const currentX =
+			x.get();
+
+		/*
+		 * Convert the current percentage position
+		 * into a number.
+		 *
+		 * Example:
+		 * "-20.5%" -> -20.5
+		 */
+		const currentPercentage =
+			parseFloat(
+				String(currentX),
+			);
+
+		const current =
+			Number.isFinite(
+				currentPercentage,
+			)
+				? currentPercentage
+				: 0;
+
+		/*
+		 * Distance remaining until -50%.
+		 */
+		const remainingDistance =
+			Math.abs(
+				-50 - current,
+			);
+
+		/*
+		 * Original animation covers 50 percentage
+		 * points in 100 seconds.
+		 *
+		 * Therefore:
+		 * 50 points = 100 seconds
+		 * 1 point  = 2 seconds
+		 */
+		const remainingDuration =
+			remainingDistance * 2;
+
+		/*
+		 * If we're already at the end, let the
+		 * animation restart from 0 naturally.
+		 */
+		if (
+			remainingDistance <=
+			0.01
+		) {
+			x.set("0%");
+
+			animate(
+				x,
+				"-50%",
+				{
+					duration: 100,
+					ease: "linear",
+					repeat: Infinity,
+					repeatType: "loop",
+				},
+			);
+
+			return;
+		}
+
+		animate(
+			x,
+			"-50%",
+			{
+				duration:
+					remainingDuration,
+				ease: "linear",
+				repeat: Infinity,
+				repeatType: "loop",
+			},
+		);
+	};
 
 	return (
 		<section
@@ -387,14 +468,22 @@ export default function Testimonials() {
 							sm:text-base
 						"
 					>
-						Real experiences from people
-						who made their moments a
-						little more special with us.
+						Real experiences from people who made their moments a little more
+						special with us.
 					</p>
 				</div>
 
 				{testimonials.length > 0 ? (
-					<div className="relative w-full overflow-hidden">
+					<div
+						className="relative w-full overflow-hidden"
+						onMouseEnter={
+							handleMouseEnter
+						}
+						onMouseLeave={
+							handleMouseLeave
+						}
+					>
+						{/* Left fade */}
 						<div
 							className="
 								pointer-events-none
@@ -411,6 +500,7 @@ export default function Testimonials() {
 							"
 						/>
 
+						{/* Right fade */}
 						<div
 							className="
 								pointer-events-none
@@ -436,20 +526,8 @@ export default function Testimonials() {
 								sm:gap-6
 								sm:px-6
 							"
-							animate={{
-								x: [
-									"0%",
-									"-50%",
-								],
-							}}
-							transition={{
-								x: {
-									duration: 60,
-									ease: "linear",
-									repeat: Infinity,
-									repeatType:
-										"loop",
-								},
+							style={{
+								x,
 							}}
 						>
 							{marqueeTestimonials.map(
@@ -476,8 +554,7 @@ export default function Testimonials() {
 							text-[#2E2E2E]/50
 						"
 					>
-						Loading customer
-						reviews…
+						Loading customer reviews…
 					</div>
 				)}
 
